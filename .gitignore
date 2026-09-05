@@ -1,0 +1,111 @@
+# --------------------------
+# macOS
+# --------------------------
+
+.DS_Store
+
+
+# --------------------------
+# Python
+# --------------------------
+
+__pycache__/
+*.py[cod]
+*.pyo
+
+.venv/
+venv/
+env/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+
+# --------------------------
+# Environment / Secrets
+# --------------------------
+
+.env
+.env.local
+.env.production
+
+!.env.example
+
+
+# --------------------------
+# IDE
+# --------------------------
+
+.vscode/
+.idea/
+
+
+# --------------------------
+# Audio uploads
+# --------------------------
+
+uploads/
+storage/
+temp/
+tmp/
+
+
+# --------------------------
+# Machine Learning Models
+# --------------------------
+
+models/
+checkpoints/
+weights/
+
+*.pth
+*.pt
+*.ckpt
+*.onnx
+
+
+# --------------------------
+# Dataset audio
+# --------------------------
+
+datasets/audio/
+datasets/raw/
+datasets/downloads/
+
+
+# --------------------------
+# Experiment output
+# --------------------------
+
+experiments/output/
+experiments/cache/
+
+
+# --------------------------
+# Logs
+# --------------------------
+
+*.log
+logs/
+
+
+# --------------------------
+# Docker
+# --------------------------
+
+docker-data/
+
+
+# --------------------------
+# PostgreSQL
+# --------------------------
+
+postgres-data/
+
+
+# --------------------------
+# Redis
+# --------------------------
+
+redis-data/
