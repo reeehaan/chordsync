@@ -6,6 +6,9 @@ import subprocess
 
 from analysis.preprocessing.audio_preprocessor import get_audio_metadata
 
+from analysis.chords.models import ChordSegment
+from analysis.chords.normalizer import normalize_chord_label
+
 
 DEFAULT_PLUGIN = "vamp:nnls-chroma:chordino:simplechord"
 
@@ -19,7 +22,7 @@ def get_sonic_annotator_path() -> Path:
     return Path("sonic-annotator")
 
 
-def run_chordino(audio_path: Path) -> list[dict]:
+def run_chordino(audio_path: Path) -> list[ChordSegment]:
     if not audio_path.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
@@ -81,7 +84,7 @@ def parse_chordino_csv(csv_output: str) -> list[dict]:
 def events_to_segments(
     events: list[dict],
     duration: float,
-) -> list[dict]:
+) -> list[ChordSegment]:
     if not events:
         return []
 
@@ -95,10 +98,16 @@ def events_to_segments(
         else:
             end = duration
 
-        segments.append({
-            "start": round(start, 6),
-            "end": round(end, 6),
-            "label": event["label"],
-        })
+        segments.append(
+    ChordSegment(
+        start=round(start, 6),
+        end=round(end, 6),
+        raw_label=event["label"],
+        normalized_label=normalize_chord_label(
+            event["label"]
+        ),
+        source="chordino",
+    )
+)
 
     return segments

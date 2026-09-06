@@ -10,4 +10,4 @@ segments = run_chordino(audio_path)
 print(f"Detected {len(segments)} chord segments\n")
 
 for segment in segments[:20]:
-    print(segment)
+    print(segment.model_dump())

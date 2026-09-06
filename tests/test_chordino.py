@@ -30,20 +30,22 @@ def test_events_to_segments():
         duration=5.0,
     )
 
-    assert segments == [
-        {
-            "start": 0.0,
-            "end": 1.5,
-            "label": "N",
-        },
-        {
-            "start": 1.5,
-            "end": 3.0,
-            "label": "C",
-        },
-        {
-            "start": 3.0,
-            "end": 5.0,
-            "label": "G",
-        },
-    ]
+    assert len(segments) == 3
+
+    assert segments[0].start == 0.0
+    assert segments[0].end == 1.5
+    assert segments[0].raw_label == "N"
+    assert segments[0].normalized_label == "N"
+    assert segments[0].source == "chordino"
+
+    assert segments[1].start == 1.5
+    assert segments[1].end == 3.0
+    assert segments[1].raw_label == "C"
+    assert segments[1].normalized_label == "C"
+    assert segments[1].source == "chordino"
+
+    assert segments[2].start == 3.0
+    assert segments[2].end == 5.0
+    assert segments[2].raw_label == "G"
+    assert segments[2].normalized_label == "G"
+    assert segments[2].source == "chordino"
