@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "bpm": 96.0,
+  "beats_per_bar": 4,
+  "beat_source": "synthetic-grid",
+  "lyric_source": "synthetic-words",
+  "bars": [
+    {
+      "bar_number": 1,
+      "start_time": 1.0,
+      "end_time": 5.0,
+      "beats": [
+        {
+          "time": 1.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "C"
+        },
+        {
+          "time": 2.0,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G"
+        },
+        {
+          "time": 3.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Am"
+        },
+        {
+          "time": 4.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "F"
+        }
+      ]
+    },
+    {
+      "bar_number": 2,
+      "start_time": 5.0,
+      "end_time": 9.0,
+      "beats": [
+        {
+          "time": 5.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Dm"
+        },
+        {
+          "time": 6.0,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G"
+        },
+        {
+          "time": 7.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "C"
+        },
+        {
+          "time": 8.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "C"
+        }
+      ]
+    }
+  ],
+  "lyrics": [
+    {
+      "start": 1.5,
+      "end": 3.9,
+      "text": "Morning light moves across",
+      "words": [
+        {
+          "start": 1.5,
+          "end": 2.2,
+          "text": "Morning"
+        },
+        {
+          "start": 2.2,
+          "end": 2.8,
+          "text": "light"
+        },
+        {
+          "start": 3.0,
+          "end": 3.6,
+          "text": "moves"
+        },
+        {
+          "start": 3.6,
+          "end": 3.9,
+          "text": "across"
+        }
+      ]
+    },
+    {
+      "start": 5.2,
+      "end": 7.8,
+      "text": "the open road glows",
+      "words": [
+        {
+          "start": 5.2,
+          "end": 5.6,
+          "text": "the"
+        },
+        {
+          "start": 5.7,
+          "end": 6.4,
+          "text": "open"
+        },
+        {
+          "start": 6.6,
+          "end": 7.3,
+          "text": "road"
+        },
+        {
+          "start": 7.3,
+          "end": 7.8,
+          "text": "glows"
+        }
+      ]
+    }
+  ]
+}

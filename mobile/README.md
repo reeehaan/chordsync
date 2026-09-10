@@ -1,17 +1,43 @@
-# chordsync
+# ChordSync Flutter Client
 
-A new Flutter project.
+This directory contains the Flutter client for ChordSync, a final-year Music
+Information Retrieval and software engineering project for synchronised guitar
+practice.
 
-## Getting Started
+## Current Functionality
 
-This project is a starting point for a Flutter application.
+- Loads and deserializes a Python-generated `SharedTimeline` JSON asset.
+- Models bars, beat events, chords, lyric segments, and word timings.
+- Resolves the current chord, beat/downbeat state, and active lyric word for a
+  playback timestamp.
+- Provides a small playback-position controller that supports forward and
+  backward seeking in tests.
 
-A few resources to get you started if this is your first Flutter project:
+Real audio playback and the complete practice interface are planned for later
+tasks.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Setup
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+From this directory, resolve Flutter dependencies:
+
+```sh
+flutter pub get
+```
+
+## Verification
+
+Run the test suite:
+
+```sh
+flutter test
+```
+
+Run static analysis:
+
+```sh
+flutter analyze
+```
+
+The practice-timeline tests exercise both controlled timelines and the bundled
+`SharedTimeline` asset. The asset is a temporary research fixture and remains
+subject to the repository's data-publication review.
