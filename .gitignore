@@ -68,7 +68,6 @@ tmp/
 # Machine Learning Models
 # --------------------------
 
-models/
 checkpoints/
 weights/
 
