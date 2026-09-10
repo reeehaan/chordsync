@@ -21,6 +21,13 @@ env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
+.tox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+**/.ipynb_checkpoints/
 
 
 # --------------------------
@@ -28,10 +35,15 @@ env/
 # --------------------------
 
 .env
-.env.local
-.env.production
+.env.*
 
 !.env.example
+
+credentials.json
+service-account*.json
+service_account*.json
+client_secret*.json
+secrets.json
 
 
 # --------------------------
@@ -64,6 +76,9 @@ weights/
 *.pt
 *.ckpt
 *.onnx
+*.pkl
+*.pickle
+*.joblib
 
 
 # --------------------------
@@ -73,6 +88,20 @@ weights/
 datasets/audio/
 datasets/raw/
 datasets/downloads/
+datasets/chord_eval/audio/
+datasets/chord_eval/annotations/let_it_be.lab
+datasets/lyrics_eval/clips/
+datasets/lyrics_eval/let_it_be_reference_words.csv
+
+# Local evaluation working documents
+*.numbers
+
+
+# --------------------------
+# Build output
+# --------------------------
+
+/build/
 
 
 # --------------------------
@@ -81,6 +110,12 @@ datasets/downloads/
 
 experiments/output/
 experiments/cache/
+experiments/chordino/chordino_raw.csv
+
+# Local one-off research validation scripts
+analysis/fusion/test_real_timeline_lookup.py
+analysis/fusion/test_real_timeline_lookup_whisperx.py
+analysis/lyrics/test_whisper_runner.py
 
 
 # --------------------------
@@ -89,6 +124,18 @@ experiments/cache/
 
 *.log
 logs/
+
+
+# --------------------------
+# Local databases
+# --------------------------
+
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-wal
+*.sqlite-shm
+*.db-journal
 
 
 # --------------------------
