@@ -1,15 +1,20 @@
+import argparse
 from pathlib import Path
 
-from analysis.chords.btc.btc_parser import parse_btc_lab
-from analysis.chords.chordino.chordino_runner import (
-    parse_chordino_csv,
-)
 from analysis.chords.models import ChordSegment
 from analysis.chords.normalizer import normalize_chord_label
 from analysis.evaluation.chord_evaluator import (
     evaluate_chords,
     load_reference_lab,
     segments_to_intervals,
+)
+
+
+DEFAULT_CHORDINO_PREDICTION = Path(
+    "datasets/chord_eval/predictions/chordino/let_it_be.lab"
+)
+DEFAULT_BTC_PREDICTION = Path(
+    "datasets/chord_eval/predictions/btc/let_it_be.lab"
 )
 
 
@@ -54,19 +59,11 @@ def load_prediction_lab(
     return segments
 
 
-def main():
-    reference_path = Path(
-        "datasets/chord_eval/annotations/let_it_be.lab"
-    )
-
-    chordino_path = Path(
-        "datasets/chord_eval/predictions/chordino/let_it_be.lab"
-    )
-
-    btc_path = Path(
-        "datasets/chord_eval/predictions/btc/let_it_be.lab"
-    )
-
+def compare_estimators(
+    reference_path: Path,
+    chordino_path: Path = DEFAULT_CHORDINO_PREDICTION,
+    btc_path: Path = DEFAULT_BTC_PREDICTION,
+) -> dict[str, dict[str, float]]:
     reference_intervals, reference_labels = (
         load_reference_lab(reference_path)
     )
@@ -102,6 +99,50 @@ def main():
         btc_intervals,
         btc_labels,
     )
+
+    return {
+        "chordino": chordino_result,
+        "btc": btc_result,
+    }
+
+
+def parse_arguments(
+    argv: list[str] | None = None,
+) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Compare ChordSync chord estimator predictions.",
+    )
+    parser.add_argument(
+        "--reference",
+        required=True,
+        type=Path,
+        help="Path to a locally supplied reference chord .lab file.",
+    )
+    parser.add_argument(
+        "--chordino-prediction",
+        type=Path,
+        default=DEFAULT_CHORDINO_PREDICTION,
+        help="Path to the Chordino prediction .lab file.",
+    )
+    parser.add_argument(
+        "--btc-prediction",
+        type=Path,
+        default=DEFAULT_BTC_PREDICTION,
+        help="Path to the BTC prediction .lab file.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    arguments = parse_arguments(argv)
+    results = compare_estimators(
+        reference_path=arguments.reference,
+        chordino_path=arguments.chordino_prediction,
+        btc_path=arguments.btc_prediction,
+    )
+
+    chordino_result = results["chordino"]
+    btc_result = results["btc"]
 
     print()
     print("ChordSync — Chord Estimator Comparison")
