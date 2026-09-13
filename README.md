@@ -48,7 +48,9 @@ ChordSync is currently in Sprint 4 — Interactive Client. The Python pipeline
 supports chord analysis, beat/downbeat tracking, WhisperX word alignment, and
 fusion into a shared practice timeline. The Flutter client can deserialize that
 timeline, resolve playback state, and control test playback positions. Real
-audio playback and the full practice interface are not implemented yet.
+audio playback now uses a bundled synthetic fixture through `just_audio`, and
+the practice interface supports synchronized chords, lyrics, rhythm context,
+seeking, looping, speed control, and bar navigation.
 
 ## Repository Structure
 
@@ -104,16 +106,49 @@ The Flutter client uses the SDK constraints and dependencies declared in
 flutter pub get
 ```
 
-Python components use intentionally isolated environments because the backend,
-evaluation tools, beat tracking, and lyric alignment have different native and
-ML dependencies. Existing pinned manifests include:
+Python 3.11 is the currently verified baseline. The backend, beat tracking,
+evaluation, Whisper, and WhisperX dependencies intentionally use separate
+virtual environments because their native and ML requirements differ.
 
-- `backend/api/requirements.txt`
-- `analysis/evaluation/requirements.txt`
+Create and install the lightweight shared/test environment from the repository
+root:
 
-Some pipeline stages also require system tools such as FFmpeg and
-Sonic Annotator/Chordino. Environment-specific setup is still being documented;
-consult the sprint and experiment notes before attempting full pipeline setup.
+```sh
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+Create the subsystem environments in the same way:
+
+```sh
+python3.11 -m venv backend/api/.venv-api
+backend/api/.venv-api/bin/python -m pip install -r backend/api/requirements.txt
+
+python3.11 -m venv analysis/beats/.venv-beats
+analysis/beats/.venv-beats/bin/python -m pip install -r analysis/beats/requirements.txt
+
+python3.11 -m venv analysis/evaluation/.venv-eval
+analysis/evaluation/.venv-eval/bin/python -m pip install -r analysis/evaluation/requirements.txt
+
+python3.11 -m venv analysis/lyrics/.venv-lyrics
+analysis/lyrics/.venv-lyrics/bin/python -m pip install -r analysis/lyrics/requirements-whisper.txt
+
+python3.11 -m venv analysis/lyrics/.venv-whisperx
+analysis/lyrics/.venv-whisperx/bin/python -m pip install -r analysis/lyrics/requirements-whisperx.txt
+```
+
+Do not casually combine the Whisper and WhisperX environments: their PyTorch
+and native dependency requirements can differ. The madmom environment uses the
+tested NumPy 1.26.4 and setuptools 80.10.2 combination. Because madmom 0.16.1
+is legacy software, ChordSync applies a small compatibility shim before
+importing it on Python 3.11. Use madmom through the ChordSync beat modules and
+scripts; no manual editing of packages inside a virtual environment is needed.
+
+FFmpeg and ffprobe are external system requirements for audio preprocessing.
+Chordino requires separately installed Vamp/Chordino tooling, including a
+compatible command-line host. ML model downloads are external runtime inputs
+and are not stored in Git. These instructions document the verified macOS
+development arrangement and do not claim support for untested platforms.
 
 ## Testing
 

@@ -10,11 +10,13 @@ practice.
 - Models bars, beat events, chords, lyric segments, and word timings.
 - Resolves the current chord, beat/downbeat state, and active lyric word for a
   playback timestamp.
-- Provides a small playback-position controller that supports forward and
-  backward seeking in tests.
-
-Real audio playback and the complete practice interface are planned for later
-tasks.
+- Plays a bundled publication-safe synthetic audio fixture through
+  `just_audio` while keeping media position authoritative.
+- Provides seeking, completion/replay handling, playback-speed selection,
+  A/B looping, previous/next bar navigation, and synchronized chord, lyric,
+  rhythm, and progression context.
+- Presents the practice state in a responsive, scrollable interface for phone
+  and desktop-sized layouts.
 
 ## Setup
 
@@ -38,6 +40,6 @@ Run static analysis:
 flutter analyze
 ```
 
-The practice-timeline tests exercise both controlled timelines and the bundled
-`SharedTimeline` asset. The asset is a temporary research fixture and remains
-subject to the repository's data-publication review.
+The practice-timeline tests exercise controlled timelines and the bundled
+synthetic `SharedTimeline` and audio fixtures. Both fixtures were created for
+ChordSync testing and contain no commercial song audio or lyrics.
