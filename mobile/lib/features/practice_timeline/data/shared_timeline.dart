@@ -40,6 +40,11 @@ class SharedTimeline {
 
   int get totalLyricWordCount =>
       lyrics.fold(0, (total, segment) => total + segment.words.length);
+
+  double get endTime => bars.fold(
+    0,
+    (latest, bar) => bar.endTime > latest ? bar.endTime : latest,
+  );
 }
 
 class TimelineBar {
