@@ -1,19 +1,10 @@
 from pathlib import Path
-
-import numpy as np
-
-from analysis.beats.models import BeatEvent
-
 from statistics import median
 
 from analysis.beats.models import BeatEvent, BeatGrid
+from analysis.beats.madmom_compat import apply_madmom_compatibility
 
-# Compatibility for madmom 0.16.1 with modern NumPy.
-np.int = int
-np.float = float
-np.bool = bool
-np.complex = complex
-np.object = object
+apply_madmom_compatibility()
 
 from madmom.features.beats import (
     RNNBeatProcessor,
@@ -122,4 +113,3 @@ def build_beat_grid(
         beats=beat_positions,
         source="madmom",
     )
-

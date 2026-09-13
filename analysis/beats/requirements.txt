@@ -1,0 +1,5 @@
+-r ../../requirements.txt
+
+numpy==1.26.4
+madmom==0.16.1
+setuptools==80.10.2

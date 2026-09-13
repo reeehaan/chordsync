@@ -1,0 +1,3 @@
+-r ../../requirements.txt
+
+whisperx==3.8.6
