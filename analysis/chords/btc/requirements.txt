@@ -1,0 +1,11 @@
+# Verified with Python 3.11 on Apple Silicon. Keep this environment isolated.
+torch==2.14.0
+numpy==2.4.6
+librosa==0.11.0
+PyYAML==6.0.3
+mir_eval==0.8.2
+pretty_midi==0.2.11.post0
+pandas==3.0.5
+pyrubberband==0.4.0
+soundfile==0.14.0
+pydantic==2.13.5

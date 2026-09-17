@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from backend.api.app.routers.analysis_jobs import router as analysis_jobs_router
 from backend.api.app.routers.audio import router as audio_router
 
 
@@ -10,6 +11,7 @@ app = FastAPI(
 
 
 app.include_router(audio_router)
+app.include_router(analysis_jobs_router)
 
 
 @app.get("/")

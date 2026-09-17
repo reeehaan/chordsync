@@ -1,7 +1,45 @@
+from pathlib import Path
+
+import pytest
+
 from analysis.chords.chordino.chordino_runner import (
-    parse_chordino_csv,
     events_to_segments,
+    get_sonic_annotator_path,
+    parse_chordino_csv,
+    SonicAnnotatorNotFoundError,
 )
+
+
+def test_configured_sonic_annotator_path_is_used(monkeypatch, tmp_path):
+    executable = tmp_path / "sonic-annotator"
+    executable.write_text("fake executable", encoding="utf-8")
+    executable.chmod(0o755)
+    monkeypatch.setenv("CHORDSYNC_SONIC_ANNOTATOR", str(executable))
+
+    assert get_sonic_annotator_path() == executable
+
+
+def test_sonic_annotator_falls_back_to_path_lookup(monkeypatch):
+    monkeypatch.delenv("CHORDSYNC_SONIC_ANNOTATOR", raising=False)
+    monkeypatch.delenv("SONIC_ANNOTATOR_PATH", raising=False)
+    monkeypatch.setattr(
+        "analysis.chords.chordino.chordino_runner.shutil.which",
+        lambda command: "/portable/bin/sonic-annotator",
+    )
+
+    assert get_sonic_annotator_path() == Path("/portable/bin/sonic-annotator")
+
+
+def test_missing_sonic_annotator_fails_clearly(monkeypatch):
+    monkeypatch.delenv("CHORDSYNC_SONIC_ANNOTATOR", raising=False)
+    monkeypatch.delenv("SONIC_ANNOTATOR_PATH", raising=False)
+    monkeypatch.setattr(
+        "analysis.chords.chordino.chordino_runner.shutil.which",
+        lambda command: None,
+    )
+
+    with pytest.raises(SonicAnnotatorNotFoundError, match="not configured"):
+        get_sonic_annotator_path()
 
 
 def test_parse_chordino_csv():

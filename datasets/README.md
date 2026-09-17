@@ -47,6 +47,12 @@ used to produce them is also supplied locally and is not distributed.
 See `datasets/chord_eval/README.md` for the recorded provenance and current
 reproduction limitations of the retained prediction files.
 
+The public manifest example at
+`analysis/evaluation/evaluation_manifest.example.json` documents the required
+provenance fields. Restricted track paths belong in the ignored
+`analysis/evaluation/evaluation_manifest.local.json`, never in committed
+results; machine-readable evaluation output uses a safe track ID instead.
+
 ## Local lyric benchmarks
 
 Manually annotated lyric timing and reference files may contain text derived

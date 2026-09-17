@@ -44,13 +44,22 @@ four risk-driven sprints:
 
 ## Current Status
 
-ChordSync is currently in Sprint 4 — Interactive Client. The Python pipeline
-supports chord analysis, beat/downbeat tracking, WhisperX word alignment, and
-fusion into a shared practice timeline. The Flutter client can deserialize that
-timeline, resolve playback state, and control test playback positions. Real
-audio playback now uses a bundled synthetic fixture through `just_audio`, and
-the practice interface supports synchronized chords, lyrics, rhythm context,
-seeking, looping, speed control, and bar navigation.
+ChordSync is currently in Sprint 5 — backend and client integration. The Python
+pipeline supports chord analysis, beat/downbeat tracking, WhisperX word
+alignment, and fusion into a shared practice timeline. Chordino remains the
+default classical chord-estimation baseline, while BTC-ISMIR19 is now an
+independently executable neural candidate using an isolated environment and
+external local checkpoint. Formal multi-track comparison is still pending.
+
+A duration-aware evaluation harness can run both estimators on one normalized
+input and score them against a trusted `.lab` reference using root,
+major/minor, triad, and no-chord metrics. Its synthetic result validates the
+workflow only; real-song evaluation requires authorized audio, trusted
+annotations, and recorded provenance. See `analysis/evaluation/README.md`.
+
+The Flutter client can upload audio, poll analysis jobs, deserialize completed
+timelines, and provide synchronized practice playback with chord, lyric,
+rhythm, seeking, looping, speed, and bar-navigation controls.
 
 ## Repository Structure
 
@@ -78,12 +87,13 @@ Local:
 - Redis
 - FFmpeg
 - Chordino
+- BTC inference on CPU through its isolated environment
 - evaluation tooling
 
-Remote CUDA worker:
+Remote CUDA worker (future/heavier runs):
 
 - Demucs
-- BTC full inference/evaluation
+- BTC full evaluation
 - WhisperX
 - heavier MIR workloads
 
@@ -130,6 +140,10 @@ analysis/beats/.venv-beats/bin/python -m pip install -r analysis/beats/requireme
 python3.11 -m venv analysis/evaluation/.venv-eval
 analysis/evaluation/.venv-eval/bin/python -m pip install -r analysis/evaluation/requirements.txt
 
+python3.11 -m venv analysis/chords/btc/.venv-btc
+analysis/chords/btc/.venv-btc/bin/python -m pip install \
+  -r analysis/chords/btc/requirements.txt
+
 python3.11 -m venv analysis/lyrics/.venv-lyrics
 analysis/lyrics/.venv-lyrics/bin/python -m pip install -r analysis/lyrics/requirements-whisper.txt
 
@@ -149,6 +163,11 @@ Chordino requires separately installed Vamp/Chordino tooling, including a
 compatible command-line host. ML model downloads are external runtime inputs
 and are not stored in Git. These instructions document the verified macOS
 development arrangement and do not claim support for untested platforms.
+
+BTC additionally requires a local checkout of the upstream BTC-ISMIR19 source
+and a locally supplied checkpoint. Neither is vendored into this repository;
+see `analysis/chords/btc/README.md` for configuration, provenance, vocabulary,
+and Apple Silicon notes.
 
 ## Testing
 

@@ -110,6 +110,7 @@ datasets/lyrics_eval/let_it_be_reference_words.csv
 experiments/output/
 experiments/cache/
 experiments/chordino/chordino_raw.csv
+analysis/evaluation/evaluation_manifest.local.json
 
 # Local one-off research validation scripts
 analysis/fusion/test_real_timeline_lookup.py

@@ -2,6 +2,7 @@ from pathlib import Path
 import csv
 import io
 import os
+import shutil
 import subprocess
 
 from analysis.preprocessing.audio_preprocessor import get_audio_metadata
@@ -11,15 +12,32 @@ from analysis.chords.normalizer import normalize_chord_label
 
 
 DEFAULT_PLUGIN = "vamp:nnls-chroma:chordino:simplechord"
+SONIC_ANNOTATOR_ENV = "CHORDSYNC_SONIC_ANNOTATOR"
+
+
+class SonicAnnotatorNotFoundError(RuntimeError):
+    pass
 
 
 def get_sonic_annotator_path() -> Path:
-    configured_path = os.getenv("SONIC_ANNOTATOR_PATH")
+    configured_path = os.getenv(SONIC_ANNOTATOR_ENV) or os.getenv(
+        "SONIC_ANNOTATOR_PATH"
+    )
 
     if configured_path:
-        return Path(configured_path).expanduser()
+        executable = Path(configured_path).expanduser()
+        if executable.is_file() and os.access(executable, os.X_OK):
+            return executable
+        raise SonicAnnotatorNotFoundError(
+            f"{SONIC_ANNOTATOR_ENV} does not identify an executable file."
+        )
 
-    return Path("sonic-annotator")
+    discovered_path = shutil.which("sonic-annotator")
+    if discovered_path:
+        return Path(discovered_path)
+    raise SonicAnnotatorNotFoundError(
+        f"sonic-annotator is not configured; set {SONIC_ANNOTATOR_ENV}."
+    )
 
 
 def run_chordino(audio_path: Path) -> list[ChordSegment]:
