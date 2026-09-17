@@ -24,6 +24,7 @@ abstract interface class PracticeAudioPlayer {
 class JustAudioPracticeAudioPlayer implements PracticeAudioPlayer {
   JustAudioPracticeAudioPlayer({
     this.assetPath = 'assets/practice_audio/synthetic_practice.wav',
+    this.filePath,
   }) {
     _playerStateSubscription = _player.playerStateStream.listen(
       _handlePlayerState,
@@ -32,6 +33,7 @@ class JustAudioPracticeAudioPlayer implements PracticeAudioPlayer {
   }
 
   final String assetPath;
+  final String? filePath;
   final AudioPlayer _player = AudioPlayer();
   final _statuses = StreamController<PracticePlaybackStatus>.broadcast();
   late final StreamSubscription<PlayerState> _playerStateSubscription;
@@ -58,7 +60,12 @@ class JustAudioPracticeAudioPlayer implements PracticeAudioPlayer {
   @override
   Future<void> load() async {
     try {
-      await _player.setAudioSource(AudioSource.asset(assetPath));
+      final localFilePath = filePath;
+      await _player.setAudioSource(
+        localFilePath == null
+            ? AudioSource.asset(assetPath)
+            : AudioSource.file(localFilePath),
+      );
       _setStatus(PracticePlaybackStatus.paused);
     } on Object {
       _setStatus(PracticePlaybackStatus.error);

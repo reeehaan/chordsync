@@ -154,6 +154,8 @@ void main() {
       await pumpScreen(tester, audioPlayer: player);
 
       expect(find.byKey(const ValueKey('chordFocus')), findsOneWidget);
+      expect(find.text('Practice sheet'), findsOneWidget);
+      expect(find.byKey(const ValueKey('noChordFallback')), findsOneWidget);
       expect(find.byKey(const ValueKey('lyricsSection')), findsOneWidget);
       expect(find.byKey(const ValueKey('rhythmSection')), findsOneWidget);
       expect(find.byKey(const ValueKey('progressionSection')), findsOneWidget);
@@ -246,6 +248,17 @@ void main() {
         progression: ['C', 'G', 'Am', 'F'],
       );
 
+      await setPosition(tester, 2);
+      expect(find.byKey(const ValueKey('chordDiagram')), findsOneWidget);
+      final activeSheetWord = tester.widget<Text>(
+        find.byKey(const ValueKey('sheetWord1.5')),
+      );
+      expect(activeSheetWord.style?.decoration, TextDecoration.underline);
+      await setPosition(tester, 2.5);
+      final pastSheetWord = tester.widget<Text>(
+        find.byKey(const ValueKey('sheetWord1.5')),
+      );
+      expect(pastSheetWord.style?.decoration, TextDecoration.none);
       await setPosition(tester, 2);
       expectState(
         chord: 'G',
@@ -463,6 +476,7 @@ void main() {
       for (final size in const [
         Size(320, 640),
         Size(390, 844),
+        Size(430, 932),
         Size(1024, 768),
       ]) {
         tester.view.devicePixelRatio = 1;
@@ -472,6 +486,7 @@ void main() {
         await tester.scrollUntilVisible(
           find.byKey(const ValueKey('practiceToolsSection')),
           300,
+          scrollable: find.byType(Scrollable).first,
         );
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('speedSelector')), findsOneWidget);
