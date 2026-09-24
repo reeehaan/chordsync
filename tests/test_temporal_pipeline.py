@@ -81,6 +81,74 @@ def test_align_chords_to_beats():
     assert aligned[1].chord == "G"
 
 
+def test_align_chords_to_beats_snaps_onset_to_nearest_beat():
+    # Chord estimator says G starts at 1.05s, but the nearest beat is 1.0s
+    # (the estimator overshot slightly); the beat two beats later is 2.0s.
+    beats = [
+        BeatEvent(time=0.0, beat_number=1, is_downbeat=True, source="test"),
+        BeatEvent(time=1.0, beat_number=2, is_downbeat=False, source="test"),
+        BeatEvent(time=2.0, beat_number=3, is_downbeat=False, source="test"),
+    ]
+
+    chords = [
+        ChordSegment(
+            start=0.0, end=1.05, raw_label="C", normalized_label="C", source="test"
+        ),
+        ChordSegment(
+            start=1.05, end=3.0, raw_label="G", normalized_label="G", source="test"
+        ),
+    ]
+
+    aligned = align_chords_to_beats(beats, chords)
+
+    # Without snapping, the beat at 1.0s still falls inside the C segment
+    # (0.0-1.05) and G would only appear a full beat later, at 2.0s.
+    assert [event.chord for event in aligned] == ["C", "G", "G"]
+
+
+def test_align_chords_to_beats_does_not_snap_a_distant_off_beat_change():
+    beats = [
+        BeatEvent(time=0.0, beat_number=1, is_downbeat=True, source="test"),
+        BeatEvent(time=1.0, beat_number=2, is_downbeat=False, source="test"),
+        BeatEvent(time=2.0, beat_number=3, is_downbeat=False, source="test"),
+    ]
+    chords = [
+        ChordSegment(
+            start=0.0, end=1.4, raw_label="C", normalized_label="C", source="test"
+        ),
+        ChordSegment(
+            start=1.4, end=3.0, raw_label="G", normalized_label="G", source="test"
+        ),
+    ]
+
+    aligned = align_chords_to_beats(beats, chords)
+
+    assert [event.chord for event in aligned] == ["C", "C", "G"]
+
+
+def test_align_chords_to_beats_does_not_collapse_adjacent_changes():
+    beats = [
+        BeatEvent(time=0.0, beat_number=1, is_downbeat=True, source="test"),
+        BeatEvent(time=1.0, beat_number=2, is_downbeat=False, source="test"),
+        BeatEvent(time=2.0, beat_number=3, is_downbeat=False, source="test"),
+    ]
+    chords = [
+        ChordSegment(
+            start=0.0, end=0.95, raw_label="C", normalized_label="C", source="test"
+        ),
+        ChordSegment(
+            start=0.95, end=1.05, raw_label="G", normalized_label="G", source="test"
+        ),
+        ChordSegment(
+            start=1.05, end=3.0, raw_label="Am", normalized_label="Am", source="test"
+        ),
+    ]
+
+    aligned = align_chords_to_beats(beats, chords)
+
+    assert [event.chord for event in aligned] == ["C", "G", "Am"]
+
+
 def test_group_into_bars():
     events = [
         TimelineEvent(

@@ -149,6 +149,10 @@ analysis/lyrics/.venv-lyrics/bin/python -m pip install -r analysis/lyrics/requir
 
 python3.11 -m venv analysis/lyrics/.venv-whisperx
 analysis/lyrics/.venv-whisperx/bin/python -m pip install -r analysis/lyrics/requirements-whisperx.txt
+
+python3.11 -m venv analysis/separation/.venv-separation
+analysis/separation/.venv-separation/bin/python -m pip install \
+  -r analysis/separation/requirements.txt
 ```
 
 Do not casually combine the Whisper and WhisperX environments: their PyTorch

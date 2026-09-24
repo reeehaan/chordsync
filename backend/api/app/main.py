@@ -1,7 +1,15 @@
+import logging
+
 from fastapi import FastAPI
 
 from backend.api.app.routers.analysis_jobs import router as analysis_jobs_router
 from backend.api.app.routers.audio import router as audio_router
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 
 app = FastAPI(

@@ -52,6 +52,7 @@ def run_fusion(
     beat_path: Path,
     whisperx_path: Path,
     output_path: Path,
+    lyric_source: str = "whisperx-base",
 ) -> None:
     from analysis.beats.models import BeatGrid
     from analysis.chords.models import ChordSegment
@@ -67,7 +68,7 @@ def run_fusion(
 
     chords = [ChordSegment.model_validate(item) for item in chord_data]
     beat_grid = BeatGrid.model_validate(beat_data)
-    lyrics = parse_whisperx_result(whisperx_data, source="whisperx-base")
+    lyrics = parse_whisperx_result(whisperx_data, source=lyric_source)
     events = align_chords_to_beats(beat_grid.beats, chords)
     bars = group_into_bars(events)
     timeline = build_shared_timeline(beat_grid, bars, lyrics)
@@ -93,6 +94,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     fusion_parser.add_argument("--chords", type=Path, required=True)
     fusion_parser.add_argument("--beats", type=Path, required=True)
     fusion_parser.add_argument("--whisperx", type=Path, required=True)
+    fusion_parser.add_argument("--lyric-source", default="whisperx-base")
     fusion_parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -118,6 +120,7 @@ def main(argv: list[str] | None = None) -> None:
             arguments.beats,
             arguments.whisperx,
             arguments.output,
+            arguments.lyric_source,
         )
 
 

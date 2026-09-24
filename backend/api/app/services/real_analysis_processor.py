@@ -1,6 +1,8 @@
 import json
+import logging
 import os
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -12,6 +14,7 @@ from analysis.fusion.models import SharedTimeline
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
+logger = logging.getLogger(__name__)
 
 
 class AnalysisPipelineError(RuntimeError):
@@ -75,21 +78,29 @@ class AnalysisPipelineConfig:
     api_python: Path
     beat_python: Path
     whisperx_executable: Path
+    demucs_executable: Path
     chord_estimator: ChordEstimator = ChordEstimator.CHORDINO
     btc_python: Path | None = None
     btc_checkpoint: Path | None = None
     btc_source: Path | None = None
     stage_module: str = "analysis.pipeline_cli"
-    whisperx_model: str = "base"
+    whisperx_model: str = "small"
+    demucs_model: str = "htdemucs"
     preprocessing_timeout: float = 120.0
     chord_timeout: float = 300.0
     beat_timeout: float = 300.0
+    separation_timeout: float = 600.0
     lyric_timeout: float = 1800.0
     fusion_timeout: float = 120.0
 
     @classmethod
     def local(cls) -> "AnalysisPipelineConfig":
-        estimator_text = os.getenv("CHORDSYNC_CHORD_ESTIMATOR", "chordino")
+        btc_python = _optional_path("CHORDSYNC_BTC_PYTHON")
+        btc_checkpoint = _optional_path("CHORDSYNC_BTC_CHECKPOINT")
+        btc_source = _optional_path("CHORDSYNC_BTC_SOURCE")
+        btc_configured = bool(btc_python and btc_checkpoint and btc_source)
+        default_estimator = "btc" if btc_configured else "chordino"
+        estimator_text = os.getenv("CHORDSYNC_CHORD_ESTIMATOR", default_estimator)
         try:
             estimator = ChordEstimator(estimator_text)
         except ValueError as error:
@@ -102,10 +113,13 @@ class AnalysisPipelineConfig:
             whisperx_executable=(
                 _PROJECT_ROOT / "analysis/lyrics/.venv-whisperx/bin/whisperx"
             ),
+            demucs_executable=(
+                _PROJECT_ROOT / "analysis/separation/.venv-separation/bin/demucs"
+            ),
             chord_estimator=estimator,
-            btc_python=_optional_path("CHORDSYNC_BTC_PYTHON"),
-            btc_checkpoint=_optional_path("CHORDSYNC_BTC_CHECKPOINT"),
-            btc_source=_optional_path("CHORDSYNC_BTC_SOURCE"),
+            btc_python=btc_python,
+            btc_checkpoint=btc_checkpoint,
+            btc_source=btc_source,
         )
 
 
@@ -141,8 +155,15 @@ class RealAnalysisProcessor:
         normalized_path = workspace / "normalized.wav"
         chord_path = workspace / "chords.json"
         beat_path = workspace / "beats.json"
+        separation_directory = workspace / "separated"
+        vocals_path = (
+            separation_directory
+            / self._config.demucs_model
+            / normalized_path.stem
+            / "vocals.wav"
+        )
         whisperx_directory = workspace / "whisperx"
-        whisperx_path = whisperx_directory / "normalized.json"
+        whisperx_path = whisperx_directory / f"{vocals_path.stem}.json"
         timeline_path = workspace / "timeline.json"
 
         self._run_stage(
@@ -179,10 +200,28 @@ class RealAnalysisProcessor:
             beat_path,
         )
         self._run_stage(
+            "separate",
+            [
+                str(self._config.demucs_executable),
+                "-n",
+                self._config.demucs_model,
+                "--two-stems",
+                "vocals",
+                "-d",
+                "cpu",
+                "-o",
+                str(separation_directory),
+                str(normalized_path),
+            ],
+            self._config.separation_timeout,
+            vocals_path,
+            json_output=False,
+        )
+        self._run_stage(
             "lyrics",
             [
                 str(self._config.whisperx_executable),
-                str(normalized_path),
+                str(vocals_path),
                 "--model",
                 self._config.whisperx_model,
                 "--language",
@@ -214,6 +253,8 @@ class RealAnalysisProcessor:
                 str(beat_path),
                 "--whisperx",
                 str(whisperx_path),
+                "--lyric-source",
+                f"whisperx-{self._config.whisperx_model}",
                 "--output",
                 str(timeline_path),
             ],
@@ -273,6 +314,10 @@ class RealAnalysisProcessor:
         expected_output: Path,
         json_output: bool = True,
     ) -> None:
+        job_id = self._job_id_for(expected_output)
+        prefix = f"[job {job_id}] {stage}"
+        logger.info("%s: started", prefix)
+        started_at = time.monotonic()
         try:
             result = self._runner.run(
                 argv,
@@ -280,20 +325,33 @@ class RealAnalysisProcessor:
                 timeout=timeout,
             )
         except SubprocessRunnerTimeout as error:
+            logger.warning("%s: timed out", prefix)
             raise AnalysisStageTimeout(f"{stage} stage timed out") from error
         except OSError as error:
+            logger.warning("%s: could not start", prefix)
             raise AnalysisPipelineError(f"{stage} stage could not start") from error
+        elapsed = time.monotonic() - started_at
         if result.returncode != 0:
+            logger.warning("%s: failed\n%s", prefix, result.stderr)
             raise AnalysisPipelineError(f"{stage} stage failed")
         if not expected_output.is_file() or expected_output.stat().st_size == 0:
+            logger.warning("%s: output is missing", prefix)
             raise AnalysisPipelineError(f"{stage} stage output is missing")
         if json_output:
             try:
                 json.loads(expected_output.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as error:
+                logger.warning("%s: output is malformed", prefix)
                 raise AnalysisPipelineError(
                     f"{stage} stage output is malformed"
                 ) from error
+        logger.info("%s: finished in %.1fs", prefix, elapsed)
+
+    def _job_id_for(self, expected_output: Path) -> str:
+        try:
+            return expected_output.relative_to(self._config.workspace_root).parts[0]
+        except ValueError:
+            return "unknown"
 
 
 def _optional_path(name: str) -> Path | None:

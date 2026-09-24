@@ -100,8 +100,11 @@ class FakePipelineRunner:
 
     @staticmethod
     def _stage(argv: list[str]) -> str:
-        if Path(argv[0]).name == "whisperx":
+        executable_name = Path(argv[0]).name
+        if executable_name == "whisperx":
             return "lyrics"
+        if executable_name == "demucs":
+            return "separate"
         return argv[3]
 
     def _write_output(self, stage: str, argv: list[str]) -> None:
@@ -139,6 +142,13 @@ class FakePipelineRunner:
                     ],
                 },
             )
+        elif stage == "separate":
+            output_dir = Path(argv[argv.index("-o") + 1])
+            model_name = argv[argv.index("-n") + 1]
+            input_path = Path(argv[-1])
+            vocals_path = output_dir / model_name / input_path.stem / "vocals.wav"
+            vocals_path.parent.mkdir(parents=True, exist_ok=True)
+            vocals_path.write_bytes(b"RIFF synthetic vocals audio")
         elif stage == "lyrics":
             output_directory = Path(argv[argv.index("--output_dir") + 1])
             input_path = Path(argv[1])
@@ -184,9 +194,11 @@ def processor_context(tmp_path):
         api_python=Path("/env/api/python"),
         beat_python=Path("/env/beats/python"),
         whisperx_executable=Path("/env/whisperx/whisperx"),
+        demucs_executable=Path("/env/demucs/demucs"),
         preprocessing_timeout=11,
         chord_timeout=22,
         beat_timeout=33,
+        separation_timeout=66,
         lyric_timeout=44,
         fusion_timeout=55,
     )
@@ -207,15 +219,20 @@ def test_real_adapter_runs_isolated_stages_in_order_and_parses_timeline(
         "preprocess",
         "chords",
         "beats",
+        "separate",
         "lyrics",
         "fuse",
     ]
     assert runner.calls[0].argv[0] == str(config.api_python)
     assert runner.calls[1].argv[0] == str(config.api_python)
     assert runner.calls[2].argv[0] == str(config.beat_python)
-    assert runner.calls[3].argv[0] == str(config.whisperx_executable)
-    assert runner.calls[4].argv[0] == str(config.api_python)
-    assert [call.timeout for call in runner.calls] == [11, 22, 33, 44, 55]
+    assert runner.calls[3].argv[0] == str(config.demucs_executable)
+    assert runner.calls[4].argv[0] == str(config.whisperx_executable)
+    assert runner.calls[5].argv[0] == str(config.api_python)
+    assert runner.calls[5].argv[
+        runner.calls[5].argv.index("--lyric-source") + 1
+    ] == "whisperx-small"
+    assert [call.timeout for call in runner.calls] == [11, 22, 33, 66, 44, 55]
     assert all(call.cwd == config.repo_root for call in runner.calls)
     assert str(input_path) in runner.calls[0].argv
     assert input_path.read_bytes() == b"original synthetic upload"
@@ -288,6 +305,19 @@ def test_local_config_defaults_to_chordino_without_btc_paths(monkeypatch):
     assert config.btc_source is None
 
 
+def test_local_config_prefers_btc_once_configured_without_explicit_opt_in(
+    monkeypatch,
+):
+    monkeypatch.delenv("CHORDSYNC_CHORD_ESTIMATOR", raising=False)
+    monkeypatch.setenv("CHORDSYNC_BTC_PYTHON", "/portable/btc/python")
+    monkeypatch.setenv("CHORDSYNC_BTC_CHECKPOINT", "/local/model.pt")
+    monkeypatch.setenv("CHORDSYNC_BTC_SOURCE", "/external/BTC-ISMIR19")
+
+    config = AnalysisPipelineConfig.local()
+
+    assert config.chord_estimator is ChordEstimator.BTC
+
+
 def test_local_config_reads_btc_environment_without_importing_model(monkeypatch):
     monkeypatch.setenv("CHORDSYNC_CHORD_ESTIMATOR", "btc")
     monkeypatch.setenv("CHORDSYNC_BTC_PYTHON", "/portable/btc/python")
@@ -318,7 +348,7 @@ def test_separate_jobs_use_separate_workspaces(processor_context):
     assert (config.workspace_root / "job-two" / "timeline.json").exists()
 
 
-@pytest.mark.parametrize("stage", ["chords", "beats", "lyrics", "fuse"])
+@pytest.mark.parametrize("stage", ["chords", "beats", "separate", "lyrics", "fuse"])
 def test_nonzero_stage_exit_fails_processing(processor_context, stage):
     config, input_path = processor_context
     processor = RealAnalysisProcessor(
@@ -331,7 +361,7 @@ def test_nonzero_stage_exit_fails_processing(processor_context, stage):
 
 
 @pytest.mark.parametrize(
-    "stage", ["preprocess", "chords", "beats", "lyrics", "fuse"]
+    "stage", ["preprocess", "chords", "beats", "separate", "lyrics", "fuse"]
 )
 def test_missing_stage_output_fails_processing(processor_context, stage):
     config, input_path = processor_context
@@ -399,6 +429,9 @@ def test_api_import_does_not_load_heavy_analysis_packages():
     assert not any(name == "madmom" or name.startswith("madmom.") for name in sys.modules)
     assert not any(
         name == "whisperx" or name.startswith("whisperx.") for name in sys.modules
+    )
+    assert not any(
+        name == "demucs" or name.startswith("demucs.") for name in sys.modules
     )
     assert not any(name == "torch" or name.startswith("torch.") for name in sys.modules)
     assert not any(

@@ -1,0 +1,4 @@
+demucs==4.0.1
+# torchaudio (pulled in by demucs) dropped its sox_io/soundfile save backend
+# in favor of TorchCodec; without this, separation runs but fails on write.
+torchcodec==0.16.0

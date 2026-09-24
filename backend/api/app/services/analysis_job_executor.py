@@ -46,7 +46,7 @@ class InProcessAnalysisJobExecutor(AnalysisJobExecutor):
         if not self._service.mark_processing(job_id):
             return False
 
-        logger.info("Analysis job processing started", extra={"job_id": job_id})
+        logger.info("[job %s] processing started", job_id)
         try:
             input_path = self._input_storage.get_path(job_id)
             if input_path is None:
@@ -54,14 +54,14 @@ class InProcessAnalysisJobExecutor(AnalysisJobExecutor):
             result = self._processor.process(input_path)
             self._service.complete(job_id, result)
         except Exception:
-            logger.exception("Analysis job processing failed", extra={"job_id": job_id})
+            logger.exception("[job %s] processing failed", job_id)
             self._service.fail(
                 job_id,
                 code=_SAFE_FAILURE_CODE,
                 message=_SAFE_FAILURE_MESSAGE,
             )
         else:
-            logger.info("Analysis job completed", extra={"job_id": job_id})
+            logger.info("[job %s] completed", job_id)
         return True
 
     def drain(self) -> None:

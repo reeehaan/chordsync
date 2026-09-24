@@ -3,8 +3,9 @@
 ChordSync integrates the 25-class major/minor/no-chord mode of
 [BTC-ISMIR19](https://github.com/jayg996/BTC-ISMIR19), the MIT-licensed code
 released with Park et al., “A Bi-Directional Transformer for Musical Chord
-Recognition,” ISMIR 2019. Chordino remains the default classical baseline;
-formal multi-track comparison is still pending.
+Recognition,” ISMIR 2019. BTC is the preferred estimator once its local
+environment is configured (see below); Chordino remains the fallback
+wherever BTC isn't set up.
 
 ## Local setup
 
@@ -27,14 +28,16 @@ against `checkpoint.sha256` before use.
 Configure local paths without committing machine-specific values:
 
 ```sh
-export CHORDSYNC_CHORD_ESTIMATOR=btc
 export CHORDSYNC_BTC_PYTHON=/path/to/.venv-btc/bin/python
 export CHORDSYNC_BTC_SOURCE=/path/to/BTC-ISMIR19
 export CHORDSYNC_BTC_CHECKPOINT=/path/to/btc_model.pt
 ```
 
-The default estimator is `chordino`; missing BTC configuration does not affect
-that path. Run BTC independently with explicit paths:
+`AnalysisPipelineConfig.local()` switches to BTC automatically once all three
+paths above are set — no separate opt-in variable needed. Set
+`CHORDSYNC_CHORD_ESTIMATOR` explicitly (`chordino` or `btc`) to override that
+choice either way. With none of the BTC variables set, the default remains
+`chordino`. Run BTC independently with explicit paths:
 
 ```sh
 analysis/chords/btc/.venv-btc/bin/python -m analysis.pipeline_cli btc-chords \
