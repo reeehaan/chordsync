@@ -90,6 +90,33 @@ class PlaybackLookup {
     return null;
   }
 
+  /// Returns when the chord active at [playbackTime] first started playing,
+  /// so callers can measure how far through that chord's span playback is.
+  static double? currentChordStart(
+    SharedTimeline timeline,
+    double playbackTime,
+  ) {
+    double? runStart;
+    String? runChord;
+    double? result;
+
+    for (final bar in timeline.bars) {
+      for (final beat in bar.beats) {
+        if (beat.chord != runChord) {
+          runChord = beat.chord;
+          runStart = beat.time;
+        }
+        if (beat.time <= playbackTime) {
+          result = runStart;
+        } else {
+          return result;
+        }
+      }
+    }
+
+    return result;
+  }
+
   static TimelineEvent? nextChord(
     SharedTimeline timeline,
     double playbackTime,
@@ -105,6 +132,27 @@ class PlaybackLookup {
     }
 
     return null;
+  }
+
+  /// Returns the chord run immediately before the chord active at
+  /// [playbackTime]. Repeated beat labels inside the same run are ignored.
+  static String? previousChord(SharedTimeline timeline, double playbackTime) {
+    String? activeRun;
+    String? previousRun;
+    var hasActiveBeat = false;
+
+    for (final bar in timeline.bars) {
+      for (final beat in bar.beats) {
+        if (beat.time > playbackTime) return hasActiveBeat ? previousRun : null;
+        hasActiveBeat = true;
+        if (beat.chord != activeRun) {
+          previousRun = activeRun;
+          activeRun = beat.chord;
+        }
+      }
+    }
+
+    return hasActiveBeat ? previousRun : null;
   }
 
   static List<String> chordProgression(
@@ -179,6 +227,10 @@ class PlaybackLookup {
     final upcomingChord = nextChord(timeline, playbackTime);
     final previousWord = previousLyricWord(timeline, playbackTime);
     final upcomingWord = nextLyricWord(timeline, playbackTime);
+    final chordStart = currentChordStart(timeline, playbackTime);
+    final chordEnd = chordStart == null
+        ? null
+        : (upcomingChord?.time ?? timeline.endTime);
 
     return PlaybackState(
       playbackTime: playbackTime,
@@ -188,7 +240,10 @@ class PlaybackLookup {
       beatsPerBar: timeline.beatsPerBar,
       isDownbeat: beat?.isDownbeat ?? false,
       chordProgression: chordProgression(timeline, playbackTime),
+      previousChord: previousChord(timeline, playbackTime),
       nextChord: upcomingChord?.chord,
+      currentChordStart: chordStart,
+      currentChordEnd: chordEnd,
       previousLyricWord: previousWord?.text,
       lyricWord: activeWord?.text,
       nextLyricWord: upcomingWord?.text,

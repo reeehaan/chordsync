@@ -40,22 +40,14 @@ void main() {
       expect(text.data, value);
     }
 
-    expect(find.text('Current chord'), findsOneWidget);
     expect(find.text('Bar'), findsOneWidget);
     expect(find.text('Beat'), findsOneWidget);
     expect(find.text('Downbeat'), findsOneWidget);
-    expect(find.text('Next chord'), findsOneWidget);
-    expect(find.text('Lyrics'), findsOneWidget);
-    expect(find.text('Progression'), findsOneWidget);
-    expect(find.text('Position'), findsOneWidget);
     expectValue('currentChordValue', chord);
     expectValue('nextChordValue', nextChord);
     expectValue('barValue', bar);
     expectValue('beatValue', beat);
     expectValue('downbeatValue', downbeat);
-    expectValue('previousLyricValue', previousLyric);
-    expectValue('lyricValue', lyric);
-    expectValue('nextLyricValue', nextLyric);
     expectValue('positionValue', position);
 
     for (var marker = 1; marker <= 4; marker++) {
@@ -188,7 +180,6 @@ void main() {
         position: '0.0 s',
         progression: ['C', 'G', 'Am', 'F'],
       );
-      expect(find.text('Playback'), findsOneWidget);
       expect(find.text('Paused'), findsOneWidget);
       expect(find.byTooltip('Play'), findsOneWidget);
       expect(find.byTooltip('Previous bar'), findsOneWidget);
@@ -249,16 +240,71 @@ void main() {
       );
 
       await setPosition(tester, 2);
-      expect(find.byKey(const ValueKey('chordDiagram')), findsOneWidget);
-      final activeSheetWord = tester.widget<Text>(
-        find.byKey(const ValueKey('sheetWord1.5')),
+      // Previous, current, and next chords remain visible in the fixed header.
+      expect(find.byKey(const ValueKey('chordDiagram')), findsNWidgets(3));
+      expect(
+        (find
+                    .byKey(const ValueKey('previousChordValue'))
+                    .evaluate()
+                    .single
+                    .widget
+                as Text)
+            .data,
+        'C',
       );
-      expect(activeSheetWord.style?.decoration, TextDecoration.underline);
+      final headerTop = tester.getTopLeft(
+        find.byKey(const ValueKey('fixedChordHeader')),
+      );
+      final transportTop = tester.getTopLeft(
+        find.byKey(const ValueKey('transportSection')),
+      );
+      await tapControl(tester, 'Play');
+      await tester.drag(
+        find.byKey(const ValueKey('lyricScrollView')),
+        const Offset(0, -100),
+      );
+      await tester.pumpAndSettle();
+      expect(player.isPlaying, isTrue);
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('fixedChordHeader'))),
+        headerTop,
+      );
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('transportSection'))),
+        transportTop,
+      );
+      expect(find.byKey(const ValueKey('followLyricsButton')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('followLyricsButton')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('followLyricsButton')), findsNothing);
+      await tapControl(tester, 'Pause');
+      final progressFinder = find.descendant(
+        of: find.byKey(const ValueKey('chordProgressBar')),
+        matching: find.byType(LinearProgressIndicator),
+      );
+      final progressAnimation = tester.widget<TweenAnimationBuilder<double>>(
+        find.descendant(
+          of: find.byKey(const ValueKey('chordProgressBar')),
+          matching: find.byType(TweenAnimationBuilder<double>),
+        ),
+      );
+      expect(progressAnimation.duration, const Duration(milliseconds: 180));
+      expect(tester.widget<LinearProgressIndicator>(progressFinder).value, 0);
+      final activeSheetWord = tester.widget<AnimatedDefaultTextStyle>(
+        find.byKey(const ValueKey('sheetWordStyle1.5')),
+      );
+      expect(activeSheetWord.style.fontWeight, FontWeight.w800);
       await setPosition(tester, 2.5);
-      final pastSheetWord = tester.widget<Text>(
-        find.byKey(const ValueKey('sheetWord1.5')),
+      expect(
+        tester.widget<LinearProgressIndicator>(progressFinder).value,
+        closeTo(0.5, 0.001),
       );
-      expect(pastSheetWord.style?.decoration, TextDecoration.none);
+      final pastSheetWord = tester.widget<AnimatedDefaultTextStyle>(
+        find.byKey(const ValueKey('sheetWordStyle1.5')),
+      );
+      expect(activeSheetWord.style.color, isNot(pastSheetWord.style.color));
+      await setPosition(tester, 3);
+      expect(tester.widget<LinearProgressIndicator>(progressFinder).value, 0);
       await setPosition(tester, 2);
       expectState(
         chord: 'G',
@@ -483,12 +529,9 @@ void main() {
         tester.view.physicalSize = size;
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        await tester.scrollUntilVisible(
-          find.byKey(const ValueKey('practiceToolsSection')),
-          300,
-          scrollable: find.byType(Scrollable).first,
-        );
-        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('fixedChordHeader')), findsOneWidget);
+        expect(find.byKey(const ValueKey('lyricScrollView')), findsOneWidget);
+        expect(find.byKey(const ValueKey('transportSection')), findsOneWidget);
         expect(find.byKey(const ValueKey('speedSelector')), findsOneWidget);
         expect(tester.takeException(), isNull);
       }

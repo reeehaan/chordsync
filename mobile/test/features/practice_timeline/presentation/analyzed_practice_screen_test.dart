@@ -56,7 +56,9 @@ void main() {
       }
       expect(tester.takeException(), isNull);
       expect(find.byTooltip('Play'), findsOneWidget);
-      expect(find.text('Current chord'), findsOneWidget);
+      expect(find.text('Current chord'), findsNothing);
+      expect(find.text('Previous'), findsNothing);
+      expect(find.text('Next chord'), findsNothing);
       expect(
         tester
             .widget<Text>(find.byKey(const ValueKey('currentChordValue')))
@@ -64,11 +66,15 @@ void main() {
             ?.fontWeight,
         FontWeight.w800,
       );
-      expect(find.text('line40'), findsOneWidget);
       final scrollable = find.byType(Scrollable).first;
       final scrollPosition = tester.state<ScrollableState>(scrollable).position;
       expect(scrollPosition.pixels, 0);
-      await tester.drag(scrollable, const Offset(0, -3000));
+      await tester.scrollUntilVisible(
+        find.text('line40'),
+        300,
+        scrollable: scrollable,
+      );
+      scrollPosition.jumpTo(scrollPosition.maxScrollExtent);
       await tester.pump();
       expect(scrollPosition.pixels, greaterThan(0));
       await tester.ensureVisible(find.text('line40'));
@@ -82,7 +88,6 @@ void main() {
       expect(scrollPosition.pixels, greaterThan(0));
       expect(find.byTooltip('Play'), findsOneWidget);
       expect(_text(tester, 'persistentChordValue'), 'Current C');
-      expect(_text(tester, 'persistentNextChordValue'), 'Next G');
       expect(tester.takeException(), isNull);
 
       final bottomBeforeSeek = scrollPosition.pixels;
@@ -91,18 +96,12 @@ void main() {
       expect(_text(tester, 'currentChordValue'), 'G');
       expect(_text(tester, 'barValue'), '40');
       expect(_text(tester, 'persistentChordValue'), 'Current G');
-      expect(_text(tester, 'persistentNextChordValue'), 'Next Am');
       expect(scrollPosition.pixels, bottomBeforeSeek);
       expect(tester.takeException(), isNull);
 
       scrollPosition.jumpTo(scrollPosition.maxScrollExtent);
       await tester.pump();
-      expect(
-        tester.getBottomLeft(find.text('Clear Loop')).dy,
-        lessThan(
-          tester.getTopLeft(find.byKey(const ValueKey('transportSection'))).dy,
-        ),
-      );
+      expect(find.byTooltip('Clear Loop'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

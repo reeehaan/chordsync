@@ -21,9 +21,9 @@ practice.
   status, and parsing completed results with the existing `SharedTimeline`
   model.
 - Converts completed analysis into a practice session that keeps the returned
-  timeline paired with the exact local audio file selected for upload. The
-  server analyzes an uploaded copy; practice playback uses the original local
-  file through the existing controller and synchronization stack.
+  timeline paired with an app-owned copy of the selected local audio file. The
+  server analyzes an uploaded copy; practice playback uses the persisted local
+  copy through the existing controller and synchronization stack.
 - Provides the first functional user journey: choose a local WAV, MP3, or M4A
   file, review its safe metadata, analyze it with visible upload/job state, and
   explicitly enter the song-sheet practice screen when ready.
@@ -67,6 +67,14 @@ Cancelling from the import screen only stops local waiting. The backend job may
 continue independently, while the selected file remains available for an
 explicit retry that creates a new job. Returning from practice preserves the
 ready result and selection. Broader song-library navigation remains pending.
+
+Selected audio is copied immediately into the app's Documents
+`imported_audio/` directory, so practice does not depend on a temporary native
+picker path. Successful imports are retained for analysis and practice, including
+retries and return navigation. There is no automatic deletion in this phase:
+library ownership, duplicate detection, orphan cleanup, and retention limits
+are deferred. An import that fails partway removes its partial copy when
+possible.
 
 ## Verification
 
