@@ -7,6 +7,7 @@ import 'package:chordsync/features/analysis/application/analysis_practice_coordi
 import 'package:chordsync/features/analysis/data/analysis_api_client.dart';
 import 'package:chordsync/features/analysis/data/analysis_client_errors.dart';
 import 'package:chordsync/features/analysis/data/analysis_job.dart';
+import 'package:chordsync/features/analysis/data/analyzed_session_library.dart';
 import 'package:chordsync/features/analysis/presentation/audio_file_selector.dart';
 import 'package:chordsync/features/analysis/presentation/audio_import_controller.dart';
 import 'package:chordsync/features/analysis/presentation/audio_import_screen.dart';
@@ -40,7 +41,10 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  Future<void> pumpScreen(WidgetTester tester) async {
+  Future<void> pumpScreen(
+    WidgetTester tester, {
+    AnalyzedSessionLibrary? sessionLibrary,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: AudioImportScreen(
@@ -49,6 +53,7 @@ void main() {
           practiceSessionFactory: PracticeSessionFactory(
             audioPlayerFactory: (_) => practicePlayer,
           ),
+          sessionLibrary: sessionLibrary,
         ),
       ),
     );
@@ -117,13 +122,31 @@ void main() {
     await tester.ensureVisible(find.text('Start Practice'));
     await tester.tap(find.text('Start Practice'));
     await tester.pumpAndSettle();
-    expect(find.text('ChordSync Practice'), findsOneWidget);
+    expect(find.text('safe_song'), findsOneWidget);
     expect(find.byKey(const ValueKey('currentChordValue')), findsOneWidget);
 
-    Navigator.of(tester.element(find.text('ChordSync Practice'))).pop();
+    Navigator.of(tester.element(find.text('safe_song'))).pop();
     await tester.pumpAndSettle();
     expect(find.text('Ready to practice'), findsOneWidget);
     expect(find.text('safe_song.wav'), findsOneWidget);
+  });
+
+  testWidgets('opens a previously analyzed song without analyzing again', (
+    tester,
+  ) async {
+    final saved = _session(audio);
+    await pumpScreen(tester, sessionLibrary: _FakeSessionLibrary([saved]));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Previously analyzed'), findsOneWidget);
+    expect(find.text('safe_song'), findsOneWidget);
+    expect(find.text('1 saved'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('savedPractice-widget-job')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('currentChordValue')), findsOneWidget);
+    expect(preparation.calls, 0);
   });
 
   testWidgets('shows safe errors, supports retry, and cancels locally', (
@@ -156,6 +179,27 @@ void main() {
     expect(find.text('Stopped waiting. You can try again.'), findsOneWidget);
     expect(find.text('Analyze Song'), findsOneWidget);
     expect(find.text('safe_song.wav'), findsOneWidget);
+  });
+
+  testWidgets('shows a path-free error when audio import fails', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+    selector.error = FileSystemException(
+      'private picker failure',
+      '${directory.path}/private-song.wav',
+    );
+
+    await tester.tap(find.text('Choose audio file'));
+    await tester.pump();
+
+    expect(
+      find.text('Could not import that audio file. Please try again.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining(directory.path), findsNothing);
+    expect(tester.takeException(), isNull);
+    expect(preparation.calls, 0);
   });
 
   testWidgets('remains usable without overflow at supported sizes', (
@@ -212,9 +256,30 @@ class _FakeFileSelector implements AudioFileSelector {
   _FakeFileSelector(this.file);
 
   final File? file;
+  Object? error;
 
   @override
-  Future<File?> chooseAudio() async => file;
+  Future<SelectedAudioFile?> chooseAudio() async {
+    if (error case final failure?) throw failure;
+    final selected = file;
+    if (selected == null) return null;
+    return SelectedAudioFile(
+      file: selected,
+      displayName: selected.uri.pathSegments.last,
+    );
+  }
+}
+
+class _FakeSessionLibrary implements AnalyzedSessionLibrary {
+  _FakeSessionLibrary(this.sessions);
+
+  final List<AnalyzedPracticeSession> sessions;
+
+  @override
+  Future<List<AnalyzedPracticeSession>> load() async => sessions;
+
+  @override
+  Future<void> save(AnalyzedPracticeSession session) async {}
 }
 
 class _FakePreparation implements AnalysisPracticePreparation {

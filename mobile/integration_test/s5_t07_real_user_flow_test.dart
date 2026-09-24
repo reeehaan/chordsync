@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -59,15 +61,22 @@ void main() {
     await tester.pumpWidget(
       MyApp(
         importController: setup.controller,
-        fileSelector: _KnownAudioSelector(setup.audioFile),
+        fileSelector: NativeAudioFileSelector(
+          pickFile: () async => setup.audioFile,
+        ),
       ),
     );
     expect(find.text('Choose audio file'), findsOneWidget);
 
     await tester.tap(find.text('Choose audio file'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('synthetic_practice.wav'), findsOneWidget);
     expect(find.textContaining(setup.directory.path), findsNothing);
+    final imported = setup.controller.selectedFile!;
+    final documents = await getApplicationDocumentsDirectory();
+    expect(p.dirname(imported.path), p.join(documents.path, 'imported_audio'));
+    await setup.audioFile.delete();
+    expect(await imported.exists(), isTrue);
 
     await tester.ensureVisible(find.text('Analyze Song'));
     await tester.tap(find.text('Analyze Song'));
@@ -78,7 +87,10 @@ void main() {
         () => Future<void>.delayed(const Duration(seconds: 1)),
       );
       await tester.pump();
-      if (setup.controller.phase == AudioImportPhase.ready) break;
+      if (setup.controller.phase == AudioImportPhase.ready ||
+          setup.controller.phase == AudioImportPhase.failed) {
+        break;
+      }
     }
     await tester.pump();
     expect(setup.controller.phase, AudioImportPhase.ready);
@@ -94,7 +106,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       if (find.byTooltip('Play').evaluate().isNotEmpty) break;
     }
-    expect(find.text('ChordSync Practice'), findsOneWidget);
+    expect(find.text('synthetic_practice'), findsOneWidget);
     expect(find.byKey(const ValueKey('currentChordValue')), findsOneWidget);
 
     await tester.ensureVisible(find.byTooltip('Play'));
@@ -141,16 +153,8 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.runAsync(() async {
       await Future<void>.delayed(const Duration(milliseconds: 100));
+      await imported.delete();
       await setup.directory.delete(recursive: true);
     });
   }, timeout: const Timeout(Duration(minutes: 20)));
-}
-
-class _KnownAudioSelector implements AudioFileSelector {
-  const _KnownAudioSelector(this.file);
-
-  final File file;
-
-  @override
-  Future<File?> chooseAudio() async => file;
 }

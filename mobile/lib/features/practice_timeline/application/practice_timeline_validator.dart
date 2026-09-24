@@ -14,11 +14,18 @@ class PracticeTimelineValidator {
 
     var previousBarEnd = 0.0;
     var previousBeatTime = -1.0;
-    for (final bar in timeline.bars) {
+    for (var barIndex = 0; barIndex < timeline.bars.length; barIndex++) {
+      final bar = timeline.bars[barIndex];
+      final isFinalPartialBar =
+          barIndex == timeline.bars.length - 1 &&
+          bar.endTime == bar.startTime &&
+          bar.beats.length == 1 &&
+          bar.beats.single.time == bar.startTime;
       if (!bar.startTime.isFinite ||
           !bar.endTime.isFinite ||
           bar.startTime < 0 ||
-          bar.endTime <= bar.startTime ||
+          bar.endTime < bar.startTime ||
+          (bar.endTime == bar.startTime && !isFinalPartialBar) ||
           bar.startTime < previousBarEnd ||
           bar.beats.isEmpty) {
         throw const FormatException('Timeline bar structure is invalid.');

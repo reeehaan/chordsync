@@ -6,6 +6,7 @@ import 'package:chordsync/features/analysis/application/analysis_practice_coordi
 import 'package:chordsync/features/analysis/data/analysis_client_errors.dart';
 import 'package:chordsync/features/analysis/data/analysis_api_client.dart';
 import 'package:chordsync/features/analysis/data/analysis_job.dart';
+import 'package:chordsync/features/analysis/data/analyzed_session_library.dart';
 import 'package:chordsync/features/analysis/presentation/audio_import_controller.dart';
 import 'package:chordsync/features/practice_timeline/data/shared_timeline.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,22 @@ void main() {
     expect(controller.fileSizeBytes, 3);
     expect(controller.title, 'my_song');
     expect(controller.canAnalyze, isTrue);
+  });
+
+  test('uses source display name while retaining the opaque stored file', () {
+    final stored = File(
+      '${directory.path}/0123456789abcdef0123456789abcdef.wav',
+    )..writeAsBytesSync([1, 2, 3]);
+
+    expect(
+      controller.selectFile(stored, displayName: 'My Practice Song.WAV'),
+      isTrue,
+    );
+
+    expect(controller.selectedFile, stored);
+    expect(controller.filename, 'My Practice Song.WAV');
+    expect(controller.extension, 'wav');
+    expect(controller.title, 'My Practice Song');
   });
 
   test('rejects unsupported files without exposing their path', () {
@@ -89,6 +106,24 @@ void main() {
     expect(controller.session, same(session));
     expect(preparation.files.single, same(audio));
     expect(preparation.titles.single, 'my_song');
+  });
+
+  test('saves a completed analysis for later practice', () async {
+    final library = _FakeSessionLibrary();
+    controller.dispose();
+    controller = AudioImportController(
+      preparation: preparation,
+      sessionLibrary: library,
+    );
+    controller.selectFile(audio);
+
+    final analysis = controller.analyze();
+    final session = _session(audio);
+    preparation.complete(session);
+    await analysis;
+
+    expect(library.saved, [same(session)]);
+    expect(controller.phase, AudioImportPhase.ready);
   });
 
   test('guards duplicate analyze and file changes while active', () async {
@@ -148,6 +183,17 @@ void main() {
 
     expect(preparation.cancellations.single.isCancelled, isTrue);
   });
+}
+
+class _FakeSessionLibrary implements AnalyzedSessionLibrary {
+  final saved = <AnalyzedPracticeSession>[];
+
+  @override
+  Future<List<AnalyzedPracticeSession>> load() async => saved;
+
+  @override
+  Future<void> save(AnalyzedPracticeSession session) async =>
+      saved.add(session);
 }
 
 class _FakePreparation implements AnalysisPracticePreparation {

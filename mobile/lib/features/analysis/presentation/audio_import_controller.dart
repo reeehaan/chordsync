@@ -6,6 +6,7 @@ import '../application/analysis_job_poller.dart';
 import '../application/analysis_practice_coordinator.dart';
 import '../data/analysis_client_errors.dart';
 import '../data/analysis_job.dart';
+import '../data/analyzed_session_library.dart';
 
 enum AudioImportPhase {
   idle,
@@ -22,15 +23,18 @@ enum AudioImportPhase {
 class AudioImportController extends ChangeNotifier {
   factory AudioImportController({
     required AnalysisPracticePreparation preparation,
-  }) => AudioImportController._(preparation);
+    AnalyzedSessionLibrary? sessionLibrary,
+  }) => AudioImportController._(preparation, sessionLibrary);
 
-  AudioImportController._(this._preparation);
+  AudioImportController._(this._preparation, this._sessionLibrary);
 
   static const supportedExtensions = {'wav', 'mp3', 'm4a'};
 
   final AnalysisPracticePreparation _preparation;
+  final AnalyzedSessionLibrary? _sessionLibrary;
   AudioImportPhase _phase = AudioImportPhase.idle;
   File? _selectedFile;
+  String? _displayName;
   String _title = '';
   int? _fileSizeBytes;
   double? _uploadProgress;
@@ -43,7 +47,7 @@ class AudioImportController extends ChangeNotifier {
 
   AudioImportPhase get phase => _phase;
   File? get selectedFile => _selectedFile;
-  String? get filename => _selectedFile?.uri.pathSegments.last;
+  String? get filename => _displayName;
   String? get extension {
     final name = filename;
     if (name == null || !name.contains('.')) return null;
@@ -63,12 +67,16 @@ class AudioImportController extends ChangeNotifier {
       _title.trim().isNotEmpty &&
       _title.trim().length <= 200;
 
-  bool selectFile(File file) {
+  bool selectFile(File file, {String? displayName}) {
     if (_active) return false;
-    final name = file.uri.pathSegments.last;
-    final suffix = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    final name = displayName ?? file.uri.pathSegments.last;
+    final storedName = file.uri.pathSegments.last;
+    final suffix = storedName.contains('.')
+        ? storedName.split('.').last.toLowerCase()
+        : '';
     if (!supportedExtensions.contains(suffix)) {
       _selectedFile = null;
+      _displayName = null;
       _fileSizeBytes = null;
       _session = null;
       _phase = AudioImportPhase.failed;
@@ -78,12 +86,16 @@ class AudioImportController extends ChangeNotifier {
     }
 
     _selectedFile = file;
+    _displayName = name;
     try {
       _fileSizeBytes = file.lengthSync();
     } on FileSystemException {
       _fileSizeBytes = null;
     }
-    _title = name.substring(0, name.length - suffix.length - 1);
+    final titleSuffix = name.contains('.') ? name.split('.').last : '';
+    _title = titleSuffix.isEmpty
+        ? name
+        : name.substring(0, name.length - titleSuffix.length - 1);
     _uploadProgress = null;
     _errorMessage = null;
     _session = null;
@@ -135,6 +147,13 @@ class AudioImportController extends ChangeNotifier {
       );
       if (!_isCurrent(attempt)) return;
       _session = session;
+      try {
+        await _sessionLibrary?.save(session);
+      } on FileSystemException {
+        // A local-library write failure must not discard a valid practice.
+      } on AnalyzedSessionLibraryException {
+        // A local-library write failure must not discard a valid practice.
+      }
       _phase = AudioImportPhase.ready;
     } on Object catch (error) {
       if (!_isCurrent(attempt)) return;

@@ -5,6 +5,7 @@ import 'features/analysis/application/analysis_job_poller.dart';
 import 'features/analysis/application/analysis_practice_coordinator.dart';
 import 'features/analysis/data/analysis_api_client.dart';
 import 'features/analysis/data/analysis_api_config.dart';
+import 'features/analysis/data/analyzed_session_library.dart';
 import 'features/analysis/presentation/audio_file_selector.dart';
 import 'features/analysis/presentation/audio_import_controller.dart';
 import 'features/analysis/presentation/audio_import_screen.dart';
@@ -38,6 +39,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   AudioImportController? _importController;
+  AnalyzedSessionLibrary? _sessionLibrary;
 
   bool get _usesPracticeFixture =>
       widget.audioPlayer != null || widget.analyzedSession != null;
@@ -46,6 +48,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     if (!_usesPracticeFixture) {
+      _sessionLibrary = LocalAnalyzedSessionLibrary();
       _importController = widget.importController ?? _createImportController();
     }
   }
@@ -59,6 +62,7 @@ class _MyAppState extends State<MyApp> {
         client: client,
         polling: AnalysisJobPoller(client: client),
       ),
+      sessionLibrary: _sessionLibrary,
     );
   }
 
@@ -84,6 +88,7 @@ class _MyAppState extends State<MyApp> {
               fileSelector:
                   widget.fileSelector ?? const NativeAudioFileSelector(),
               practiceSessionFactory: widget.sessionFactory,
+              sessionLibrary: _sessionLibrary,
             ),
     );
   }

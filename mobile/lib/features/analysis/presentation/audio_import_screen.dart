@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../design_system/chordsync_design_system.dart';
 import '../../practice_timeline/application/practice_session_factory.dart';
 import '../../practice_timeline/presentation/practice_screen.dart';
+import '../application/analyzed_practice_session.dart';
+import '../data/analyzed_session_library.dart';
 import 'audio_file_selector.dart';
 import 'audio_import_controller.dart';
 
@@ -12,21 +14,27 @@ class AudioImportScreen extends StatefulWidget {
     required this.controller,
     required this.fileSelector,
     this.practiceSessionFactory,
+    this.sessionLibrary,
   });
 
   final AudioImportController controller;
   final AudioFileSelector fileSelector;
   final PracticeSessionFactory? practiceSessionFactory;
+  final AnalyzedSessionLibrary? sessionLibrary;
 
   @override
   State<AudioImportScreen> createState() => _AudioImportScreenState();
 }
 
 class _AudioImportScreenState extends State<AudioImportScreen> {
+  List<AnalyzedPracticeSession> _savedSessions = const [];
+  String? _loadedReadyJobId;
+
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_refresh);
+    _loadSavedSessions();
   }
 
   @override
@@ -44,18 +52,61 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    final session = widget.controller.session;
+    if (widget.controller.phase == AudioImportPhase.ready &&
+        session != null &&
+        session.job.jobId != _loadedReadyJobId) {
+      _loadedReadyJobId = session.job.jobId;
+      _loadSavedSessions();
+    }
+  }
+
+  Future<void> _loadSavedSessions() async {
+    final library = widget.sessionLibrary;
+    if (library == null) return;
+    final sessions = await library.load();
+    if (mounted) setState(() => _savedSessions = sessions);
   }
 
   Future<void> _chooseAudio() async {
-    final file = await widget.fileSelector.chooseAudio();
-    if (!mounted || file == null) return;
-    widget.controller.selectFile(file);
+    SelectedAudioFile? selection;
+    try {
+      selection = await widget.fileSelector.chooseAudio();
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not import that audio file. Please try again.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted || selection == null) return;
+    widget.controller.selectFile(
+      selection.file,
+      displayName: selection.displayName,
+    );
   }
 
   Future<void> _startPractice() async {
     final session = widget.controller.session;
     if (session == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => PracticeScreen(
+          analyzedSession: session,
+          sessionFactory: widget.practiceSessionFactory,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSavedPractice(AnalyzedPracticeSession session) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => PracticeScreen(
@@ -104,8 +155,63 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
                       color: ChordSyncColors.textSecondary,
                     ),
                   ),
+                  const SizedBox(height: 22),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Previously analyzed',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      Text(
+                        '${_savedSessions.length} saved',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: ChordSyncColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (_savedSessions.isEmpty)
+                    Container(
+                      key: const ValueKey('savedPracticeEmpty'),
+                      height: 104,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: ChordSyncColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.history),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Your completed songs will appear here for quick practice.',
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      height: 104,
+                      child: ListView.separated(
+                        key: const ValueKey('savedPracticeList'),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _savedSessions.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
+                        itemBuilder: (context, index) {
+                          final session = _savedSessions[index];
+                          return _SavedPracticeCard(
+                            session: session,
+                            onOpen: () => _openSavedPractice(session),
+                          );
+                        },
+                      ),
+                    ),
                   SizedBox(
-                    height: isFocusedState ? 20 : (compactViewport ? 24 : 48),
+                    height: isFocusedState ? 20 : (compactViewport ? 24 : 36),
                   ),
                   Text(
                     'Add a song',
@@ -215,6 +321,58 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
                   ],
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedPracticeCard extends StatelessWidget {
+  const _SavedPracticeCard({required this.session, required this.onOpen});
+
+  final AnalyzedPracticeSession session;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 230,
+      child: Card(
+        child: InkWell(
+          key: ValueKey('savedPractice-${session.job.jobId}'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+            child: Row(
+              children: [
+                const CircleAvatar(child: Icon(Icons.music_note)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${session.timeline.bpm.toStringAsFixed(0)} BPM · Practice',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: ChordSyncColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
             ),
           ),
         ),
