@@ -1,0 +1,1030 @@
+{
+  "schema_version": 1,
+  "task": "S5-T16B3",
+  "checkpoint": "8e640b01e6c91ac970c53bc17c98d730f0f31951",
+  "human_question": "Should a beginner guitarist be expected to strum chords through this section?",
+  "items": [
+    {
+      "id": "R01",
+      "song": "Love Story",
+      "selection_type": "anchor",
+      "selection_context": "problematic intro",
+      "start": 0.23,
+      "end": 8.12,
+      "duration": 7.89,
+      "beat_count": 16,
+      "clip_id": "R01.m4a",
+      "raw_state": "PLAY_CHORD",
+      "raw_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "consolidated_state": "PLAY_CHORD",
+      "consolidated_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0355,
+            "mean_margin": 0.7127,
+            "mean_normalized_entropy": 0.1391
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "NORMAL",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.315,
+            "beat_alignment_ratio": 0.75,
+            "churn_per_beat": 0.25,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.7598,
+            "supporting_windows": 1.0
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.0625,
+            "longest_disagreement_run_beats": 0.5
+          }
+        }
+      },
+      "human_label": "MUSIC_ONLY",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R02",
+      "song": "Love Story",
+      "selection_type": "anchor",
+      "selection_context": "stable later section",
+      "start": 166.32,
+      "end": 174.24,
+      "duration": 7.92,
+      "beat_count": 16,
+      "clip_id": "R02.m4a",
+      "raw_state": "PLAY_CHORD",
+      "raw_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "consolidated_state": "PLAY_CHORD",
+      "consolidated_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0119,
+            "mean_margin": 0.8466,
+            "mean_normalized_entropy": 0.1102
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.6517,
+            "beat_alignment_ratio": 0.5,
+            "churn_per_beat": 0.1875,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.8259,
+            "supporting_windows": 0.5
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "NORMAL",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.25,
+            "longest_disagreement_run_beats": 2.0
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R03",
+      "song": "Duvet",
+      "selection_type": "anchor",
+      "selection_context": "problematic middle instrumental section",
+      "start": 104.52,
+      "end": 114.81,
+      "duration": 10.29,
+      "beat_count": 16,
+      "clip_id": "R03.m4a",
+      "raw_state": "MUSIC_ONLY",
+      "raw_window_states": [
+        "UNCERTAIN",
+        "MUSIC_ONLY"
+      ],
+      "consolidated_state": "MUSIC_ONLY",
+      "consolidated_window_states": [
+        "MUSIC_ONLY",
+        "MUSIC_ONLY"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "STRONGLY_WEAK",
+          "window_strengths": [
+            "STRONGLY_WEAK",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0631,
+            "mean_margin": 0.5176,
+            "mean_normalized_entropy": 0.304
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 0.8575,
+            "beat_alignment_ratio": 0.5,
+            "churn_per_beat": 0.625,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.5308,
+            "supporting_windows": 0.0
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "STRONGLY_WEAK",
+          "window_strengths": [
+            "STRONGLY_WEAK",
+            "STRONGLY_WEAK"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.875,
+            "longest_disagreement_run_beats": 4.5
+          }
+        }
+      },
+      "human_label": "MUSIC_ONLY",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R04",
+      "song": "Duvet",
+      "selection_type": "anchor",
+      "selection_context": "stable section",
+      "start": 73.59,
+      "end": 83.89,
+      "duration": 10.3,
+      "beat_count": 16,
+      "clip_id": "R04.m4a",
+      "raw_state": "PLAY_CHORD",
+      "raw_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "consolidated_state": "PLAY_CHORD",
+      "consolidated_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0089,
+            "mean_margin": 0.8293,
+            "mean_normalized_entropy": 0.1091
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.2875,
+            "beat_alignment_ratio": 0.5,
+            "churn_per_beat": 0.375,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.9348,
+            "supporting_windows": 11.5
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.3125,
+            "longest_disagreement_run_beats": 1.5
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R05",
+      "song": "Let Her Go",
+      "selection_type": "anchor",
+      "selection_context": "valid sparse/fingerpicked intro",
+      "start": 0.27,
+      "end": 13.52,
+      "duration": 13.25,
+      "beat_count": 16,
+      "clip_id": "R05.m4a",
+      "raw_state": "PLAY_CHORD",
+      "raw_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "consolidated_state": "PLAY_CHORD",
+      "consolidated_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0278,
+            "mean_margin": 0.8536,
+            "mean_normalized_entropy": 0.1061
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.2132,
+            "beat_alignment_ratio": 0.775,
+            "churn_per_beat": 0.5625,
+            "rapid_transition_count": 0.5
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.8268,
+            "supporting_windows": 1.0
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.25,
+            "longest_disagreement_run_beats": 1.0
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R06",
+      "song": "Let Her Go",
+      "selection_type": "anchor",
+      "selection_context": "stable section",
+      "start": 167.1,
+      "end": 179.94,
+      "duration": 12.84,
+      "beat_count": 16,
+      "clip_id": "R06.m4a",
+      "raw_state": "PLAY_CHORD",
+      "raw_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "consolidated_state": "PLAY_CHORD",
+      "consolidated_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0073,
+            "mean_margin": 0.9475,
+            "mean_normalized_entropy": 0.0378
+          }
+        },
+        "structural_instability": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.605,
+            "beat_alignment_ratio": 1.0,
+            "churn_per_beat": 0.375,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 1.0,
+            "supporting_windows": 8.0
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.3125,
+            "longest_disagreement_run_beats": 1.0
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R07",
+      "song": "Perfect",
+      "selection_type": "new",
+      "selection_context": "opening",
+      "start": 0.13,
+      "end": 15.26,
+      "duration": 15.13,
+      "beat_count": 16,
+      "clip_id": "R07.m4a",
+      "raw_state": "PLAY_CHORD",
+      "raw_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "consolidated_state": "PLAY_CHORD",
+      "consolidated_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0,
+            "mean_margin": 0.8995,
+            "mean_normalized_entropy": 0.0738
+          }
+        },
+        "structural_instability": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.8912,
+            "beat_alignment_ratio": 0.6667,
+            "churn_per_beat": 0.375,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.8482,
+            "supporting_windows": 2.5
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.1875,
+            "longest_disagreement_run_beats": 1.0
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R08",
+      "song": "Perfect",
+      "selection_type": "new",
+      "selection_context": "middle diagnostic transition",
+      "start": 91.08,
+      "end": 106.26,
+      "duration": 15.18,
+      "beat_count": 16,
+      "clip_id": "R08.m4a",
+      "raw_state": "UNCERTAIN",
+      "raw_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "consolidated_state": "UNCERTAIN",
+      "consolidated_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0549,
+            "mean_margin": 0.8036,
+            "mean_normalized_entropy": 0.102
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.5821,
+            "beat_alignment_ratio": 0.7333,
+            "churn_per_beat": 0.5,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.7392,
+            "supporting_windows": 0.5
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.3125,
+            "longest_disagreement_run_beats": 2.0
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R09",
+      "song": "Perfect",
+      "selection_type": "new",
+      "selection_context": "stable middle section",
+      "start": 151.71,
+      "end": 166.87,
+      "duration": 15.16,
+      "beat_count": 16,
+      "clip_id": "R09.m4a",
+      "raw_state": "PLAY_CHORD",
+      "raw_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "consolidated_state": "PLAY_CHORD",
+      "consolidated_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0,
+            "mean_margin": 0.9565,
+            "mean_normalized_entropy": 0.0375
+          }
+        },
+        "structural_instability": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 2.5267,
+            "beat_alignment_ratio": 1.0,
+            "churn_per_beat": 0.25,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.7616,
+            "supporting_windows": 1.0
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.0625,
+            "longest_disagreement_run_beats": 0.5
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R10",
+      "song": "Perfect",
+      "selection_type": "new",
+      "selection_context": "late diagnostic transition",
+      "start": 197.17,
+      "end": 212.34,
+      "duration": 15.17,
+      "beat_count": 16,
+      "clip_id": "R10.m4a",
+      "raw_state": "UNCERTAIN",
+      "raw_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "consolidated_state": "UNCERTAIN",
+      "consolidated_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0,
+            "mean_margin": 0.8862,
+            "mean_normalized_entropy": 0.0784
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "NORMAL",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 2.023,
+            "beat_alignment_ratio": 1.0,
+            "churn_per_beat": 0.375,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 1.0,
+            "supporting_windows": 3.0
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "STRONGLY_WEAK",
+          "window_strengths": [
+            "NORMAL",
+            "STRONGLY_WEAK"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.625,
+            "longest_disagreement_run_beats": 3.0
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R11",
+      "song": "Heal the World",
+      "selection_type": "new",
+      "selection_context": "opening",
+      "start": 0.3,
+      "end": 12.12,
+      "duration": 11.82,
+      "beat_count": 16,
+      "clip_id": "R11.m4a",
+      "raw_state": "UNCERTAIN",
+      "raw_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "consolidated_state": "UNCERTAIN",
+      "consolidated_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.008,
+            "mean_margin": 0.7732,
+            "mean_normalized_entropy": 0.1331
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.0835,
+            "beat_alignment_ratio": 0.9,
+            "churn_per_beat": 0.5625,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.8044,
+            "supporting_windows": 1.0
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.3125,
+            "longest_disagreement_run_beats": 1.5
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R12",
+      "song": "Heal the World",
+      "selection_type": "new",
+      "selection_context": "stable middle section",
+      "start": 83.29,
+      "end": 95.12,
+      "duration": 11.83,
+      "beat_count": 16,
+      "clip_id": "R12.m4a",
+      "raw_state": "PLAY_CHORD",
+      "raw_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "consolidated_state": "PLAY_CHORD",
+      "consolidated_window_states": [
+        "PLAY_CHORD",
+        "PLAY_CHORD"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0547,
+            "mean_margin": 0.7824,
+            "mean_normalized_entropy": 0.1244
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.0843,
+            "beat_alignment_ratio": 0.9,
+            "churn_per_beat": 0.5625,
+            "rapid_transition_count": 0.5
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 1.0,
+            "supporting_windows": 2.5
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.1875,
+            "longest_disagreement_run_beats": 1.5
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R13",
+      "song": "Heal the World",
+      "selection_type": "new",
+      "selection_context": "late diagnostic transition",
+      "start": 213.73,
+      "end": 225.58,
+      "duration": 11.85,
+      "beat_count": 16,
+      "clip_id": "R13.m4a",
+      "raw_state": "UNCERTAIN",
+      "raw_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "consolidated_state": "UNCERTAIN",
+      "consolidated_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.1094,
+            "mean_margin": 0.6708,
+            "mean_normalized_entropy": 0.1472
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.4825,
+            "beat_alignment_ratio": 0.65,
+            "churn_per_beat": 0.4375,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "NORMAL",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.6567,
+            "supporting_windows": 0.5
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.375,
+            "longest_disagreement_run_beats": 2.0
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    },
+    {
+      "id": "R14",
+      "song": "Heal the World",
+      "selection_type": "new",
+      "selection_context": "outro/fade candidate",
+      "start": 249.3,
+      "end": 261.16,
+      "duration": 11.86,
+      "beat_count": 16,
+      "clip_id": "R14.m4a",
+      "raw_state": "UNCERTAIN",
+      "raw_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "consolidated_state": "UNCERTAIN",
+      "consolidated_window_states": [
+        "UNCERTAIN",
+        "UNCERTAIN"
+      ],
+      "evidence": {
+        "model_uncertainty": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "low_margin_ratio": 0.0391,
+            "mean_margin": 0.8352,
+            "mean_normalized_entropy": 0.1076
+          }
+        },
+        "structural_instability": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "WEAK"
+          ],
+          "mean_metrics": {
+            "average_run_duration": 1.186,
+            "beat_alignment_ratio": 0.875,
+            "churn_per_beat": 0.5,
+            "rapid_transition_count": 0.0
+          }
+        },
+        "section_consistency": {
+          "strength": "NORMAL",
+          "window_strengths": [
+            "NORMAL",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "nearest_similarity": 0.9348,
+            "supporting_windows": 3.0
+          }
+        },
+        "estimator_disagreement": {
+          "strength": "WEAK",
+          "window_strengths": [
+            "WEAK",
+            "NORMAL"
+          ],
+          "mean_metrics": {
+            "disagreement_ratio": 0.375,
+            "longest_disagreement_run_beats": 1.0
+          }
+        }
+      },
+      "human_label": "PLAY_CHORD",
+      "human_note": "",
+      "human_question": "Should a beginner guitarist be expected to strum chords through this section?"
+    }
+  ]
+}
