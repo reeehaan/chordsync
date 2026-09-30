@@ -29,7 +29,10 @@ void main() {
     expect(mapped.map((word) => word.chordMarker).toList(), ['C', 'G']);
   });
 
-  test('multiple changes within one lyric segment map to nearby words', () {
+  test('a chord change lands on the word already being sung', () {
+    // G changes at 1.7, which is mid-word for "two" ([1.6, 2.0)): the
+    // strummer is already singing "two" when the new chord starts, so the
+    // marker belongs there, not on the next word "three".
     final mapped = LyricChordMarkerMapper.map(
       _timeline(
         chords: const [(0.0, 'C'), (1.7, 'G'), (2.7, 'Am')],
@@ -44,9 +47,9 @@ void main() {
 
     expect(mapped.map((word) => word.chordMarker).toList(), [
       'C',
-      null,
       'G',
       'Am',
+      null,
     ]);
   });
 
@@ -106,6 +109,23 @@ void main() {
       );
 
       expect(mapped.map((word) => word.chordMarker).toList(), ['Dm', null]);
+    },
+  );
+
+  test(
+    'a mid-word chord change never attaches to a later word than the one '
+    'sounding at that instant',
+    () {
+      // Regression for a bug where every chord that changed mid-word was
+      // shown one lyric word later than where the strum actually happens.
+      final mapped = LyricChordMarkerMapper.map(
+        _timeline(
+          chords: const [(0.0, 'Em'), (3.2, 'D')],
+          words: const [(2.0, 4.0, 'looooong'), (4.5, 5.0, 'word')],
+        ),
+      );
+
+      expect(mapped.map((word) => word.chordMarker).toList(), ['D', null]);
     },
   );
 

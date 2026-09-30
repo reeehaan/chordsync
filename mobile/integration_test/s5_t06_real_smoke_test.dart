@@ -88,7 +88,7 @@ void main() {
       }
     }
     expect(find.byKey(const ValueKey('chordFocus')), findsOneWidget);
-    expect(find.byKey(const ValueKey('beatValue')), findsOneWidget);
+    expect(find.byKey(const ValueKey('currentChordValue')), findsOneWidget);
     expect(find.byKey(const ValueKey('transportSection')), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());

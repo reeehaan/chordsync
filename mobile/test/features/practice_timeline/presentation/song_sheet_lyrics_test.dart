@@ -36,7 +36,63 @@ void main() {
     expect(find.byKey(const ValueKey('inlineChord0_0_0')), findsOneWidget);
     expect(find.byKey(const ValueKey('inlineChord0_3_0')), findsOneWidget);
     expect(find.byKey(const ValueKey('segmentChord0')), findsNothing);
+    const cellHeight =
+        SongSheetLyrics.chordLaneHeight + SongSheetLyrics.wordLineHeight;
+    final firstRow = tester.getSize(find.byKey(const ValueKey('lyricRow0')));
+    expect(firstRow.height, cellHeight);
+    final firstCell = tester.getSize(
+      find.byKey(const ValueKey('lyricWordCell0_0')),
+    );
+    expect(firstCell.height, cellHeight);
+    final wordStyles = <AnimatedDefaultTextStyle>[
+      for (final start in const [0.5, 1.5, 2.5])
+        tester.widget<AnimatedDefaultTextStyle>(
+          find.byKey(ValueKey('sheetWordStyle$start')),
+        ),
+    ];
+    expect(wordStyles.map((word) => word.style.fontSize).toSet(), {19.0});
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sizes each word to its own text so none overlap', (
+    tester,
+  ) async {
+    // Mixed short and very long words in one line: the previous equal-width
+    // layout made the long ones paint over their neighbours.
+    final timeline = _unevenWordTimeline();
+    await _pumpLyrics(tester, timeline, 0.6);
+
+    final rects = <Rect>[
+      for (var index = 0; index < 5; index++)
+        tester.getRect(find.byKey(ValueKey('lyricWordCell0_$index'))),
+    ];
+
+    for (var index = 0; index + 1 < rects.length; index++) {
+      final left = rects[index];
+      final right = rects[index + 1];
+      if (left.top != right.top) continue; // wrapped onto the next run
+      expect(
+        left.right,
+        lessThanOrEqualTo(right.left),
+        reason: 'word $index overlaps word ${index + 1}',
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps one uniform row height for even line spacing', (
+    tester,
+  ) async {
+    final timeline = _multiBlockTimeline();
+    await _pumpLyrics(tester, timeline, 0.6);
+
+    final tops = <double>[
+      for (var index = 0; index < 3; index++)
+        tester.getTopLeft(find.byKey(ValueKey('lyricBlock$index'))).dy,
+    ];
+
+    expect(tops[1] - tops[0], SongSheetLyrics.blockExtent);
+    expect(tops[2] - tops[1], SongSheetLyrics.blockExtent);
   });
 
   testWidgets('auto-follows only when the focused lyric block changes', (
@@ -151,6 +207,40 @@ SharedTimeline _singleSegmentTimeline() {
       ),
     ],
     lyrics: [LyricSegment(start: 0.5, end: 10.3, text: 'source', words: words)],
+  );
+}
+
+SharedTimeline _unevenWordTimeline() {
+  const words = [
+    LyricWord(start: 0.5, end: 1.3, text: 'I'),
+    LyricWord(start: 1.5, end: 2.3, text: 'overwhelmingly'),
+    LyricWord(start: 2.5, end: 3.3, text: 'a'),
+    LyricWord(start: 3.5, end: 4.3, text: 'disproportionate'),
+    LyricWord(start: 4.5, end: 5.3, text: 'it'),
+  ];
+  return const SharedTimeline(
+    schemaVersion: 1,
+    bpm: 120,
+    beatsPerBar: 4,
+    beatSource: 'test',
+    lyricSource: 'test',
+    bars: [
+      TimelineBar(
+        barNumber: 1,
+        startTime: 0,
+        endTime: 6,
+        beats: [
+          TimelineEvent(time: 0, beatNumber: 1, isDownbeat: true, chord: 'C'),
+          TimelineEvent(
+            time: 2.4,
+            beatNumber: 2,
+            isDownbeat: false,
+            chord: 'G',
+          ),
+        ],
+      ),
+    ],
+    lyrics: [LyricSegment(start: 0.5, end: 5.3, text: 'source', words: words)],
   );
 }
 

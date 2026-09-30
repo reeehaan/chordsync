@@ -59,8 +59,15 @@ abstract final class LyricChordMarkerMapper {
 
     final markers = <int, String>{};
     for (final change in changes) {
+      // The word this change belongs to is whichever one hasn't finished
+      // yet: the word already sounding when the chord changes mid-word, or
+      // the next upcoming word when the change falls in a lyric gap.
+      // Matching on `word.start >= change.time` instead would skip the word
+      // currently being sung whenever a chord change lands inside it (the
+      // common case, since chords follow the beat grid, not lyric timing),
+      // shifting every marker one word later than where the strum happens.
       final target = words.indexWhere(
-        (entry) => entry.word.start >= change.time,
+        (entry) => entry.word.end > change.time,
       );
       if (target == -1) continue;
       if (change.chord == 'N') {

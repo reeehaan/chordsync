@@ -14,6 +14,11 @@ class PlaybackState {
     required this.previousLyricWord,
     required this.lyricWord,
     required this.nextLyricWord,
+    required this.isMusicOnly,
+    this.musicOnlyStart,
+    this.musicOnlyEnd,
+    this.currentBeatStart,
+    this.nextBeatStart,
   });
 
   final double playbackTime;
@@ -30,6 +35,11 @@ class PlaybackState {
   final String? previousLyricWord;
   final String? lyricWord;
   final String? nextLyricWord;
+  final bool isMusicOnly;
+  final double? musicOnlyStart;
+  final double? musicOnlyEnd;
+  final double? currentBeatStart;
+  final double? nextBeatStart;
 
   String get currentChord => chord;
   String? get activeLyricWord => lyricWord;
@@ -39,6 +49,22 @@ class PlaybackState {
   double? get chordProgress {
     final start = currentChordStart;
     final end = currentChordEnd;
+    if (start == null || end == null || end <= start) return null;
+    return ((playbackTime - start) / (end - start)).clamp(0.0, 1.0);
+  }
+
+  double? get musicOnlyProgress {
+    final start = musicOnlyStart;
+    final end = musicOnlyEnd;
+    if (!isMusicOnly || start == null || end == null || end <= start) {
+      return null;
+    }
+    return ((playbackTime - start) / (end - start)).clamp(0.0, 1.0);
+  }
+
+  double? get beatProgress {
+    final start = currentBeatStart;
+    final end = nextBeatStart;
     if (start == null || end == null || end <= start) return null;
     return ((playbackTime - start) / (end - start)).clamp(0.0, 1.0);
   }

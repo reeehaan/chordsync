@@ -66,7 +66,10 @@ void main() {
             ?.fontWeight,
         FontWeight.w800,
       );
-      final scrollable = find.byType(Scrollable).first;
+      final scrollable = find.descendant(
+        of: find.byKey(const ValueKey('lyricScrollView')),
+        matching: find.byType(Scrollable),
+      );
       final scrollPosition = tester.state<ScrollableState>(scrollable).position;
       expect(scrollPosition.pixels, 0);
       await tester.scrollUntilVisible(
@@ -92,9 +95,8 @@ void main() {
 
       final bottomBeforeSeek = scrollPosition.pixels;
       player.emit(const Duration(seconds: 157));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(_text(tester, 'currentChordValue'), 'G');
-      expect(_text(tester, 'barValue'), '40');
       expect(_text(tester, 'persistentChordValue'), 'Current G');
       expect(scrollPosition.pixels, bottomBeforeSeek);
       expect(tester.takeException(), isNull);
@@ -186,10 +188,9 @@ void main() {
     expect(find.byKey(const ValueKey('lyricValue')), findsNothing);
 
     tester.widget<Slider>(find.byType(Slider)).onChanged!(2);
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(_text(tester, 'currentChordValue'), 'C');
-    expect(_text(tester, 'beatValue'), '2 / 4');
     expect(_text(tester, 'positionValue'), '2.0 s');
 
     await tester.pumpWidget(const SizedBox());

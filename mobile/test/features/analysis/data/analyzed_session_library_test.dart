@@ -34,6 +34,31 @@ void main() {
     expect(restored.single.timeline.bpm, 90);
     expect(restored.single.timeline.totalBeatCount, 1);
     expect(restored.single.timeline.totalLyricWordCount, 1);
+    expect(restored.single.timeline.practiceRegions, hasLength(1));
+    expect(restored.single.timeline.practiceRegions.single.start, 2);
+    expect(restored.single.timeline.practiceRegions.single.end, 4);
+    expect(
+      restored.single.timeline.practiceRegions.single.mode,
+      PracticeMode.musicOnly,
+    );
+  });
+
+  test('loads an old saved session without practice_regions', () async {
+    final session = _session(audio, jobId: 'old-job', title: 'Old session');
+    await library.save(session);
+    final index = File('${documents.path}/analyzed_sessions/sessions.json');
+    final contents = await index.readAsString();
+    await index.writeAsString(
+      contents.replaceFirst(
+        ',"practice_regions":[{"start":2.0,"end":4.0,"mode":"music_only"}]',
+        '',
+      ),
+    );
+
+    final restored = await library.load();
+
+    expect(restored, hasLength(1));
+    expect(restored.single.timeline.practiceRegions, isEmpty);
   });
 
   test('replaces the same job and omits sessions with missing audio', () async {
@@ -98,6 +123,9 @@ AnalyzedPracticeSession _session(
         text: 'Hello',
         words: [LyricWord(start: 0, end: 1, text: 'Hello')],
       ),
+    ],
+    practiceRegions: [
+      PracticeRegion(start: 2, end: 4, mode: PracticeMode.musicOnly),
     ],
   ),
 );

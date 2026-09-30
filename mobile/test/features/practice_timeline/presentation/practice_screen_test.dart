@@ -40,50 +40,12 @@ void main() {
       expect(text.data, value);
     }
 
-    expect(find.text('Bar'), findsOneWidget);
-    expect(find.text('Beat'), findsOneWidget);
-    expect(find.text('Downbeat'), findsOneWidget);
+    expect(find.text('Bar'), findsNothing);
+    expect(find.text('Beat'), findsNothing);
+    expect(find.text('Downbeat'), findsNothing);
     expectValue('currentChordValue', chord);
     expectValue('nextChordValue', nextChord);
-    expectValue('barValue', bar);
-    expectValue('beatValue', beat);
-    expectValue('downbeatValue', downbeat);
     expectValue('positionValue', position);
-
-    for (var marker = 1; marker <= 4; marker++) {
-      expect(find.byKey(ValueKey('beatMarker$marker')), findsOneWidget);
-    }
-    final activeMarker = find.byKey(const ValueKey('activeBeatMarker'));
-    final activeBeat = int.tryParse(beat.split(' ').first);
-    if (activeBeat == null) {
-      expect(activeMarker, findsNothing);
-    } else {
-      expect(activeMarker, findsOneWidget);
-      expect(
-        find.descendant(
-          of: activeMarker,
-          matching: find.byKey(ValueKey('beatMarker$activeBeat')),
-        ),
-        findsOneWidget,
-      );
-    }
-
-    for (var index = 0; index < progression.length; index++) {
-      expectValue('progressionChord$index', progression[index]);
-    }
-    expect(
-      find.byKey(ValueKey('progressionChord${progression.length}')),
-      findsNothing,
-    );
-
-    final firstProgressionChord =
-        find.byKey(const ValueKey('progressionChord0')).evaluate().single.widget
-            as Text;
-    if (chord == 'N') {
-      expect(firstProgressionChord.style?.fontWeight, isNot(FontWeight.bold));
-    } else {
-      expect(firstProgressionChord.style?.fontWeight, FontWeight.bold);
-    }
   }
 
   Future<void> setPosition(WidgetTester tester, double seconds) async {
@@ -149,8 +111,8 @@ void main() {
       expect(find.text('Practice sheet'), findsOneWidget);
       expect(find.byKey(const ValueKey('noChordFallback')), findsOneWidget);
       expect(find.byKey(const ValueKey('lyricsSection')), findsOneWidget);
-      expect(find.byKey(const ValueKey('rhythmSection')), findsOneWidget);
-      expect(find.byKey(const ValueKey('progressionSection')), findsOneWidget);
+      expect(find.byKey(const ValueKey('rhythmSection')), findsNothing);
+      expect(find.byKey(const ValueKey('progressionSection')), findsNothing);
       expect(find.byKey(const ValueKey('transportSection')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('practiceToolsSection')),
@@ -185,7 +147,10 @@ void main() {
       expect(find.byTooltip('Previous bar'), findsOneWidget);
       expect(find.byTooltip('Next bar'), findsOneWidget);
       expectBarNavigation(tester, previousEnabled: false, nextEnabled: true);
-      expect(find.text('Speed'), findsOneWidget);
+      // The speed control is a compact circular button showing the rate
+      // itself, so there is no separate "Speed" caption.
+      expect(find.text('Speed'), findsNothing);
+      expect(find.text('1.0x'), findsOneWidget);
       expect(
         tester
             .widget<DropdownButton<double>>(
@@ -241,7 +206,9 @@ void main() {
 
       await setPosition(tester, 2);
       // Previous, current, and next chords remain visible in the fixed header.
-      expect(find.byKey(const ValueKey('chordDiagram')), findsNWidgets(3));
+      expect(find.byKey(const ValueKey('chordDiagram')), findsNWidgets(4));
+      // Each strip card animates between its raised and resting appearance.
+      expect(find.byType(AnimatedContainer), findsWidgets);
       expect(
         (find
                     .byKey(const ValueKey('previousChordValue'))

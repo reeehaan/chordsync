@@ -7,6 +7,7 @@ class SharedTimeline {
     required this.lyricSource,
     required this.bars,
     required this.lyrics,
+    this.practiceRegions = const [],
   });
 
   factory SharedTimeline.fromJson(Map<String, dynamic> json) {
@@ -24,6 +25,11 @@ class SharedTimeline {
             (segment) => LyricSegment.fromJson(segment as Map<String, dynamic>),
           )
           .toList(),
+      practiceRegions: (json['practice_regions'] as List<dynamic>? ?? const [])
+          .map(
+            (region) => PracticeRegion.fromJson(region as Map<String, dynamic>),
+          )
+          .toList(),
     );
   }
 
@@ -34,6 +40,7 @@ class SharedTimeline {
   final String lyricSource;
   final List<TimelineBar> bars;
   final List<LyricSegment> lyrics;
+  final List<PracticeRegion> practiceRegions;
 
   int get totalBeatCount =>
       bars.fold(0, (total, bar) => total + bar.beats.length);
@@ -45,6 +52,32 @@ class SharedTimeline {
     0,
     (latest, bar) => bar.endTime > latest ? bar.endTime : latest,
   );
+}
+
+enum PracticeMode { musicOnly }
+
+class PracticeRegion {
+  const PracticeRegion({
+    required this.start,
+    required this.end,
+    required this.mode,
+  });
+
+  factory PracticeRegion.fromJson(Map<String, dynamic> json) {
+    final mode = switch (json['mode']) {
+      'music_only' => PracticeMode.musicOnly,
+      final value => throw FormatException('Unsupported practice mode: $value'),
+    };
+    return PracticeRegion(
+      start: (json['start'] as num).toDouble(),
+      end: (json['end'] as num).toDouble(),
+      mode: mode,
+    );
+  }
+
+  final double start;
+  final double end;
+  final PracticeMode mode;
 }
 
 class TimelineBar {

@@ -75,6 +75,27 @@ class PlaybackLookup {
     return currentBeat;
   }
 
+  static TimelineEvent? nextBeat(SharedTimeline timeline, double playbackTime) {
+    for (final bar in timeline.bars) {
+      for (final beat in bar.beats) {
+        if (beat.time > playbackTime) return beat;
+      }
+    }
+    return null;
+  }
+
+  static PracticeRegion? activePracticeRegion(
+    SharedTimeline timeline,
+    double playbackTime,
+  ) {
+    for (final region in timeline.practiceRegions) {
+      if (region.start <= playbackTime && playbackTime < region.end) {
+        return region;
+      }
+    }
+    return null;
+  }
+
   static LyricWord? activeLyricWord(
     SharedTimeline timeline,
     double playbackTime,
@@ -223,6 +244,8 @@ class PlaybackLookup {
   ) {
     final bar = currentBar(timeline, playbackTime);
     final beat = currentBeat(timeline, playbackTime);
+    final followingBeat = nextBeat(timeline, playbackTime);
+    final practiceRegion = activePracticeRegion(timeline, playbackTime);
     final activeWord = activeLyricWord(timeline, playbackTime);
     final upcomingChord = nextChord(timeline, playbackTime);
     final previousWord = previousLyricWord(timeline, playbackTime);
@@ -247,6 +270,13 @@ class PlaybackLookup {
       previousLyricWord: previousWord?.text,
       lyricWord: activeWord?.text,
       nextLyricWord: upcomingWord?.text,
+      isMusicOnly: practiceRegion?.mode == PracticeMode.musicOnly,
+      musicOnlyStart: practiceRegion?.start,
+      musicOnlyEnd: practiceRegion?.end,
+      currentBeatStart: beat?.time,
+      nextBeatStart:
+          followingBeat?.time ??
+          (beat == null ? null : beat.time + 60 / timeline.bpm),
     );
   }
 }

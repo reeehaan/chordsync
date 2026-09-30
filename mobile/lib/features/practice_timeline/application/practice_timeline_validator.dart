@@ -42,5 +42,18 @@ class PracticeTimelineValidator {
       }
       previousBarEnd = bar.endTime;
     }
+
+    var previousRegionEnd = -1.0;
+    for (final region in timeline.practiceRegions) {
+      if (!region.start.isFinite ||
+          !region.end.isFinite ||
+          region.start < 0 ||
+          region.end <= region.start ||
+          region.start < previousRegionEnd ||
+          region.end > timeline.endTime) {
+        throw const FormatException('Timeline practice regions are invalid.');
+      }
+      previousRegionEnd = region.end;
+    }
   }
 }

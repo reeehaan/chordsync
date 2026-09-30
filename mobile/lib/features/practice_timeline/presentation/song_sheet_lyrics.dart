@@ -16,13 +16,27 @@ class SongSheetLyrics extends StatefulWidget {
   final SharedTimeline timeline;
   final double playbackTime;
 
+  /// Chord chip lane, reserved on every word so words with and without a
+  /// chord still sit on one shared baseline.
+  static const chordLaneHeight = 26.0;
+  static const wordLineHeight = 30.0;
+
+  /// Height of one chord-plus-word run.
+  static const runExtent = chordLaneHeight + wordLineHeight;
+
+  /// Breathing room added above and below each line's content.
+  static const lineGap = 18.0;
+
+  /// Uniform row height. Every lyric line reserves the same vertical space so
+  /// the gaps between lines — and above the first and below the last — stay
+  /// visually identical while the sheet scrolls.
+  static const blockExtent = runExtent + lineGap;
+
   @override
   State<SongSheetLyrics> createState() => _SongSheetLyricsState();
 }
 
 class _SongSheetLyricsState extends State<SongSheetLyrics> {
-  static const _blockExtent = 90.0;
-
   final ScrollController _scrollController = ScrollController();
   late List<LyricDisplayBlock> _blocks;
   int? _focusedBlockIndex;
@@ -66,10 +80,12 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
       final focused = _focusedBlockIndex;
       if (focused == null) return;
       final position = _scrollController.position;
+      const extent = SongSheetLyrics.blockExtent;
       final target =
-          (focused * _blockExtent -
-                  (position.viewportDimension - _blockExtent) / 2)
-              .clamp(0.0, position.maxScrollExtent);
+          (focused * extent - (position.viewportDimension - extent) / 2).clamp(
+            0.0,
+            position.maxScrollExtent,
+          );
       if (jump) {
         _scrollController.jumpTo(target);
       } else {
@@ -115,9 +131,13 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
           child: ListView.builder(
             key: const ValueKey('lyricScrollView'),
             controller: _scrollController,
-            physics: const ClampingScrollPhysics(),
-            itemExtent: _blockExtent,
-            padding: const EdgeInsets.fromLTRB(0, 12, 0, 40),
+            // Always draggable, so browsing the sheet by hand still suspends
+            // auto-follow even when a short song fits the viewport.
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: ClampingScrollPhysics(),
+            ),
+            itemExtent: SongSheetLyrics.blockExtent,
+            padding: const EdgeInsets.symmetric(vertical: 24),
             itemCount: _blocks.length,
             itemBuilder: (context, index) {
               final block = _blocks[index];
@@ -162,20 +182,33 @@ class _FocusedLyricBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedOpacity(
       key: isFocused ? const ValueKey('currentLyricBlock') : null,
-      opacity: isFocused ? 1 : 0.5,
+      opacity: isFocused ? 1 : 0.42,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 5,
-            runSpacing: 9,
-            crossAxisAlignment: WrapCrossAlignment.end,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        // A lyric line always stays on one row: an over-long line is scaled
+        // down a little rather than wrapping, which is what keeps every row
+        // the same height and the spacing between rows even.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            key: ValueKey('lyricRow${block.index}'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               for (final entry in block.words)
-                _LyricChordWord(entry: entry, playbackTime: playbackTime),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: _LyricChordWord(
+                    key: ValueKey(
+                      'lyricWordCell${entry.segmentIndex}_${entry.wordIndex}',
+                    ),
+                    entry: entry,
+                    playbackTime: playbackTime,
+                  ),
+                ),
             ],
           ),
         ),
@@ -184,8 +217,17 @@ class _FocusedLyricBlock extends StatelessWidget {
   }
 }
 
+/// One word sized to its own text, with its chord chip centred above it.
+///
+/// Words are never forced into equal-width columns: each takes exactly the
+/// room its glyphs need, which is what keeps neighbouring words from
+/// overlapping when one of them is long.
 class _LyricChordWord extends StatelessWidget {
-  const _LyricChordWord({required this.entry, required this.playbackTime});
+  const _LyricChordWord({
+    super.key,
+    required this.entry,
+    required this.playbackTime,
+  });
 
   final LyricChordWord entry;
   final double playbackTime;
@@ -196,12 +238,13 @@ class _LyricChordWord extends StatelessWidget {
     final word = entry.word;
     final isActive = word.start <= playbackTime && playbackTime < word.end;
     final isPast = word.end <= playbackTime;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          height: 25,
+          height: SongSheetLyrics.chordLaneHeight,
           child: entry.chordMarkers.isEmpty
               ? null
               : Row(
@@ -212,58 +255,84 @@ class _LyricChordWord extends StatelessWidget {
                       index < entry.chordMarkers.length;
                       index++
                     )
-                      Container(
+                      _ChordChip(
                         key: ValueKey(
-                          'inlineChord${entry.segmentIndex}_${entry.wordIndex}_$index',
+                          'inlineChord${entry.segmentIndex}_'
+                          '${entry.wordIndex}_$index',
                         ),
-                        margin: const EdgeInsets.only(right: 4, bottom: 3),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: PracticeStageColors.surfaceRaised,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          entry.chordMarkers[index],
-                          style: textTheme.labelSmall?.copyWith(
-                            color: PracticeStageColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        label: entry.chordMarkers[index],
+                        isSounding: isActive,
                       ),
                   ],
                 ),
         ),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-          decoration: BoxDecoration(
-            color: isActive
-                ? PracticeStageColors.activeWord
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: AnimatedDefaultTextStyle(
-            key: ValueKey('sheetWordStyle${word.start}'),
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            style: (textTheme.bodyLarge ?? const TextStyle()).copyWith(
-              color: isActive
-                  ? PracticeStageColors.amberBright
-                  : isPast
-                  ? PracticeStageColors.textFaint
-                  : PracticeStageColors.textSecondary,
-              fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
-              fontSize: 19,
-              height: 1.24,
+        SizedBox(
+          height: SongSheetLyrics.wordLineHeight,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            // Shrink-wrap horizontally: without this the cell would expand to
+            // the full line width and push every other word onto its own row.
+            widthFactor: 1,
+            child: AnimatedDefaultTextStyle(
+              key: ValueKey('sheetWordStyle${word.start}'),
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              style: (textTheme.bodyLarge ?? const TextStyle()).copyWith(
+                color: isActive
+                    ? PracticeStageColors.amberBright
+                    : isPast
+                    ? PracticeStageColors.textFaint
+                    : PracticeStageColors.textSecondary,
+                fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+                fontSize: 19,
+                height: 1.25,
+              ),
+              child: Text(
+                word.text,
+                key: ValueKey('sheetWord${word.start}'),
+                maxLines: 1,
+                softWrap: false,
+                textAlign: TextAlign.center,
+              ),
             ),
-            child: Text(word.text, key: ValueKey('sheetWord${word.start}')),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ChordChip extends StatelessWidget {
+  const _ChordChip({super.key, required this.label, required this.isSounding});
+
+  final String label;
+  final bool isSounding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isSounding
+            ? Colors.transparent
+            : PracticeStageColors.surfaceRaised,
+        border: Border.all(
+          color: isSounding
+              ? PracticeStageColors.textPrimary
+              : Colors.transparent,
+          width: 1.2,
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: PracticeStageColors.textPrimary,
+          fontWeight: FontWeight.w700,
+          height: 1.2,
+        ),
+      ),
     );
   }
 }

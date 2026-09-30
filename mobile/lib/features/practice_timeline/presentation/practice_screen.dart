@@ -9,10 +9,10 @@ import '../application/practice_playback_status.dart';
 import '../application/practice_playback_speeds.dart';
 import '../application/practice_playback_synchronizer.dart';
 import '../application/practice_session_factory.dart';
+import '../data/playback_state.dart';
 import '../data/shared_timeline_asset_loader.dart';
 import '../data/shared_timeline.dart';
-import 'chord_diagram.dart';
-import 'practice_beat_indicator.dart';
+import 'chord_diagram_strip.dart';
 import 'practice_stage_colors.dart';
 import 'song_sheet_lyrics.dart';
 
@@ -210,9 +210,12 @@ class _PracticeScreenState extends State<PracticeScreen> {
       ),
       dividerColor: PracticeStageColors.border,
       sliderTheme: baseTheme.sliderTheme.copyWith(
-        activeTrackColor: PracticeStageColors.amber,
+        activeTrackColor: PracticeStageColors.amberBright,
         inactiveTrackColor: PracticeStageColors.border,
         thumbColor: PracticeStageColors.amberBright,
+        trackHeight: 3,
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
       ),
     );
 
@@ -224,153 +227,14 @@ class _PracticeScreenState extends State<PracticeScreen> {
     );
   }
 
-  Widget? _buildTransportBar(BuildContext context) {
-    final controller = _controller;
-    final synchronizer = _synchronizer;
-    if (!_isLoaded || controller == null || synchronizer == null) return null;
-    final status = synchronizer.status;
-    final state = controller.state;
-    final position =
-        controller.position.inMicroseconds / Duration.microsecondsPerSecond;
-    return Container(
-      key: const ValueKey('transportSection'),
-      color: PracticeStageColors.background,
-      padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Current ${state.currentChord}',
-                      key: const ValueKey('persistentChordValue'),
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: PracticeStageColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    status.label,
-                    key: const ValueKey('playbackStatusValue'),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '${position.toStringAsFixed(1)} s',
-                    key: const ValueKey('positionValue'),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 5),
-              Container(
-                decoration: BoxDecoration(
-                  color: PracticeStageColors.surface,
-                  border: Border.all(color: PracticeStageColors.border),
-                  borderRadius: BorderRadius.circular(32),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Row(
-                  children: [
-                    _TransportControls(
-                      status: status,
-                      canGoPrevious: synchronizer.canSeekToPreviousBar,
-                      canGoNext: synchronizer.canSeekToNextBar,
-                      onPrevious: () => _runAudioAction(() async {
-                        await synchronizer.seekToPreviousBar();
-                      }),
-                      onPlayPause: () => _runAudioAction(
-                        status == PracticePlaybackStatus.playing
-                            ? synchronizer.pause
-                            : synchronizer.play,
-                      ),
-                      onNext: () => _runAudioAction(() async {
-                        await synchronizer.seekToNextBar();
-                      }),
-                    ),
-                    Expanded(
-                      child: Slider(
-                        value: position.clamp(0, _maximumPosition),
-                        min: 0,
-                        max: _maximumPosition,
-                        onChanged: _seek,
-                      ),
-                    ),
-                    _SpeedSelector(
-                      speed: synchronizer.speed,
-                      onChanged: _setSpeed,
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                key: const ValueKey('practiceToolsSection'),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _loopRangeLabel(synchronizer),
-                        key: const ValueKey('loopRangeValue'),
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ),
-                    _CompactAction(
-                      label: 'Set A',
-                      onPressed: () =>
-                          synchronizer.setLoopStart(controller.position),
-                    ),
-                    _CompactAction(
-                      label: 'Set B',
-                      onPressed: () =>
-                          synchronizer.setLoopEnd(controller.position),
-                    ),
-                    _CompactAction(
-                      label: synchronizer.loop?.enabled == true
-                          ? 'Loop Off'
-                          : 'Loop On',
-                      onPressed: () {
-                        if (synchronizer.loop?.enabled == true) {
-                          synchronizer.disableLoop();
-                        } else {
-                          synchronizer.enableLoop();
-                        }
-                      },
-                    ),
-                    IconButton(
-                      onPressed: synchronizer.clearLoop,
-                      tooltip: 'Clear Loop',
-                      visualDensity: VisualDensity.compact,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 30,
-                        height: 34,
-                      ),
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(Icons.close, size: 18),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBody(BuildContext context) {
     if (_loadError != null) {
       return const Center(child: Text('Unable to load practice audio.'));
     }
 
     final controller = _controller;
-    if (!_isLoaded || controller == null) {
+    final synchronizer = _synchronizer;
+    if (!_isLoaded || controller == null || synchronizer == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -378,387 +242,413 @@ class _PracticeScreenState extends State<PracticeScreen> {
     return SafeArea(
       child: Column(
         children: [
-          Container(
-            key: const ValueKey('fixedChordHeader'),
-            padding: const EdgeInsets.fromLTRB(16, 5, 16, 6),
-            decoration: const BoxDecoration(
-              color: PracticeStageColors.background,
-              border: Border(
-                bottom: BorderSide(color: PracticeStageColors.border),
-              ),
+          _SheetHeader(
+            title: widget.analyzedSession?.title ?? 'Practice sheet',
+            subtitle: _headerSubtitle(),
+            status: synchronizer.status,
+            loopRange: _loopRangeLabel(synchronizer),
+            isLooping: synchronizer.loop?.enabled == true,
+            onSetLoopStart: () =>
+                synchronizer.setLoopStart(controller.position),
+            onSetLoopEnd: () => synchronizer.setLoopEnd(controller.position),
+            onToggleLoop: () {
+              if (synchronizer.loop?.enabled == true) {
+                synchronizer.disableLoop();
+              } else {
+                synchronizer.enableLoop();
+              }
+            },
+            onClearLoop: synchronizer.clearLoop,
+          ),
+          if (state.isMusicOnly)
+            const _MusicOnlyChordFocus()
+          else
+            ChordDiagramStrip(
+              previousChord: state.previousChord,
+              currentChord: state.currentChord,
+              nextChord: state.nextChord,
+              progression: state.chordProgression,
+              chordProgress: state.chordProgress,
+              chordStart: state.currentChordStart,
             ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
+          const Divider(height: 1, thickness: 1),
+          Expanded(
+            child: Container(
+              key: const ValueKey('lyricsSection'),
+              color: PracticeStageColors.background,
+              child: state.isMusicOnly
+                  ? _MusicOnlyLyrics(state: state)
+                  : SongSheetLyrics(
+                      timeline: _timeline!,
+                      playbackTime: state.playbackTime,
+                    ),
+            ),
+          ),
+          _TransportBar(
+            status: synchronizer.status,
+            position:
+                controller.position.inMicroseconds /
+                Duration.microsecondsPerSecond,
+            maximumPosition: _maximumPosition,
+            speed: synchronizer.speed,
+            chordLabel: state.isMusicOnly
+                ? 'Music only'
+                : 'Current ${state.currentChord}',
+            canGoPrevious: synchronizer.canSeekToPreviousBar,
+            canGoNext: synchronizer.canSeekToNextBar,
+            onPrevious: () => _runAudioAction(() async {
+              await synchronizer.seekToPreviousBar();
+            }),
+            onPlayPause: () => _runAudioAction(
+              synchronizer.status == PracticePlaybackStatus.playing
+                  ? synchronizer.pause
+                  : synchronizer.play,
+            ),
+            onNext: () => _runAudioAction(() async {
+              await synchronizer.seekToNextBar();
+            }),
+            onSeek: _seek,
+            onSpeedChanged: _setSpeed,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _headerSubtitle() {
+    final timeline = _timeline;
+    if (timeline == null) return '—';
+    return '${timeline.bpm.toStringAsFixed(0)} BPM · '
+        '${timeline.beatsPerBar}/4';
+  }
+}
+
+/// Song identity plus the A–B loop tools, styled as the pill row from the
+/// practice sheet design.
+class _SheetHeader extends StatelessWidget {
+  const _SheetHeader({
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    required this.loopRange,
+    required this.isLooping,
+    required this.onSetLoopStart,
+    required this.onSetLoopEnd,
+    required this.onToggleLoop,
+    required this.onClearLoop,
+  });
+
+  final String title;
+  final String subtitle;
+  final PracticePlaybackStatus status;
+  final String loopRange;
+  final bool isLooping;
+  final VoidCallback onSetLoopStart;
+  final VoidCallback onSetLoopEnd;
+  final VoidCallback onToggleLoop;
+  final VoidCallback onClearLoop;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      key: const ValueKey('fixedChordHeader'),
+      color: PracticeStageColors.background,
+      padding: const EdgeInsets.fromLTRB(4, 4, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const BackButton(),
+              Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        const BackButton(),
-                        Expanded(
-                          child: Text(
-                            widget.analyzedSession?.title ?? 'Practice sheet',
-                            key: const ValueKey('songSheetTitle'),
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        Text(
-                          '${_timeline?.bpm.toStringAsFixed(0) ?? '—'} BPM',
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: PracticeStageColors.textSecondary,
-                              ),
-                        ),
-                      ],
+                    Text(
+                      title,
+                      key: const ValueKey('songSheetTitle'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
                     ),
-                    _ChordFocus(
-                      previousChord: state.previousChord,
-                      currentChord: state.currentChord,
-                      nextChord: state.nextChord,
-                      chordProgress: state.chordProgress,
-                      chordStart: state.currentChordStart,
-                    ),
-                    const Divider(height: 10),
-                    Column(
-                      key: const ValueKey('rhythmSection'),
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _CompactMetric(
-                              label: 'Bar',
-                              value: state.currentBarNumber?.toString() ?? '—',
-                              valueKey: const ValueKey('barValue'),
-                            ),
-                            _CompactMetric(
-                              label: 'Beat',
-                              value:
-                                  '${state.beatNumber?.toString() ?? '—'} / '
-                                  '${state.beatsPerBar}',
-                              valueKey: const ValueKey('beatValue'),
-                            ),
-                            _CompactMetric(
-                              label: 'Downbeat',
-                              value: state.isDownbeat ? 'Yes' : 'No',
-                              valueKey: const ValueKey('downbeatValue'),
-                            ),
-                          ],
-                        ),
-                        SizedBox(
-                          height: 28,
-                          child: PracticeBeatIndicator(
-                            beatNumber: state.beatNumber,
-                            beatsPerBar: state.beatsPerBar,
-                            isDownbeat: state.isDownbeat,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(
-                      key: const ValueKey('progressionSection'),
-                      height: 32,
-                      child: _ChordProgression(
-                        chords: state.chordProgression,
-                        hasCurrentChord: state.currentChord != 'N',
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.labelMedium?.copyWith(
+                        color: PracticeStageColors.textSecondary,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
-          Expanded(
-            child: Container(
-              key: const ValueKey('lyricsSection'),
-              color: PracticeStageColors.background,
-              child: SongSheetLyrics(
-                timeline: _timeline!,
-                playbackTime: state.playbackTime,
+              const SizedBox(width: 8),
+              Text(
+                status.label,
+                key: const ValueKey('playbackStatusValue'),
+                style: textTheme.labelMedium?.copyWith(
+                  color: PracticeStageColors.textSecondary,
+                ),
               ),
-            ),
+              IconButton(
+                key: const ValueKey('clearLoopButton'),
+                onPressed: onClearLoop,
+                tooltip: 'Clear Loop',
+                visualDensity: VisualDensity.compact,
+                color: PracticeStageColors.textSecondary,
+                icon: const Icon(Icons.more_horiz, size: 22),
+              ),
+            ],
           ),
-          _buildTransportBar(context)!,
+          const SizedBox(height: 6),
+          Row(
+            key: const ValueKey('practiceToolsSection'),
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      _ToolPill(
+                        label: isLooping ? 'Loop Off' : 'Loop On',
+                        icon: Icons.repeat_rounded,
+                        isActive: isLooping,
+                        onPressed: onToggleLoop,
+                      ),
+                      const SizedBox(width: 8),
+                      _ToolPill(
+                        label: 'Set A',
+                        icon: Icons.flag_outlined,
+                        onPressed: onSetLoopStart,
+                      ),
+                      const SizedBox(width: 8),
+                      _ToolPill(
+                        label: 'Set B',
+                        icon: Icons.outlined_flag_rounded,
+                        onPressed: onSetLoopEnd,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 124),
+                child: Text(
+                  loopRange,
+                  key: const ValueKey('loopRangeValue'),
+                  maxLines: 1,
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: PracticeStageColors.textFaint,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _ChordFocus extends StatelessWidget {
-  const _ChordFocus({
-    required this.previousChord,
-    required this.currentChord,
-    required this.nextChord,
-    required this.chordProgress,
-    required this.chordStart,
-  });
-
-  final String? previousChord;
-  final String currentChord;
-  final String? nextChord;
-  final double? chordProgress;
-  final double? chordStart;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      label:
-          'Previous chord ${previousChord ?? 'none'}, current chord '
-          '$currentChord, next chord ${nextChord ?? 'none'}',
-      child: Container(
-        key: const ValueKey('chordFocus'),
-        decoration: const BoxDecoration(color: PracticeStageColors.background),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 4, 0, 5),
-          child: Column(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: _ChordSlot(
-                      chord: previousChord,
-                      valueKey: const ValueKey('previousChordValue'),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    flex: 3,
-                    child: _ChordSlot(
-                      chord: currentChord,
-                      valueKey: const ValueKey('currentChordValue'),
-                      isCurrent: true,
-                      chordProgress: chordProgress,
-                      chordStart: chordStart,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    flex: 2,
-                    child: _ChordSlot(
-                      key: const ValueKey('nextChordPreview'),
-                      chord: nextChord,
-                      valueKey: const ValueKey('nextChordValue'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChordSlot extends StatelessWidget {
-  const _ChordSlot({
-    super.key,
-    required this.chord,
-    required this.valueKey,
-    this.isCurrent = false,
-    this.chordProgress,
-    this.chordStart,
-  });
-
-  final String? chord;
-  final Key valueKey;
-  final bool isCurrent;
-  final double? chordProgress;
-  final double? chordStart;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final displayChord = chord ?? '—';
-    return Opacity(
-      opacity: isCurrent
-          ? 1
-          : chord != null
-          ? 0.68
-          : 0.35,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: EdgeInsets.fromLTRB(6, isCurrent ? 8 : 18, 6, 7),
-        decoration: BoxDecoration(
-          color: isCurrent
-              ? PracticeStageColors.surfaceRaised
-              : Colors.transparent,
-          border: isCurrent
-              ? Border.all(color: PracticeStageColors.textSecondary, width: 1.5)
-              : null,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          children: [
-            Text(
-              displayChord,
-              key: valueKey,
-              maxLines: 1,
-              style: isCurrent
-                  ? textTheme.headlineMedium?.copyWith(
-                      color: PracticeStageColors.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    )
-                  : textTheme.titleMedium?.copyWith(
-                      color: PracticeStageColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-            ),
-            SizedBox(
-              height: isCurrent ? 102 : 60,
-              child: chord == null
-                  ? const SizedBox.shrink()
-                  : FittedBox(
-                      fit: BoxFit.contain,
-                      child: ChordDiagram(
-                        chord: chord!,
-                        foregroundColor: isCurrent
-                            ? PracticeStageColors.textPrimary
-                            : PracticeStageColors.textSecondary,
-                        accentColor: isCurrent
-                            ? PracticeStageColors.textPrimary
-                            : PracticeStageColors.textSecondary,
-                      ),
-                    ),
-            ),
-            if (isCurrent) ...[
-              const SizedBox(height: 7),
-              _ChordProgressBar(
-                key: const ValueKey('chordProgressBar'),
-                progress: chordProgress,
-                chordStart: chordStart,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ChordProgressBar extends StatelessWidget {
-  const _ChordProgressBar({
-    super.key,
-    required this.progress,
-    required this.chordStart,
-  });
-
-  final double? progress;
-  final double? chordStart;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: progress == null
-          ? 'No chord duration to show'
-          : 'Chord ${(progress! * 100).round()} percent played',
-      child: TweenAnimationBuilder<double>(
-        key: ValueKey(chordStart),
-        tween: Tween(end: progress ?? 0),
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.linear,
-        builder: (context, value, child) => ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: value,
-            minHeight: 6,
-            backgroundColor: PracticeStageColors.border,
-            valueColor: const AlwaysStoppedAnimation(PracticeStageColors.amber),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactMetric extends StatelessWidget {
-  const _CompactMetric({
+class _ToolPill extends StatelessWidget {
+  const _ToolPill({
     required this.label,
-    required this.value,
-    required this.valueKey,
+    required this.icon,
+    required this.onPressed,
+    this.isActive = false,
   });
 
   final String label;
-  final String value;
-  final Key valueKey;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: PracticeStageColors.textSecondary,
-            ),
+    return Material(
+      color: isActive ? PracticeStageColors.surfaceRaised : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: isActive
+              ? PracticeStageColors.textSecondary
+              : PracticeStageColors.border,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: isActive
+                    ? PracticeStageColors.textPrimary
+                    : PracticeStageColors.textSecondary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: isActive
+                      ? PracticeStageColors.textPrimary
+                      : PracticeStageColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-          Text(
-            value,
-            key: valueKey,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: PracticeStageColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _TransportControls extends StatelessWidget {
-  const _TransportControls({
+/// Rounded transport pill: bar navigation, play/pause, scrub line, and the
+/// speed control kept as a compact circular button.
+class _TransportBar extends StatelessWidget {
+  const _TransportBar({
     required this.status,
+    required this.position,
+    required this.maximumPosition,
+    required this.speed,
+    required this.chordLabel,
     required this.canGoPrevious,
     required this.canGoNext,
     required this.onPrevious,
     required this.onPlayPause,
     required this.onNext,
+    required this.onSeek,
+    required this.onSpeedChanged,
   });
 
   final PracticePlaybackStatus status;
+  final double position;
+  final double maximumPosition;
+  final double speed;
+  final String chordLabel;
   final bool canGoPrevious;
   final bool canGoNext;
   final VoidCallback onPrevious;
   final VoidCallback onPlayPause;
   final VoidCallback onNext;
+  final ValueChanged<double> onSeek;
+  final ValueChanged<double> onSpeedChanged;
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     final isPlaying = status == PracticePlaybackStatus.playing;
     final playLabel = status == PracticePlaybackStatus.completed
         ? 'Replay'
         : 'Play';
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          key: const ValueKey('previousBarButton'),
-          onPressed: canGoPrevious ? onPrevious : null,
-          tooltip: 'Previous bar',
-          icon: const Icon(Icons.skip_previous),
-        ),
-        IconButton(
-          onPressed: onPlayPause,
-          tooltip: isPlaying ? 'Pause' : playLabel,
-          iconSize: 26,
-          color: PracticeStageColors.textPrimary,
-          icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-        ),
-        IconButton(
-          key: const ValueKey('nextBarButton'),
-          onPressed: canGoNext ? onNext : null,
-          tooltip: 'Next bar',
-          icon: const Icon(Icons.skip_next),
-        ),
-      ],
+
+    return Container(
+      key: const ValueKey('transportSection'),
+      color: PracticeStageColors.background,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  chordLabel,
+                  key: const ValueKey('persistentChordValue'),
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: PracticeStageColors.textFaint,
+                  ),
+                ),
+              ),
+              Text(
+                '${position.toStringAsFixed(1)} s',
+                key: const ValueKey('positionValue'),
+                style: textTheme.labelSmall?.copyWith(
+                  color: PracticeStageColors.textFaint,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: PracticeStageColors.surface,
+                    border: Border.all(color: PracticeStageColors.border),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        key: const ValueKey('previousBarButton'),
+                        onPressed: canGoPrevious ? onPrevious : null,
+                        tooltip: 'Previous bar',
+                        iconSize: 20,
+                        visualDensity: VisualDensity.compact,
+                        color: PracticeStageColors.textSecondary,
+                        icon: const Icon(Icons.skip_previous_rounded),
+                      ),
+                      IconButton(
+                        onPressed: onPlayPause,
+                        tooltip: isPlaying ? 'Pause' : playLabel,
+                        iconSize: 30,
+                        visualDensity: VisualDensity.compact,
+                        color: PracticeStageColors.textPrimary,
+                        icon: Icon(
+                          isPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                        ),
+                      ),
+                      IconButton(
+                        key: const ValueKey('nextBarButton'),
+                        onPressed: canGoNext ? onNext : null,
+                        tooltip: 'Next bar',
+                        iconSize: 20,
+                        visualDensity: VisualDensity.compact,
+                        color: PracticeStageColors.textSecondary,
+                        icon: const Icon(Icons.skip_next_rounded),
+                      ),
+                      Expanded(
+                        child: SliderTheme(
+                          data: SliderTheme.of(context),
+                          child: Slider(
+                            value: position.clamp(0, maximumPosition),
+                            min: 0,
+                            max: maximumPosition,
+                            onChanged: onSeek,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _SpeedSelector(speed: speed, onChanged: onSpeedChanged),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -771,119 +661,151 @@ class _SpeedSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 66,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Speed',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: PracticeStageColors.textFaint,
-              fontSize: 9,
-            ),
-          ),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<double>(
-              key: const ValueKey('speedSelector'),
-              value: speed,
-              isExpanded: true,
-              isDense: true,
-              onChanged: (value) {
-                if (value != null) onChanged(value);
-              },
-              items: [
-                for (final option in PracticePlaybackSpeeds.supported)
-                  DropdownMenuItem(
-                    value: option,
-                    child: Text(
-                      PracticePlaybackSpeeds.label(option),
-                      textAlign: TextAlign.center,
-                    ),
+    final style = Theme.of(context).textTheme.titleSmall?.copyWith(
+      color: PracticeStageColors.textPrimary,
+      fontWeight: FontWeight.w700,
+    );
+    return Container(
+      width: 60,
+      height: 60,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: PracticeStageColors.surface,
+        border: Border.all(color: PracticeStageColors.border),
+        shape: BoxShape.circle,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: SizedBox(
+          width: 46,
+          child: DropdownButton<double>(
+            key: const ValueKey('speedSelector'),
+            value: speed,
+            isDense: true,
+            isExpanded: true,
+            alignment: Alignment.center,
+            icon: const SizedBox.shrink(),
+            dropdownColor: PracticeStageColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(14),
+            onChanged: (value) {
+              if (value != null) onChanged(value);
+            },
+            selectedItemBuilder: (context) => [
+              for (final option in PracticePlaybackSpeeds.supported)
+                Center(
+                  child: Text(
+                    PracticePlaybackSpeeds.label(option),
+                    style: style,
                   ),
-              ],
-            ),
+                ),
+            ],
+            items: [
+              for (final option in PracticePlaybackSpeeds.supported)
+                DropdownMenuItem(
+                  value: option,
+                  child: Text(
+                    PracticePlaybackSpeeds.label(option),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _ChordProgression extends StatelessWidget {
-  const _ChordProgression({
-    required this.chords,
-    required this.hasCurrentChord,
-  });
-
-  final List<String> chords;
-  final bool hasCurrentChord;
+class _MusicOnlyChordFocus extends StatelessWidget {
+  const _MusicOnlyChordFocus();
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    if (chords.isEmpty) {
-      return const Text('—', key: ValueKey('progressionEmpty'));
-    }
-    return Row(
-      children: [
-        for (var index = 0; index < chords.length; index++)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                decoration: BoxDecoration(
-                  color: index == 0 && hasCurrentChord
-                      ? PracticeStageColors.surfaceRaised
-                      : PracticeStageColors.surface,
-                  border: Border.all(
-                    color: index == 0 && hasCurrentChord
-                        ? PracticeStageColors.amber
-                        : PracticeStageColors.border,
-                    width: index == 0 && hasCurrentChord ? 1.5 : 1,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  chords[index],
-                  key: ValueKey('progressionChord$index'),
-                  style: index == 0 && hasCurrentChord
-                      ? textTheme.labelLarge?.copyWith(
-                          color: PracticeStageColors.amberBright,
-                          fontWeight: FontWeight.bold,
-                        )
-                      : textTheme.labelMedium?.copyWith(
-                          color: PracticeStageColors.textSecondary,
-                        ),
+    return Semantics(
+      container: true,
+      label: 'No chord to play',
+      child: SizedBox(
+        key: const ValueKey('musicOnlyChordFocus'),
+        height: ChordDiagramStrip.compactHeight,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.music_note_rounded,
+                size: 32,
+                color: PracticeStageColors.amber,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'NO CHORD TO PLAY',
+                key: const ValueKey('musicOnlyChordMessage'),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: PracticeStageColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
                 ),
               ),
-            ),
+            ],
           ),
-      ],
+        ),
+      ),
     );
   }
 }
 
-class _CompactAction extends StatelessWidget {
-  const _CompactAction({required this.label, required this.onPressed});
+class _MusicOnlyLyrics extends StatelessWidget {
+  const _MusicOnlyLyrics({required this.state});
 
-  final String label;
-  final VoidCallback onPressed;
+  final PlaybackState state;
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        minimumSize: const Size(30, 34),
-        padding: const EdgeInsets.symmetric(horizontal: 2),
+    const word = 'MUSIC';
+    final beatProgress = state.beatProgress ?? 0.0;
+    final revealedLetters = (beatProgress * word.length).floor() + 1;
+    final pulse = 1.0 + (1.0 - beatProgress) * (state.isDownbeat ? 0.06 : 0.03);
+
+    return Semantics(
+      container: true,
+      label: 'Music only section',
+      value: '${((state.musicOnlyProgress ?? 0) * 100).round()} percent',
+      child: Center(
+        child: Transform.scale(
+          scale: pulse,
+          child: Row(
+            key: const ValueKey('musicOnlyLyrics'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '♪ ',
+                style: TextStyle(
+                  color: PracticeStageColors.amber,
+                  fontSize: 30,
+                ),
+              ),
+              for (var index = 0; index < word.length; index++)
+                Text(
+                  word[index],
+                  key: ValueKey('musicLetter$index'),
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: index < revealedLetters
+                        ? PracticeStageColors.amberBright
+                        : PracticeStageColors.textFaint,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                  ),
+                ),
+              const Text(
+                ' ♪',
+                style: TextStyle(
+                  color: PracticeStageColors.amber,
+                  fontSize: 30,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
     );
   }
 }

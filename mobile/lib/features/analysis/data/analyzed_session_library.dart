@@ -144,5 +144,15 @@ class LocalAnalyzedSessionLibrary implements AnalyzedSessionLibrary {
           ],
         },
     ],
+    'practice_regions': [
+      for (final region in timeline.practiceRegions)
+        {
+          'start': region.start,
+          'end': region.end,
+          'mode': switch (region.mode) {
+            PracticeMode.musicOnly => 'music_only',
+          },
+        },
+    ],
   };
 }

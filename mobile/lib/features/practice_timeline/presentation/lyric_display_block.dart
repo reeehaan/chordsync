@@ -14,7 +14,7 @@ class LyricDisplayBlock {
 /// Source text and timestamps are never altered.
 abstract final class LyricDisplayBlockGrouper {
   static const meaningfulGapSeconds = 0.8;
-  static const maximumWords = 8;
+  static const maximumWords = 7;
   static const maximumCharacters = 38;
 
   static List<LyricDisplayBlock> group(List<LyricChordWord> words) {
