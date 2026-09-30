@@ -54,6 +54,7 @@ SYNTHETIC_TIMELINE = {
             "words": [{"start": 0.1, "end": 0.5, "text": "steady"}],
         }
     ],
+    "practice_regions": [],
 }
 
 
@@ -125,6 +126,21 @@ class FakePipelineRunner:
                     }
                 ],
             )
+            if stage == "btc-chords" and "--uncertainty-output" in argv:
+                self._write_json(
+                    Path(argv[argv.index("--uncertainty-output") + 1]),
+                    [
+                        {
+                            "time": 0.0,
+                            "predicted_index": 0,
+                            "predicted_label": "C:maj",
+                            "top1_score": 0.8,
+                            "top2_score": 0.1,
+                            "margin": 0.7,
+                            "normalized_entropy": 0.2,
+                        }
+                    ],
+                )
         elif stage == "beats":
             self._write_json(
                 Path(argv[argv.index("--output") + 1]),
@@ -168,12 +184,39 @@ class FakePipelineRunner:
                     ],
                 },
             )
+        elif stage == "chordino-diagnostic":
+            self._write_json(
+                Path(argv[argv.index("--output") + 1]),
+                [
+                    {
+                        "start": 0.0,
+                        "end": 1.0,
+                        "raw_label": "C",
+                        "normalized_label": "C",
+                        "source": "chordino-diagnostic",
+                    }
+                ],
+            )
+        elif stage == "strumming-suitability":
+            self._write_json(
+                Path(argv[argv.index("--output") + 1]),
+                [
+                    {"start": 0.0, "end": 1.0, "mode": "music_only"},
+                ],
+            )
         elif stage == "fuse":
             output = Path(argv[argv.index("--output") + 1])
             if self.malformed_final:
                 self._write_json(output, {"schema_version": "invalid"})
             else:
-                self._write_json(output, SYNTHETIC_TIMELINE)
+                timeline = dict(SYNTHETIC_TIMELINE)
+                if "--practice-regions" in argv:
+                    timeline["practice_regions"] = json.loads(
+                        Path(
+                            argv[argv.index("--practice-regions") + 1]
+                        ).read_text(encoding="utf-8")
+                    )
+                self._write_json(output, timeline)
 
     @staticmethod
     def _write_json(path: Path, payload: object) -> None:
@@ -249,11 +292,12 @@ def test_btc_estimator_uses_isolated_python_and_explicit_model_paths(
             "btc_python": Path("/env/btc/python"),
             "btc_checkpoint": Path("/local/models/btc_model.pt"),
             "btc_source": Path("/external/BTC-ISMIR19"),
+            "vamp_simple_host_executable": Path("/portable/bin/vamp-simple-host"),
         }
     )
     runner = FakePipelineRunner()
 
-    RealAnalysisProcessor(config, runner).process(input_path)
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
 
     chord_call = runner.calls[1]
     assert runner._stage(chord_call.argv) == "btc-chords"
@@ -265,6 +309,48 @@ def test_btc_estimator_uses_isolated_python_and_explicit_model_paths(
         "/external/BTC-ISMIR19"
     )
     assert all(runner._stage(call.argv) != "chords" for call in runner.calls)
+    assert "--uncertainty-output" in chord_call.argv
+    assert [runner._stage(call.argv) for call in runner.calls][1:5] == [
+        "btc-chords",
+        "beats",
+        "chordino-diagnostic",
+        "strumming-suitability",
+    ]
+    assert timeline.practice_regions[0].model_dump(mode="json") == {
+        "start": 0.0,
+        "end": 1.0,
+        "mode": "music_only",
+    }
+
+
+@pytest.mark.parametrize(
+    "failing_stage",
+    ["chordino-diagnostic", "strumming-suitability"],
+)
+def test_btc_optional_diagnostic_failure_keeps_normal_analysis(
+    processor_context,
+    failing_stage,
+):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{
+            **config.__dict__,
+            "chord_estimator": ChordEstimator.BTC,
+            "btc_python": Path("/env/btc/python"),
+            "btc_checkpoint": Path("/local/models/btc_model.pt"),
+            "btc_source": Path("/external/BTC-ISMIR19"),
+            "vamp_simple_host_executable": Path("/portable/bin/vamp-simple-host"),
+        }
+    )
+    runner = FakePipelineRunner(failing_stage=failing_stage)
+
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
+
+    assert timeline.practice_regions == []
+    fuse_call = next(
+        call for call in runner.calls if runner._stage(call.argv) == "fuse"
+    )
+    assert "--practice-regions" not in fuse_call.argv
 
 
 def test_chordino_remains_default_estimator(processor_context):
@@ -296,6 +382,11 @@ def test_local_config_defaults_to_chordino_without_btc_paths(monkeypatch):
     monkeypatch.delenv("CHORDSYNC_BTC_PYTHON", raising=False)
     monkeypatch.delenv("CHORDSYNC_BTC_CHECKPOINT", raising=False)
     monkeypatch.delenv("CHORDSYNC_BTC_SOURCE", raising=False)
+    monkeypatch.delenv("CHORDSYNC_VAMP_SIMPLE_HOST", raising=False)
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor.shutil.which",
+        lambda command: None,
+    )
 
     config = AnalysisPipelineConfig.local()
 
@@ -303,6 +394,58 @@ def test_local_config_defaults_to_chordino_without_btc_paths(monkeypatch):
     assert config.btc_python is None
     assert config.btc_checkpoint is None
     assert config.btc_source is None
+    assert config.vamp_simple_host_executable is None
+
+
+def test_local_config_resolves_vamp_simple_host_from_environment(monkeypatch):
+    monkeypatch.setenv(
+        "CHORDSYNC_VAMP_SIMPLE_HOST",
+        "/portable/bin/configured-vamp-simple-host",
+    )
+
+    config = AnalysisPipelineConfig.local()
+
+    assert config.vamp_simple_host_executable == Path(
+        "/portable/bin/configured-vamp-simple-host"
+    )
+
+
+def test_local_config_resolves_vamp_simple_host_from_path(monkeypatch):
+    monkeypatch.delenv("CHORDSYNC_VAMP_SIMPLE_HOST", raising=False)
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor.shutil.which",
+        lambda command: "/portable/bin/vamp-simple-host",
+    )
+
+    config = AnalysisPipelineConfig.local()
+
+    assert config.vamp_simple_host_executable == Path(
+        "/portable/bin/vamp-simple-host"
+    )
+
+
+def test_btc_without_vamp_simple_host_skips_optional_diagnostics(
+    processor_context,
+):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{
+            **config.__dict__,
+            "chord_estimator": ChordEstimator.BTC,
+            "btc_python": Path("/env/btc/python"),
+            "btc_checkpoint": Path("/local/models/btc_model.pt"),
+            "btc_source": Path("/external/BTC-ISMIR19"),
+            "vamp_simple_host_executable": None,
+        }
+    )
+    runner = FakePipelineRunner()
+
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
+
+    stages = [runner._stage(call.argv) for call in runner.calls]
+    assert "chordino-diagnostic" not in stages
+    assert "strumming-suitability" not in stages
+    assert timeline.practice_regions == []
 
 
 def test_local_config_prefers_btc_once_configured_without_explicit_opt_in(

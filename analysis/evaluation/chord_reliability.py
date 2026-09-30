@@ -1,8 +1,7 @@
-"""Offline chord-guidance reliability diagnostics.
+"""Frozen chord-guidance reliability evidence for beat-aligned windows.
 
-This module is intentionally not imported by the production analysis pipeline.
-It measures observable BTC label behavior in beat-aligned windows; its score is
-exploratory and is not a model confidence value.
+It measures observable BTC label behavior; its score is not a model confidence
+value.
 """
 
 from dataclasses import dataclass, replace

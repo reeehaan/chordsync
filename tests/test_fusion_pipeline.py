@@ -16,6 +16,7 @@ from analysis.fusion.timeline_lookup import (
     get_current_lyric_word,
     get_playback_state,
 )
+from analysis.fusion.models import PracticeMode, PracticeRegion
 from analysis.lyrics.models import (
     LyricSegment,
     LyricTranscript,
@@ -105,6 +106,20 @@ def test_build_shared_timeline():
 
     assert timeline.bars[0].beats[0].chord == "C"
     assert timeline.lyrics[0].words[0].text == "Hello"
+    assert timeline.practice_regions == []
+
+
+def test_build_shared_timeline_with_music_only_region():
+    timeline = build_shared_timeline(
+        BeatGrid(bpm=60, beats_per_bar=4, beats=[], source="test"),
+        [],
+        LyricTranscript(language="en", source="test", segments=[]),
+        [PracticeRegion(start=4, end=8, mode=PracticeMode.MUSIC_ONLY)],
+    )
+
+    assert timeline.model_dump(mode="json")["practice_regions"] == [
+        {"start": 4.0, "end": 8.0, "mode": "music_only"}
+    ]
 
 
 def test_export_shared_timeline(tmp_path: Path):

@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import time
+import math
 from collections import Counter
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -23,6 +24,19 @@ def predict(
     checkpoint_path: Path,
     source_path: Path,
 ) -> Sequence[Mapping[str, object]]:
+    predictions, _ = predict_with_diagnostics(
+        audio_path,
+        checkpoint_path,
+        source_path,
+    )
+    return predictions
+
+
+def predict_with_diagnostics(
+    audio_path: Path,
+    checkpoint_path: Path,
+    source_path: Path,
+) -> tuple[Sequence[Mapping[str, object]], Sequence[Mapping[str, object]]]:
     source_text = str(source_path.resolve())
     if source_text not in sys.path:
         sys.path.insert(0, source_text)
@@ -72,12 +86,16 @@ def predict(
         instance_count = feature.shape[0] // timestep
         tensor = torch.tensor(feature, dtype=torch.float32).unsqueeze(0).to(device)
         frame_labels: list[int] = []
+        frame_probabilities: list[list[float]] = []
         with torch.no_grad():
             for index in range(instance_count):
                 window = tensor[:, timestep * index : timestep * (index + 1), :]
                 attention, _ = model.self_attn_layers(window)
-                prediction, _ = model.output_layer(attention)
-                frame_labels.extend(prediction.squeeze().tolist())
+                logits = model.output_layer.output_projection(attention)
+                probabilities = torch.softmax(logits, dim=-1)
+                prediction = torch.topk(probabilities, 2).indices[:, :, 0]
+                frame_labels.extend(prediction.squeeze(0).tolist())
+                frame_probabilities.extend(probabilities.squeeze(0).cpu().tolist())
         useful_frames = max(1, len(frame_labels) - padding)
         smoothed_labels = _smooth_frame_labels(
             frame_labels[:useful_frames], _SMOOTHING_WINDOW_FRAMES
@@ -89,6 +107,18 @@ def predict(
             segmented,
             max_interruption_seconds=_MAX_ISOLATED_INTERRUPTION_SECONDS,
         )
+        try:
+            labels = tuple(idx2chord[index] for index in range(25))
+            diagnostics = [
+                _frame_diagnostic(scores, index * float(time_unit), labels)
+                for index, scores in enumerate(frame_probabilities[:useful_frames])
+            ]
+        except Exception:
+            diagnostics = []
+            print(
+                "BTC uncertainty diagnostics unavailable; preserving chord output",
+                file=sys.stderr,
+            )
         inference_seconds = time.perf_counter() - inference_started
     except Exception as error:
         raise BtcInferenceError("BTC inference failed.") from error
@@ -98,7 +128,27 @@ def predict(
         f"inference={inference_seconds:.3f}s",
         file=sys.stderr,
     )
-    return predictions
+    return predictions, diagnostics
+
+
+def _frame_diagnostic(probabilities, timestamp, labels):
+    ranked = sorted(enumerate(probabilities), key=lambda item: (-item[1], item[0]))
+    predicted_index, top1 = ranked[0]
+    top2 = ranked[1][1]
+    entropy = -sum(
+        probability * math.log(probability)
+        for probability in probabilities
+        if probability > 0.0
+    ) / math.log(len(probabilities))
+    return {
+        "time": round(float(timestamp), 6),
+        "predicted_index": predicted_index,
+        "predicted_label": labels[predicted_index],
+        "top1_score": float(top1),
+        "top2_score": float(top2),
+        "margin": float(top1 - top2),
+        "normalized_entropy": float(entropy),
+    }
 
 
 def _select_device(torch):

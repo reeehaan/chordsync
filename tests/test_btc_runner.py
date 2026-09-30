@@ -9,6 +9,7 @@ from analysis.chords.btc.btc_runner import (
     BtcOutputError,
     MissingBtcCheckpointError,
     run_btc,
+    run_btc_with_diagnostics,
 )
 
 
@@ -20,6 +21,17 @@ class FakeInference:
     def predict(self, audio_path, checkpoint_path, source_path):
         self.calls.append((audio_path, checkpoint_path, source_path))
         return self.predictions
+
+
+class FakeDiagnosticInference:
+    def __init__(self, predictions, diagnostics):
+        self.predictions = predictions
+        self.diagnostics = diagnostics
+        self.calls = []
+
+    def predict_with_diagnostics(self, audio_path, checkpoint_path, source_path):
+        self.calls.append((audio_path, checkpoint_path, source_path))
+        return self.predictions, self.diagnostics
 
 
 @pytest.fixture
@@ -61,6 +73,45 @@ def test_runner_passes_normalized_input_and_maps_canonical_chords(btc_paths):
         "normalized_label": "C",
         "source": "btc",
     }
+
+
+def test_diagnostic_runner_preserves_chords_and_uses_one_inference_call(btc_paths):
+    audio, checkpoint, source = btc_paths
+    predictions = [
+        {"start": 0.0, "end": 1.0, "label": "C:maj"},
+        {"start": 1.0, "end": 2.0, "label": "A:min"},
+    ]
+    diagnostics = [
+        {
+            "time": 0.0,
+            "predicted_index": 0,
+            "predicted_label": "C:maj",
+            "top1_score": 0.8,
+            "top2_score": 0.1,
+            "margin": 0.7,
+            "normalized_entropy": 0.2,
+        }
+    ]
+    inference = FakeDiagnosticInference(predictions, diagnostics)
+
+    result = run_btc_with_diagnostics(
+        audio,
+        checkpoint,
+        source,
+        inference=inference,
+    )
+
+    assert inference.calls == [(audio, checkpoint, source)]
+    assert [chord.model_dump() for chord in result.chords] == [
+        chord.model_dump()
+        for chord in run_btc(
+            audio,
+            checkpoint,
+            source,
+            inference=FakeInference(predictions),
+        )
+    ]
+    assert result.frame_diagnostics == diagnostics
 
 
 @pytest.mark.parametrize(

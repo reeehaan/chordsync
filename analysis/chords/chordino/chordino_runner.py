@@ -13,9 +13,14 @@ from analysis.chords.normalizer import normalize_chord_label
 
 DEFAULT_PLUGIN = "vamp:nnls-chroma:chordino:simplechord"
 SONIC_ANNOTATOR_ENV = "CHORDSYNC_SONIC_ANNOTATOR"
+VAMP_SIMPLE_HOST_ENV = "CHORDSYNC_VAMP_SIMPLE_HOST"
 
 
 class SonicAnnotatorNotFoundError(RuntimeError):
+    pass
+
+
+class VampSimpleHostNotFoundError(RuntimeError):
     pass
 
 
@@ -40,11 +45,40 @@ def get_sonic_annotator_path() -> Path:
     )
 
 
+def get_vamp_simple_host_path() -> Path:
+    configured_path = os.getenv(VAMP_SIMPLE_HOST_ENV)
+    if configured_path:
+        executable = Path(configured_path).expanduser()
+        if executable.is_file() and os.access(executable, os.X_OK):
+            return executable
+        raise VampSimpleHostNotFoundError(
+            f"{VAMP_SIMPLE_HOST_ENV} does not identify an executable file."
+        )
+
+    discovered_path = shutil.which("vamp-simple-host")
+    if discovered_path:
+        return Path(discovered_path)
+    raise VampSimpleHostNotFoundError(
+        f"vamp-simple-host is not configured; set {VAMP_SIMPLE_HOST_ENV}."
+    )
+
+
 def run_chordino(audio_path: Path) -> list[ChordSegment]:
     if not audio_path.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-    sonic_annotator = get_sonic_annotator_path()
+    try:
+        sonic_annotator = get_sonic_annotator_path()
+    except SonicAnnotatorNotFoundError:
+        from analysis.chords.chordino.vamp_simple_host_runner import (
+            run_chordino_diagnostic,
+        )
+
+        chords = run_chordino_diagnostic(
+            audio_path,
+            executable=get_vamp_simple_host_path(),
+        )
+        return [chord.model_copy(update={"source": "chordino"}) for chord in chords]
 
     command = [
         str(sonic_annotator),

@@ -1,4 +1,5 @@
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Protocol, Sequence
 
@@ -35,6 +36,24 @@ class BtcInference(Protocol):
     ) -> Sequence[Mapping[str, object]]: ...
 
 
+class DiagnosticBtcInference(Protocol):
+    def predict_with_diagnostics(
+        self,
+        audio_path: Path,
+        checkpoint_path: Path,
+        source_path: Path,
+    ) -> tuple[
+        Sequence[Mapping[str, object]],
+        Sequence[Mapping[str, object]],
+    ]: ...
+
+
+@dataclass(frozen=True)
+class BtcAnalysisResult:
+    chords: list[ChordSegment]
+    frame_diagnostics: list[dict[str, object]]
+
+
 class NativeBtcInference:
     def predict(
         self,
@@ -45,6 +64,19 @@ class NativeBtcInference:
         from analysis.chords.btc.btc_inference import predict
 
         return predict(audio_path, checkpoint_path, source_path)
+
+    def predict_with_diagnostics(
+        self,
+        audio_path: Path,
+        checkpoint_path: Path,
+        source_path: Path,
+    ) -> tuple[
+        Sequence[Mapping[str, object]],
+        Sequence[Mapping[str, object]],
+    ]:
+        from analysis.chords.btc.btc_inference import predict_with_diagnostics
+
+        return predict_with_diagnostics(audio_path, checkpoint_path, source_path)
 
 
 def run_btc(
@@ -71,6 +103,50 @@ def run_btc(
     segments = [_to_segment(prediction) for prediction in predictions]
     segments.sort(key=lambda segment: (segment.start, segment.end))
 
+    for previous, current in zip(segments, segments[1:]):
+        if current.start < previous.end:
+            raise BtcOutputError("BTC output contains overlapping segments.")
+    return segments
+
+
+def run_btc_with_diagnostics(
+    audio_path: Path,
+    checkpoint_path: Path,
+    source_path: Path,
+    *,
+    inference: DiagnosticBtcInference | None = None,
+) -> BtcAnalysisResult:
+    _validate_paths(audio_path, checkpoint_path, source_path)
+    backend = inference or NativeBtcInference()
+    try:
+        predictions, diagnostics = backend.predict_with_diagnostics(
+            audio_path,
+            checkpoint_path,
+            source_path,
+        )
+    except BtcRunnerError:
+        raise
+    except Exception as error:
+        raise BtcInferenceError("BTC inference failed.") from error
+    chords = _validated_segments(predictions)
+    return BtcAnalysisResult(
+        chords=chords,
+        frame_diagnostics=[dict(frame) for frame in diagnostics],
+    )
+
+
+def _validate_paths(audio_path, checkpoint_path, source_path):
+    if not audio_path.is_file():
+        raise FileNotFoundError(f"Normalized audio file not found: {audio_path}")
+    if not checkpoint_path.is_file():
+        raise MissingBtcCheckpointError("BTC checkpoint is not configured or missing.")
+    if not source_path.is_dir():
+        raise BtcModelLoadError("BTC source directory is not configured or missing.")
+
+
+def _validated_segments(predictions):
+    segments = [_to_segment(prediction) for prediction in predictions]
+    segments.sort(key=lambda segment: (segment.start, segment.end))
     for previous, current in zip(segments, segments[1:]):
         if current.start < previous.end:
             raise BtcOutputError("BTC output contains overlapping segments.")

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -79,6 +80,7 @@ class AnalysisPipelineConfig:
     beat_python: Path
     whisperx_executable: Path
     demucs_executable: Path
+    vamp_simple_host_executable: Path | None = None
     chord_estimator: ChordEstimator = ChordEstimator.CHORDINO
     btc_python: Path | None = None
     btc_checkpoint: Path | None = None
@@ -115,6 +117,10 @@ class AnalysisPipelineConfig:
             ),
             demucs_executable=(
                 _PROJECT_ROOT / "analysis/separation/.venv-separation/bin/demucs"
+            ),
+            vamp_simple_host_executable=_optional_executable(
+                "CHORDSYNC_VAMP_SIMPLE_HOST",
+                "vamp-simple-host",
             ),
             chord_estimator=estimator,
             btc_python=btc_python,
@@ -154,6 +160,9 @@ class RealAnalysisProcessor:
 
         normalized_path = workspace / "normalized.wav"
         chord_path = workspace / "chords.json"
+        btc_uncertainty_path = workspace / "btc_uncertainty.json"
+        chordino_diagnostic_path = workspace / "chordino_diagnostic.json"
+        practice_regions_path = workspace / "practice_regions.json"
         beat_path = workspace / "beats.json"
         separation_directory = workspace / "separated"
         vocals_path = (
@@ -199,6 +208,62 @@ class RealAnalysisProcessor:
             self._config.beat_timeout,
             beat_path,
         )
+        practice_regions_available = False
+        if self._config.chord_estimator is ChordEstimator.BTC:
+            chordino_available = False
+            if self._config.vamp_simple_host_executable is None:
+                logger.warning(
+                    "[job %s] chordino diagnostic unavailable; "
+                    "vamp-simple-host was not found; continuing without "
+                    "practice_regions",
+                    job_id,
+                )
+            else:
+                chordino_available = self._run_optional_stage(
+                    "chordino diagnostic",
+                    [
+                        str(self._config.api_python),
+                        "-m",
+                        self._config.stage_module,
+                        "chordino-diagnostic",
+                        "--input",
+                        str(normalized_path),
+                        "--output",
+                        str(chordino_diagnostic_path),
+                        "--executable",
+                        str(self._config.vamp_simple_host_executable),
+                    ],
+                    self._config.chord_timeout,
+                    chordino_diagnostic_path,
+                )
+            if _has_nonempty_json_list(btc_uncertainty_path) and chordino_available:
+                practice_regions_available = self._run_optional_stage(
+                    "strumming suitability",
+                    [
+                        str(self._config.api_python),
+                        "-m",
+                        self._config.stage_module,
+                        "strumming-suitability",
+                        "--chords",
+                        str(chord_path),
+                        "--chordino",
+                        str(chordino_diagnostic_path),
+                        "--beats",
+                        str(beat_path),
+                        "--uncertainty",
+                        str(btc_uncertainty_path),
+                        "--output",
+                        str(practice_regions_path),
+                    ],
+                    self._config.fusion_timeout,
+                    practice_regions_path,
+                )
+            else:
+                logger.warning(
+                    "[job %s] strumming suitability diagnostics unavailable; "
+                    "continuing without practice_regions",
+                    job_id,
+                )
         self._run_stage(
             "separate",
             [
@@ -240,24 +305,29 @@ class RealAnalysisProcessor:
             self._config.lyric_timeout,
             whisperx_path,
         )
+        fusion_command = [
+            str(self._config.api_python),
+            "-m",
+            self._config.stage_module,
+            "fuse",
+            "--chords",
+            str(chord_path),
+            "--beats",
+            str(beat_path),
+            "--whisperx",
+            str(whisperx_path),
+            "--lyric-source",
+            f"whisperx-{self._config.whisperx_model}",
+            "--output",
+            str(timeline_path),
+        ]
+        if practice_regions_available:
+            fusion_command.extend(
+                ["--practice-regions", str(practice_regions_path)]
+            )
         self._run_stage(
             "fuse",
-            [
-                str(self._config.api_python),
-                "-m",
-                self._config.stage_module,
-                "fuse",
-                "--chords",
-                str(chord_path),
-                "--beats",
-                str(beat_path),
-                "--whisperx",
-                str(whisperx_path),
-                "--lyric-source",
-                f"whisperx-{self._config.whisperx_model}",
-                "--output",
-                str(timeline_path),
-            ],
+            fusion_command,
             self._config.fusion_timeout,
             timeline_path,
         )
@@ -304,7 +374,27 @@ class RealAnalysisProcessor:
             str(self._config.btc_checkpoint),
             "--source",
             str(self._config.btc_source),
+            "--uncertainty-output",
+            str(output_path.with_name("btc_uncertainty.json")),
         ]
+
+    def _run_optional_stage(
+        self,
+        stage: str,
+        argv: list[str],
+        timeout: float,
+        expected_output: Path,
+    ) -> bool:
+        try:
+            self._run_stage(stage, argv, timeout, expected_output)
+        except AnalysisPipelineError:
+            logger.warning(
+                "[job %s] strumming suitability diagnostics unavailable; "
+                "continuing without practice_regions",
+                self._job_id_for(expected_output),
+            )
+            return False
+        return True
 
     def _run_stage(
         self,
@@ -357,3 +447,19 @@ class RealAnalysisProcessor:
 def _optional_path(name: str) -> Path | None:
     value = os.getenv(name)
     return Path(value).expanduser() if value else None
+
+
+def _optional_executable(environment_name: str, command: str) -> Path | None:
+    configured = os.getenv(environment_name)
+    if configured:
+        return Path(configured).expanduser()
+    discovered = shutil.which(command)
+    return Path(discovered) if discovered else None
+
+
+def _has_nonempty_json_list(path: Path) -> bool:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, list) and bool(payload)
