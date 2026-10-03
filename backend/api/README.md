@@ -51,3 +51,17 @@ implementations. Subprocess orchestration is local and development-grade;
 persistent jobs, a durable remote worker/queue, authentication, input retention
 policies, and malware scanning remain deferred. Uploaded audio is retained after
 execution so it remains available for future playback support.
+
+## Optional development lyrics verification
+
+Set `CHORDSYNC_LRCLIB_REFERENCE_ENABLED=1` to enable the development/academic
+LRCLIB reference lookup. It uses embedded title and artist metadata, validates
+the provider identity, and only applies conservatively verified corrections
+with fresh WhisperX alignment timing. The feature is off by default. Provider
+failure, weak identity, unsafe context, or invalid timing always preserves the
+original WhisperX transcript and does not fail analysis.
+
+Optional transport settings are `CHORDSYNC_LRCLIB_TIMEOUT` and
+`CHORDSYNC_LRCLIB_USER_AGENT`. Full provider responses and reference lyrics are
+not persisted or logged. Only corrected timed words that pass verification may
+flow through the existing `SharedTimeline` output.

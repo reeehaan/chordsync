@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,18 @@ from pydantic import ValidationError
 
 from analysis.chords.estimator import ChordEstimator
 from analysis.fusion.models import SharedTimeline
+from analysis.lyrics.forced_alignment import WhisperXReferenceAligner
+from analysis.lyrics.lrclib_transport import (
+    DEFAULT_TIMEOUT_SECONDS,
+    DEFAULT_USER_AGENT,
+    LrclibTransport,
+)
+from analysis.lyrics.lyrics_api_reference import LyricsReferenceResult
+from analysis.lyrics.production_verification import (
+    ReferenceAligner,
+    verify_and_correct_whisperx,
+)
+from analysis.lyrics.production_reference import obtain_lrclib_reference
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -94,6 +107,9 @@ class AnalysisPipelineConfig:
     separation_timeout: float = 600.0
     lyric_timeout: float = 1800.0
     fusion_timeout: float = 120.0
+    lrclib_reference_enabled: bool = False
+    lrclib_timeout: float = DEFAULT_TIMEOUT_SECONDS
+    lrclib_user_agent: str = DEFAULT_USER_AGENT
 
     @classmethod
     def local(cls) -> "AnalysisPipelineConfig":
@@ -126,6 +142,18 @@ class AnalysisPipelineConfig:
             btc_python=btc_python,
             btc_checkpoint=btc_checkpoint,
             btc_source=btc_source,
+            lrclib_reference_enabled=(
+                os.getenv("CHORDSYNC_LRCLIB_REFERENCE_ENABLED", "").casefold()
+                in {"1", "true", "yes"}
+            ),
+            lrclib_timeout=_positive_float_environment(
+                "CHORDSYNC_LRCLIB_TIMEOUT",
+                DEFAULT_TIMEOUT_SECONDS,
+            ),
+            lrclib_user_agent=os.getenv(
+                "CHORDSYNC_LRCLIB_USER_AGENT",
+                DEFAULT_USER_AGENT,
+            ),
         )
 
 
@@ -134,11 +162,19 @@ class RealAnalysisProcessor:
         self,
         config: AnalysisPipelineConfig | None = None,
         runner: SubprocessRunner | None = None,
+        reference_aligner: ReferenceAligner | None = None,
     ) -> None:
         self._config = config or AnalysisPipelineConfig.local()
         self._runner = runner or LocalSubprocessRunner()
+        self._reference_aligner = reference_aligner
+        self.last_reference_identity_confidence = None
+        self.last_lyrics_verification_diagnostics = None
+        self.last_lyrics_timing_provenance = ()
 
     def process(self, input_path: Path) -> SharedTimeline:
+        self.last_reference_identity_confidence = None
+        self.last_lyrics_verification_diagnostics = None
+        self.last_lyrics_timing_provenance = ()
         if not input_path.is_file():
             raise AnalysisPipelineError("input stage output is missing")
         if self._config.chord_estimator is ChordEstimator.BTC:
@@ -152,6 +188,7 @@ class RealAnalysisProcessor:
                 raise AnalysisPipelineError("BTC is not configured")
 
         job_id = input_path.parent.name
+        reference = self._obtain_optional_lyrics_reference(input_path, job_id)
         workspace = self._config.workspace_root / job_id
         try:
             workspace.mkdir(parents=True, exist_ok=False)
@@ -305,7 +342,140 @@ class RealAnalysisProcessor:
             self._config.lyric_timeout,
             whisperx_path,
         )
-        fusion_command = [
+        with tempfile.TemporaryDirectory(
+            prefix="chordsync-verified-lyrics-"
+        ) as temporary_directory:
+            fusion_whisperx_path = self._verify_optional_lyrics(
+                reference,
+                whisperx_path,
+                Path(temporary_directory) / "vocals.verified.json",
+                vocals_path,
+                job_id,
+            )
+            self._run_fusion_stage(
+                chord_path,
+                beat_path,
+                fusion_whisperx_path,
+                timeline_path,
+                practice_regions_path if practice_regions_available else None,
+            )
+
+        try:
+            payload = json.loads(timeline_path.read_text(encoding="utf-8"))
+            return SharedTimeline.model_validate(payload)
+        except (OSError, json.JSONDecodeError, ValidationError) as error:
+            raise AnalysisPipelineError("fuse stage produced an invalid timeline") from error
+
+    def _obtain_optional_lyrics_reference(
+        self,
+        input_path: Path,
+        job_id: str,
+    ) -> LyricsReferenceResult | None:
+        if not self._config.lrclib_reference_enabled:
+            return None
+        try:
+            reference = obtain_lrclib_reference(
+                input_path,
+                transport=LrclibTransport(
+                    user_agent=self._config.lrclib_user_agent,
+                    timeout_seconds=self._config.lrclib_timeout,
+                ),
+            )
+        except Exception as error:
+            logger.warning(
+                "[job %s] optional lyrics reference unavailable (%s); continuing",
+                job_id,
+                type(error).__name__,
+            )
+            return None
+        logger.info(
+            "[job %s] optional lyrics reference %s; continuing with WhisperX",
+            job_id,
+            "matched" if reference is not None else "unavailable",
+        )
+        if reference is not None:
+            self.last_reference_identity_confidence = getattr(
+                reference,
+                "identity_confidence",
+                None,
+            )
+        return reference
+
+    def _verify_optional_lyrics(
+        self,
+        reference: LyricsReferenceResult | None,
+        whisperx_path: Path,
+        verified_whisperx_path: Path,
+        audio_path: Path,
+        job_id: str,
+    ) -> Path:
+        if reference is None:
+            return whisperx_path
+        try:
+            whisperx_result = json.loads(whisperx_path.read_text(encoding="utf-8"))
+            aligner = self._reference_aligner or WhisperXReferenceAligner(
+                python_executable=(
+                    self._config.whisperx_executable.parent / "python"
+                ),
+                repo_root=self._config.repo_root,
+                timeout_seconds=self._config.lyric_timeout,
+            )
+            result = verify_and_correct_whisperx(
+                whisperx_result,
+                reference.plain_lyrics,
+                audio_path,
+                aligner,
+            )
+            diagnostics = result.diagnostics
+            self.last_lyrics_verification_diagnostics = diagnostics
+            self.last_lyrics_timing_provenance = result.timing_provenance
+            logger.info(
+                "[job %s] lyrics verification: matches=%d substitutions=%d "
+                "insertions=%d deletions=%d candidates=%d forced_candidates=%d "
+                "aligned=%d reconciliation_candidates=%d accepted=%d rejected=%d "
+                "alignment_failures=%d safety_rejections=%d raw_wer=%.4f "
+                "corrected_wer=%.4f",
+                job_id,
+                diagnostics.matches,
+                diagnostics.substitutions,
+                diagnostics.insertions,
+                diagnostics.deletions,
+                diagnostics.verified_candidates,
+                diagnostics.forced_alignment_candidates,
+                diagnostics.forced_alignment_successes,
+                diagnostics.reconciliation_candidates,
+                diagnostics.accepted_corrections,
+                diagnostics.rejected_corrections,
+                diagnostics.forced_alignment_failures,
+                diagnostics.safety_rejections,
+                diagnostics.raw_wer,
+                diagnostics.corrected_wer,
+            )
+            if not result.changed:
+                return whisperx_path
+            verified_whisperx_path.write_text(
+                json.dumps(result.whisperx_result, indent=2),
+                encoding="utf-8",
+            )
+            return verified_whisperx_path
+        except Exception as error:
+            logger.warning(
+                "[job %s] optional lyrics verification unavailable (%s); "
+                "continuing with WhisperX",
+                job_id,
+                type(error).__name__,
+            )
+            return whisperx_path
+
+    def _run_fusion_stage(
+        self,
+        chord_path: Path,
+        beat_path: Path,
+        whisperx_path: Path,
+        timeline_path: Path,
+        practice_regions_path: Path | None,
+    ) -> None:
+        command = [
             str(self._config.api_python),
             "-m",
             self._config.stage_module,
@@ -321,22 +491,14 @@ class RealAnalysisProcessor:
             "--output",
             str(timeline_path),
         ]
-        if practice_regions_available:
-            fusion_command.extend(
-                ["--practice-regions", str(practice_regions_path)]
-            )
+        if practice_regions_path is not None:
+            command.extend(["--practice-regions", str(practice_regions_path)])
         self._run_stage(
             "fuse",
-            fusion_command,
+            command,
             self._config.fusion_timeout,
             timeline_path,
         )
-
-        try:
-            payload = json.loads(timeline_path.read_text(encoding="utf-8"))
-            return SharedTimeline.model_validate(payload)
-        except (OSError, json.JSONDecodeError, ValidationError) as error:
-            raise AnalysisPipelineError("fuse stage produced an invalid timeline") from error
 
     def _module_command(
         self,
@@ -455,6 +617,14 @@ def _optional_executable(environment_name: str, command: str) -> Path | None:
         return Path(configured).expanduser()
     discovered = shutil.which(command)
     return Path(discovered) if discovered else None
+
+
+def _positive_float_environment(name: str, default: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
 
 
 def _has_nonempty_json_list(path: Path) -> bool:

@@ -92,6 +92,9 @@ datasets/chord_eval/annotations/let_it_be.lab
 datasets/lyrics_eval/clips/
 datasets/lyrics_eval/let_it_be_reference_words.csv
 
+# Copyrighted reference lyrics supplied locally for verification research
+/local_reference_lyrics/
+
 # Local evaluation working documents
 *.numbers
 

@@ -1,6 +1,6 @@
-from pathlib import Path
-import subprocess
 import json
+import subprocess
+from pathlib import Path
 
 TARGET_SAMPLE_RATE = 44100
 
@@ -50,7 +50,7 @@ def preprocess_audio(input_path: Path, output_path: Path) -> Path:
 
     return output_path
 
-def get_audio_metadata(audio_path: Path) -> dict:
+def get_audio_metadata(audio_path: Path) -> dict[str, object]:
     """
     Extract technical audio metadata using ffprobe.
     """
@@ -67,7 +67,7 @@ def get_audio_metadata(audio_path: Path) -> dict:
         "-show_entries",
         "stream=codec_name,sample_rate,channels",
         "-show_entries",
-        "format=duration",
+        "format=duration:format_tags=title,artist,album,version,comment",
         "-of",
         "json",
         str(audio_path),
@@ -92,9 +92,23 @@ def get_audio_metadata(audio_path: Path) -> dict:
     stream = data["streams"][0]
     format_data = data["format"]
 
+    tags = format_data.get("tags") or {}
+    if not isinstance(tags, dict):
+        tags = {}
+
     return {
         "codec": stream.get("codec_name"),
         "sample_rate": int(stream.get("sample_rate", 0)),
         "channels": int(stream.get("channels", 0)),
         "duration": float(format_data.get("duration", 0)),
+        "title": _optional_tag(tags.get("title")),
+        "artist": _optional_tag(tags.get("artist")),
+        "album": _optional_tag(tags.get("album")),
+        "version": _optional_tag(tags.get("version")),
+        "comment": _optional_tag(tags.get("comment")),
     }
+
+
+def _optional_tag(value: object) -> str | None:
+    text = str(value).strip() if value is not None else ""
+    return text or None
