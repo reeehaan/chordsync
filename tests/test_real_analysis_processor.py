@@ -1,4 +1,5 @@
 import json
+import logging
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from analysis.chords.estimator import ChordEstimator
+from analysis.fusion.models import SharedTimeline
 from backend.api.app.models.analysis_job import AnalysisJobCreateRequest
 from backend.api.app.services.analysis_input_storage import LocalAnalysisInputStorage
 from backend.api.app.services.analysis_job_executor import InProcessAnalysisJobExecutor
@@ -431,6 +433,7 @@ def test_btc_estimator_uses_isolated_python_and_explicit_model_paths(
             "btc_checkpoint": Path("/local/models/btc_model.pt"),
             "btc_source": Path("/external/BTC-ISMIR19"),
             "vamp_simple_host_executable": Path("/portable/bin/vamp-simple-host"),
+            "music_only_enabled": True,
         }
     )
     runner = FakePipelineRunner()
@@ -478,6 +481,7 @@ def test_btc_optional_diagnostic_failure_keeps_normal_analysis(
             "btc_checkpoint": Path("/local/models/btc_model.pt"),
             "btc_source": Path("/external/BTC-ISMIR19"),
             "vamp_simple_host_executable": Path("/portable/bin/vamp-simple-host"),
+            "music_only_enabled": True,
         }
     )
     runner = FakePipelineRunner(failing_stage=failing_stage)
@@ -555,6 +559,90 @@ def test_local_config_keeps_lrclib_disabled_for_other_values(
     assert AnalysisPipelineConfig.local().lrclib_reference_enabled is False
 
 
+def test_local_config_disables_music_only_when_environment_is_unset(monkeypatch):
+    monkeypatch.delenv("CHORDSYNC_MUSIC_ONLY_ENABLED", raising=False)
+
+    assert AnalysisPipelineConfig.local().music_only_enabled is False
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "0", "false", "FALSE", "no", "unexpected"],
+)
+def test_local_config_keeps_music_only_disabled_for_false_values(
+    monkeypatch,
+    value,
+):
+    monkeypatch.setenv("CHORDSYNC_MUSIC_ONLY_ENABLED", value)
+
+    assert AnalysisPipelineConfig.local().music_only_enabled is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "YES"])
+def test_local_config_enables_music_only_for_explicit_true_values(
+    monkeypatch,
+    value,
+):
+    monkeypatch.setenv("CHORDSYNC_MUSIC_ONLY_ENABLED", value)
+
+    assert AnalysisPipelineConfig.local().music_only_enabled is True
+
+
+def test_disabled_music_only_preserves_timeline_and_skips_diagnostics(
+    processor_context,
+    caplog,
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{
+            **config.__dict__,
+            "chord_estimator": ChordEstimator.BTC,
+            "btc_python": Path("/env/btc/python"),
+            "btc_checkpoint": Path("/local/models/btc_model.pt"),
+            "btc_source": Path("/external/BTC-ISMIR19"),
+            "vamp_simple_host_executable": Path("/portable/bin/vamp-simple-host"),
+        }
+    )
+    runner = FakePipelineRunner()
+
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
+
+    stages = [runner._stage(call.argv) for call in runner.calls]
+    chord_call = runner.calls[1]
+    assert stages == [
+        "preprocess",
+        "btc-chords",
+        "beats",
+        "separate",
+        "lyrics",
+        "fuse",
+    ]
+    assert "--uncertainty-output" not in chord_call.argv
+    assert timeline.model_dump(mode="json") == SYNTHETIC_TIMELINE
+    assert timeline.practice_regions == []
+    assert timeline.bars == SharedTimeline.model_validate(SYNTHETIC_TIMELINE).bars
+    assert timeline.lyrics == SharedTimeline.model_validate(SYNTHETIC_TIMELINE).lyrics
+    assert "music_only_enabled=false" in caplog.text
+
+
+def test_stored_timeline_with_music_only_region_still_parses():
+    payload = {
+        **SYNTHETIC_TIMELINE,
+        "practice_regions": [
+            {"start": 10.0, "end": 20.0, "mode": "music_only"}
+        ],
+    }
+
+    timeline = SharedTimeline.model_validate(payload)
+
+    assert timeline.practice_regions[0].model_dump(mode="json") == {
+        "start": 10.0,
+        "end": 20.0,
+        "mode": "music_only",
+    }
+
+
 @pytest.mark.parametrize("value", ["invalid", "0", "-4"])
 def test_invalid_lrclib_timeout_falls_back_to_default(monkeypatch, value):
     monkeypatch.setenv("CHORDSYNC_LRCLIB_TIMEOUT", value)
@@ -601,6 +689,7 @@ def test_btc_without_vamp_simple_host_skips_optional_diagnostics(
             "btc_checkpoint": Path("/local/models/btc_model.pt"),
             "btc_source": Path("/external/BTC-ISMIR19"),
             "vamp_simple_host_executable": None,
+            "music_only_enabled": True,
         }
     )
     runner = FakePipelineRunner()

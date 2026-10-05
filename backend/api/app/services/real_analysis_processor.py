@@ -107,6 +107,7 @@ class AnalysisPipelineConfig:
     separation_timeout: float = 600.0
     lyric_timeout: float = 1800.0
     fusion_timeout: float = 120.0
+    music_only_enabled: bool = False
     lrclib_reference_enabled: bool = False
     lrclib_timeout: float = DEFAULT_TIMEOUT_SECONDS
     lrclib_user_agent: str = DEFAULT_USER_AGENT
@@ -142,6 +143,10 @@ class AnalysisPipelineConfig:
             btc_python=btc_python,
             btc_checkpoint=btc_checkpoint,
             btc_source=btc_source,
+            music_only_enabled=(
+                os.getenv("CHORDSYNC_MUSIC_ONLY_ENABLED", "").casefold()
+                in {"1", "true", "yes"}
+            ),
             lrclib_reference_enabled=(
                 os.getenv("CHORDSYNC_LRCLIB_REFERENCE_ENABLED", "").casefold()
                 in {"1", "true", "yes"}
@@ -246,7 +251,9 @@ class RealAnalysisProcessor:
             beat_path,
         )
         practice_regions_available = False
-        if self._config.chord_estimator is ChordEstimator.BTC:
+        if not self._config.music_only_enabled:
+            logger.info("[job %s] music_only_enabled=false", job_id)
+        elif self._config.chord_estimator is ChordEstimator.BTC:
             chordino_available = False
             if self._config.vamp_simple_host_executable is None:
                 logger.warning(
@@ -523,7 +530,7 @@ class RealAnalysisProcessor:
             return self._module_command(
                 self._config.api_python, "chords", input_path, output_path
             )
-        return [
+        command = [
             str(self._config.btc_python),
             "-m",
             self._config.stage_module,
@@ -536,9 +543,15 @@ class RealAnalysisProcessor:
             str(self._config.btc_checkpoint),
             "--source",
             str(self._config.btc_source),
-            "--uncertainty-output",
-            str(output_path.with_name("btc_uncertainty.json")),
         ]
+        if self._config.music_only_enabled:
+            command.extend(
+                [
+                    "--uncertainty-output",
+                    str(output_path.with_name("btc_uncertainty.json")),
+                ]
+            )
+        return command
 
     def _run_optional_stage(
         self,
