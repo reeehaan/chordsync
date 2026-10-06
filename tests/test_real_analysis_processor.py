@@ -78,6 +78,7 @@ class FakePipelineRunner:
         malformed_final: bool = False,
         timeout_stage: str | None = None,
         whisperx_words: list[str] | None = None,
+        whisperx_language: str = "en",
     ) -> None:
         self.failing_stage = failing_stage
         self.missing_stage = missing_stage
@@ -85,6 +86,7 @@ class FakePipelineRunner:
         self.malformed_final = malformed_final
         self.timeout_stage = timeout_stage
         self.whisperx_words = whisperx_words
+        self.whisperx_language = whisperx_language
         self.calls: list[RecordedCall] = []
         self.fusion_whisperx_payload = None
 
@@ -178,7 +180,7 @@ class FakePipelineRunner:
             self._write_json(
                 output_directory / f"{input_path.stem}.json",
                 {
-                    "language": "en",
+                    "language": self.whisperx_language,
                     "segments": [
                         {
                             "start": 0.1,
@@ -259,6 +261,27 @@ class FakePipelineRunner:
         path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+class MissingAlignmentModelRunner(FakePipelineRunner):
+    def run(self, argv: list[str], cwd: Path, timeout: float) -> SubprocessResult:
+        if self._stage(argv) == "lyrics" and "--no_align" not in argv:
+            self.calls.append(RecordedCall(argv=list(argv), cwd=cwd, timeout=timeout))
+            return SubprocessResult(
+                returncode=1,
+                stdout="",
+                stderr="ValueError: No default align-model for language: sa",
+            )
+        result = super().run(argv, cwd, timeout)
+        if self._stage(argv) == "lyrics" and "--no_align" in argv:
+            output_directory = Path(argv[argv.index("--output_dir") + 1])
+            output_path = output_directory / f"{Path(argv[1]).stem}.json"
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            payload["segments"][0].pop("words")
+            if "--language" in argv:
+                payload["language"] = argv[argv.index("--language") + 1]
+            self._write_json(output_path, payload)
+        return result
+
+
 @pytest.fixture
 def processor_context(tmp_path):
     repo_root = tmp_path / "repo"
@@ -306,6 +329,9 @@ def test_real_adapter_runs_isolated_stages_in_order_and_parses_timeline(
     assert runner.calls[2].argv[0] == str(config.beat_python)
     assert runner.calls[3].argv[0] == str(config.demucs_executable)
     assert runner.calls[4].argv[0] == str(config.whisperx_executable)
+    assert runner.calls[4].argv[
+        runner.calls[4].argv.index("--language") + 1
+    ] == "en"
     assert runner.calls[5].argv[0] == str(config.api_python)
     assert runner.calls[5].argv[
         runner.calls[5].argv.index("--lyric-source") + 1
@@ -586,6 +612,135 @@ def test_local_config_enables_music_only_for_explicit_true_values(
     monkeypatch.setenv("CHORDSYNC_MUSIC_ONLY_ENABLED", value)
 
     assert AnalysisPipelineConfig.local().music_only_enabled is True
+
+
+def test_local_config_disables_multilingual_lyrics_when_environment_is_unset(
+    monkeypatch,
+):
+    monkeypatch.delenv("CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED", raising=False)
+
+    assert AnalysisPipelineConfig.local().multilingual_lyrics_enabled is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "YES"])
+def test_local_config_enables_multilingual_lyrics_for_explicit_true_values(
+    monkeypatch,
+    value,
+):
+    monkeypatch.setenv("CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED", value)
+
+    assert AnalysisPipelineConfig.local().multilingual_lyrics_enabled is True
+
+
+def test_multilingual_lyrics_uses_detection_while_english_output_stays_unchanged(
+    processor_context,
+):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{**config.__dict__, "multilingual_lyrics_enabled": True}
+    )
+    runner = FakePipelineRunner()
+
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
+
+    lyrics_call = next(
+        call for call in runner.calls if runner._stage(call.argv) == "lyrics"
+    )
+    assert "--language" not in lyrics_call.argv
+    assert timeline.model_dump(mode="json") == SYNTHETIC_TIMELINE
+
+
+def test_multilingual_lyrics_romanizes_words_after_alignment(processor_context):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{**config.__dict__, "multilingual_lyrics_enabled": True}
+    )
+    runner = FakePipelineRunner(
+        whisperx_words=["महासमुंद"],
+        whisperx_language="en",
+    )
+
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
+
+    word = timeline.lyrics[0].words[0]
+    assert word.text == "mhasmumd"
+    assert word.start == 0.0
+    assert word.end == 0.4
+
+
+def test_multilingual_lyrics_falls_back_when_language_has_no_alignment_model(
+    processor_context,
+):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{**config.__dict__, "multilingual_lyrics_enabled": True}
+    )
+    runner = MissingAlignmentModelRunner(
+        whisperx_words=["මන්දාරම්", "හැන්දෑවේ"],
+        whisperx_language="sa",
+    )
+
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
+
+    lyrics_calls = [
+        call for call in runner.calls if runner._stage(call.argv) == "lyrics"
+    ]
+    assert len(lyrics_calls) == 3
+    assert "--no_align" not in lyrics_calls[0].argv
+    assert "--no_align" in lyrics_calls[1].argv
+    assert "--language" not in lyrics_calls[1].argv
+    assert "--no_align" in lyrics_calls[2].argv
+    assert lyrics_calls[2].argv[
+        lyrics_calls[2].argv.index("--language") + 1
+    ] == "si"
+    assert [word.text for word in timeline.lyrics[0].words] == [
+        "mndarm",
+        "haendaeve",
+    ]
+    assert timeline.lyrics[0].words[0].start == pytest.approx(0.1)
+    assert timeline.lyrics[0].words[-1].end == pytest.approx(1.0)
+
+
+def test_non_english_multilingual_lyrics_skips_english_reference_alignment(
+    processor_context,
+    monkeypatch,
+):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{
+            **config.__dict__,
+            "multilingual_lyrics_enabled": True,
+            "lrclib_reference_enabled": True,
+        }
+    )
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor.obtain_lrclib_reference",
+        lambda *args, **kwargs: SimpleNamespace(
+            plain_lyrics="reference must not enter the English aligner"
+        ),
+    )
+
+    alignment_calls = []
+
+    class EnglishOnlyAligner:
+        def align(self, audio_path, segments):
+            alignment_calls.append((audio_path, segments))
+            raise AssertionError("English aligner called for non-English lyrics")
+
+    runner = FakePipelineRunner(
+        whisperx_words=["महासमुंद"],
+        whisperx_language="en",
+    )
+    processor = RealAnalysisProcessor(
+        config,
+        runner,
+        reference_aligner=EnglishOnlyAligner(),
+    )
+    timeline = processor.process(input_path)
+
+    assert timeline.lyrics[0].words[0].text == "mhasmumd"
+    assert alignment_calls == []
+    assert processor.last_lyrics_verification_diagnostics is None
 
 
 def test_disabled_music_only_preserves_timeline_and_skips_diagnostics(

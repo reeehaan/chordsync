@@ -65,3 +65,17 @@ Optional transport settings are `CHORDSYNC_LRCLIB_TIMEOUT` and
 `CHORDSYNC_LRCLIB_USER_AGENT`. Full provider responses and reference lyrics are
 not persisted or logged. Only corrected timed words that pass verification may
 flow through the existing `SharedTimeline` output.
+
+## Optional multilingual lyrics
+
+Set `CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED=1` to let WhisperX detect the sung
+language and convert detected non-English lyrics to Latin-script display text
+after word alignment. Alignment is performed against the native transcript;
+romanization does not change word timestamps. English results are passed
+through unchanged. The established forced-English production path remains the
+default when the variable is unset.
+
+Romanization is best-effort and character based. It supports practically all
+Unicode scripts, but context-sensitive writing systems may not match a native
+speaker's preferred spelling. Non-English transcripts skip the existing
+English-only LRCLIB correction pass and continue safely with WhisperX output.

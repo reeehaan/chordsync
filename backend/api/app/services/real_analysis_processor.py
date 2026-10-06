@@ -25,6 +25,10 @@ from analysis.lyrics.production_verification import (
     verify_and_correct_whisperx,
 )
 from analysis.lyrics.production_reference import obtain_lrclib_reference
+from analysis.lyrics.romanization import (
+    romanize_whisperx_result,
+    whisperx_needs_romanization,
+)
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -108,6 +112,7 @@ class AnalysisPipelineConfig:
     lyric_timeout: float = 1800.0
     fusion_timeout: float = 120.0
     music_only_enabled: bool = False
+    multilingual_lyrics_enabled: bool = False
     lrclib_reference_enabled: bool = False
     lrclib_timeout: float = DEFAULT_TIMEOUT_SECONDS
     lrclib_user_agent: str = DEFAULT_USER_AGENT
@@ -145,6 +150,10 @@ class AnalysisPipelineConfig:
             btc_source=btc_source,
             music_only_enabled=(
                 os.getenv("CHORDSYNC_MUSIC_ONLY_ENABLED", "").casefold()
+                in {"1", "true", "yes"}
+            ),
+            multilingual_lyrics_enabled=(
+                os.getenv("CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED", "").casefold()
                 in {"1", "true", "yes"}
             ),
             lrclib_reference_enabled=(
@@ -326,15 +335,16 @@ class RealAnalysisProcessor:
             vocals_path,
             json_output=False,
         )
-        self._run_stage(
-            "lyrics",
+        lyrics_command = [
+            str(self._config.whisperx_executable),
+            str(vocals_path),
+            "--model",
+            self._config.whisperx_model,
+        ]
+        if not self._config.multilingual_lyrics_enabled:
+            lyrics_command.extend(["--language", "en"])
+        lyrics_command.extend(
             [
-                str(self._config.whisperx_executable),
-                str(vocals_path),
-                "--model",
-                self._config.whisperx_model,
-                "--language",
-                "en",
                 "--device",
                 "cpu",
                 "--compute_type",
@@ -345,10 +355,21 @@ class RealAnalysisProcessor:
                 "json",
                 "--verbose",
                 "False",
-            ],
+            ]
+        )
+        self._run_stage(
+            "lyrics",
+            lyrics_command,
             self._config.lyric_timeout,
             whisperx_path,
+            retry_without_alignment=self._config.multilingual_lyrics_enabled,
         )
+        if self._config.multilingual_lyrics_enabled:
+            self._retry_misdetected_sinhala(
+                lyrics_command,
+                whisperx_path,
+                job_id,
+            )
         with tempfile.TemporaryDirectory(
             prefix="chordsync-verified-lyrics-"
         ) as temporary_directory:
@@ -359,6 +380,12 @@ class RealAnalysisProcessor:
                 vocals_path,
                 job_id,
             )
+            if self._config.multilingual_lyrics_enabled:
+                fusion_whisperx_path = self._romanize_optional_lyrics(
+                    fusion_whisperx_path,
+                    Path(temporary_directory) / "vocals.romanized.json",
+                    job_id,
+                )
             self._run_fusion_stage(
                 chord_path,
                 beat_path,
@@ -420,6 +447,18 @@ class RealAnalysisProcessor:
             return whisperx_path
         try:
             whisperx_result = json.loads(whisperx_path.read_text(encoding="utf-8"))
+            language = str(whisperx_result.get("language", "")).casefold()
+            if (
+                self._config.multilingual_lyrics_enabled
+                and whisperx_needs_romanization(whisperx_result)
+            ):
+                logger.info(
+                    "[job %s] lyrics reference verification skipped for "
+                    "language=%s",
+                    job_id,
+                    language or "unknown",
+                )
+                return whisperx_path
             aligner = self._reference_aligner or WhisperXReferenceAligner(
                 python_executable=(
                     self._config.whisperx_executable.parent / "python"
@@ -473,6 +512,62 @@ class RealAnalysisProcessor:
                 type(error).__name__,
             )
             return whisperx_path
+
+    def _romanize_optional_lyrics(
+        self,
+        whisperx_path: Path,
+        romanized_whisperx_path: Path,
+        job_id: str,
+    ) -> Path:
+        try:
+            whisperx_result = json.loads(whisperx_path.read_text(encoding="utf-8"))
+            romanized_result = romanize_whisperx_result(whisperx_result)
+            if romanized_result is whisperx_result:
+                return whisperx_path
+            romanized_whisperx_path.write_text(
+                json.dumps(romanized_result, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.info("[job %s] multilingual lyrics romanized", job_id)
+            return romanized_whisperx_path
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            logger.warning(
+                "[job %s] multilingual lyrics romanization unavailable; "
+                "continuing with native lyrics",
+                job_id,
+            )
+            return whisperx_path
+
+    def _retry_misdetected_sinhala(
+        self,
+        lyrics_command: list[str],
+        whisperx_path: Path,
+        job_id: str,
+    ) -> None:
+        try:
+            result = json.loads(whisperx_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if str(result.get("language", "")).casefold() != "sa":
+            return
+        text = " ".join(
+            str(segment.get("text", ""))
+            for segment in result.get("segments", [])
+            if isinstance(segment, dict)
+        )
+        if not any("\u0d80" <= character <= "\u0dff" for character in text):
+            return
+        logger.info(
+            "[job %s] Sinhala script detected after Sanskrit classification; "
+            "retrying with language=si",
+            job_id,
+        )
+        self._run_stage(
+            "lyrics",
+            [*lyrics_command, "--language", "si", "--no_align"],
+            self._config.lyric_timeout,
+            whisperx_path,
+        )
 
     def _run_fusion_stage(
         self,
@@ -578,6 +673,7 @@ class RealAnalysisProcessor:
         timeout: float,
         expected_output: Path,
         json_output: bool = True,
+        retry_without_alignment: bool = False,
     ) -> None:
         job_id = self._job_id_for(expected_output)
         prefix = f"[job {job_id}] {stage}"
@@ -596,6 +692,29 @@ class RealAnalysisProcessor:
             logger.warning("%s: could not start", prefix)
             raise AnalysisPipelineError(f"{stage} stage could not start") from error
         elapsed = time.monotonic() - started_at
+        if (
+            result.returncode != 0
+            and retry_without_alignment
+            and "No default align-model for language:" in result.stderr
+            and "--no_align" not in argv
+        ):
+            logger.info(
+                "%s: alignment model unavailable; retrying with segment timing",
+                prefix,
+            )
+            try:
+                result = self._runner.run(
+                    [*argv, "--no_align"],
+                    cwd=self._config.repo_root,
+                    timeout=timeout,
+                )
+            except SubprocessRunnerTimeout as error:
+                logger.warning("%s: fallback timed out", prefix)
+                raise AnalysisStageTimeout(f"{stage} stage timed out") from error
+            except OSError as error:
+                logger.warning("%s: fallback could not start", prefix)
+                raise AnalysisPipelineError(f"{stage} stage could not start") from error
+            elapsed = time.monotonic() - started_at
         if result.returncode != 0:
             logger.warning("%s: failed\n%s", prefix, result.stderr)
             raise AnalysisPipelineError(f"{stage} stage failed")
