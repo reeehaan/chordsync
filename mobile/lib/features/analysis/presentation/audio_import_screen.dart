@@ -638,10 +638,9 @@ class _SongSourceGrid extends StatelessWidget {
         title: 'Camera Roll',
         description: 'Upload a video from your photo library',
         onTap: onCameraRoll,
-        badgeBuilder: (size) => _IconBadge(
-          icon: cupertino ? CupertinoIcons.photo : Icons.photo_library_rounded,
+        badgeBuilder: (size) => _SvgBadge(
+          'assets/icons/source_providers/gallery.svg',
           background: _UploadPalette.primaryText,
-          foreground: _UploadPalette.card,
           size: size,
         ),
       ),
@@ -650,10 +649,9 @@ class _SongSourceGrid extends StatelessWidget {
         title: 'Files',
         description: 'Upload from local files',
         onTap: onFiles,
-        badgeBuilder: (size) => _IconBadge(
-          icon: cupertino ? CupertinoIcons.folder_fill : Icons.folder_rounded,
+        badgeBuilder: (size) => _SvgBadge(
+          'assets/icons/source_providers/folder.svg',
           background: _UploadPalette.primaryText,
-          foreground: const Color(0xFF3A7BD5),
           size: size,
         ),
       ),
@@ -678,7 +676,8 @@ class _SongSourceGrid extends StatelessWidget {
         title: 'Shazam',
         description: 'Identify a song with Shazam',
         onTap: onShazam,
-        badgeBuilder: (size) => _ShazamBadge(size: size),
+        badgeBuilder: (size) =>
+            _SvgBadge('assets/icons/source_providers/shazem.svg', size: size),
       ),
     ];
     return Column(
@@ -782,27 +781,39 @@ class _IconBadge extends StatelessWidget {
   }
 }
 
-/// A simple stand-in mark for Shazam: its real logo is a trademarked asset
-/// we don't ship, so this uses only its brand colour and a generic listening
-/// glyph rather than reproducing the logo itself.
-class _ShazamBadge extends StatelessWidget {
-  const _ShazamBadge({required this.size});
+/// An SVG source-provider mark. [background] draws a squircle backdrop for
+/// glyphs whose own artwork has a transparent background (Camera Roll,
+/// Files); leaving it null is for artwork that already fills its own tile
+/// edge-to-edge (Shazam's mark already paints a full-bleed background).
+class _SvgBadge extends StatelessWidget {
+  const _SvgBadge(this.assetPath, {required this.size, this.background});
 
+  final String assetPath;
   final double size;
+  final Color? background;
 
   @override
   Widget build(BuildContext context) {
+    if (background == null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(_badgeRadius),
+        child: SvgPicture.asset(assetPath, width: size, height: size),
+      );
+    }
+    final padding = size * 0.14;
+    final contentSize = size - padding * 2;
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0088FF),
-        shape: BoxShape.circle,
+      padding: EdgeInsets.all(padding),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(_badgeRadius),
       ),
-      child: Icon(
-        Icons.graphic_eq_rounded,
-        color: Colors.white,
-        size: size * 0.5,
+      child: SvgPicture.asset(
+        assetPath,
+        width: contentSize,
+        height: contentSize,
       ),
     );
   }
