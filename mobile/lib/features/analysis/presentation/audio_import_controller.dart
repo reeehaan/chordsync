@@ -182,6 +182,19 @@ class AudioImportController extends ChangeNotifier {
     _notify();
   }
 
+  void reset() {
+    if (_active) return;
+    _selectedFile = null;
+    _displayName = null;
+    _title = '';
+    _fileSizeBytes = null;
+    _uploadProgress = null;
+    _errorMessage = null;
+    _session = null;
+    _phase = AudioImportPhase.idle;
+    _notify();
+  }
+
   bool _isCurrent(int attempt) => !_disposed && attempt == _attempt;
 
   void _notify() {

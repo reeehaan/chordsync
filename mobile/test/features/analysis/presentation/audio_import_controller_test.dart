@@ -126,6 +126,22 @@ void main() {
     expect(controller.phase, AudioImportPhase.ready);
   });
 
+  test('reset returns a completed import to the source screen state', () async {
+    controller.selectFile(audio);
+    final analysis = controller.analyze();
+    preparation.complete(_session(audio));
+    await analysis;
+
+    controller.reset();
+
+    expect(controller.phase, AudioImportPhase.idle);
+    expect(controller.selectedFile, isNull);
+    expect(controller.filename, isNull);
+    expect(controller.title, isEmpty);
+    expect(controller.session, isNull);
+    expect(controller.canAnalyze, isFalse);
+  });
+
   test('guards duplicate analyze and file changes while active', () async {
     controller.selectFile(audio);
     final first = controller.analyze();
