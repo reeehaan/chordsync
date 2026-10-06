@@ -39,6 +39,7 @@ dependencies:
   file_selector: ^1.1.0
   path_provider: ^2.1.6
   path: ^1.9.1
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +68,7 @@ flutter:
   assets:
     - assets/practice_audio/synthetic_practice.wav
     - assets/practice_timeline/synthetic_shared_timeline.json
+    - assets/icons/source_providers/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
