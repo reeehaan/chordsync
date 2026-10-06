@@ -8,14 +8,10 @@ void main() {
   testWidgets('normal app entry opens the audio import flow', (tester) async {
     await tester.pumpWidget(const MyApp());
 
-    expect(find.text('ChordSync'), findsOneWidget);
-    expect(find.text('Previously analyzed'), findsOneWidget);
-    expect(find.text('0 saved'), findsOneWidget);
-    expect(
-      find.text('Your completed songs will appear here for quick practice.'),
-      findsOneWidget,
-    );
-    expect(find.text('Choose audio file'), findsOneWidget);
+    expect(find.text('Upload'), findsOneWidget);
+    expect(find.text('Shazam'), findsOneWidget);
+    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Upload from local files'), findsOneWidget);
     expect(find.text('Analyze Song'), findsOneWidget);
     expect(find.text('ChordSync Practice'), findsNothing);
   });

@@ -65,7 +65,12 @@ void main() {
   ) async {
     await pumpScreen(tester);
 
-    expect(find.text('ChordSync'), findsOneWidget);
+    expect(find.text('Upload'), findsOneWidget);
+    // Regression: nested Theme.of(context) calls must resolve the dark
+    // upload theme, not the outer light theme's near-black-on-near-black
+    // text colour (visually invisible against the dark background).
+    final title = tester.widget<Text>(find.text('Upload'));
+    expect(title.style?.color, const Color(0xFFF6F2ED));
     expect(find.textContaining('WAV · MP3 · M4A'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Analyze Song'), findsOneWidget);
     expect(
@@ -84,7 +89,9 @@ void main() {
     await tester.pump();
     expect(preparation.calls, 0);
 
-    await tester.tap(find.text('Choose audio file'));
+    final filesSource = find.byKey(const ValueKey('filesSource'));
+    await tester.ensureVisible(filesSource);
+    await tester.tap(filesSource);
     await tester.pump();
     expect(find.text('safe_song.wav'), findsOneWidget);
     expect(find.textContaining('2.0 KB'), findsOneWidget);
@@ -115,20 +122,39 @@ void main() {
 
     preparation.complete(_session(audio));
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-    await tester.pump();
-    expect(find.text('Ready to practice'), findsOneWidget);
-    expect(find.text('Start Practice'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('Start Practice'));
-    await tester.tap(find.text('Start Practice'));
     await tester.pumpAndSettle();
     expect(find.text('safe_song'), findsOneWidget);
     expect(find.byKey(const ValueKey('currentChordValue')), findsOneWidget);
 
     Navigator.of(tester.element(find.text('safe_song'))).pop();
     await tester.pumpAndSettle();
-    expect(find.text('Ready to practice'), findsOneWidget);
-    expect(find.text('safe_song.wav'), findsOneWidget);
+    expect(find.text('Upload'), findsOneWidget);
+    expect(find.byKey(const ValueKey('filesSource')), findsOneWidget);
+    expect(find.text('Ready to practice'), findsNothing);
+    expect(find.text('safe_song.wav'), findsNothing);
+  });
+
+  testWidgets('shows song sources and explains Shazam behavior', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    expect(find.byKey(const ValueKey('youtubeSource')), findsOneWidget);
+    expect(find.byKey(const ValueKey('cameraRollSource')), findsOneWidget);
+    expect(find.byKey(const ValueKey('filesSource')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recordSource')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shazamSource')), findsOneWidget);
+
+    final shazamSource = find.byKey(const ValueKey('shazamSource'));
+    await tester.ensureVisible(shazamSource);
+    await tester.tap(shazamSource);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Shazam'), findsWidgets);
+    expect(
+      find.textContaining('does not connect to it directly yet'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('opens a previously analyzed song without analyzing again', (
@@ -136,6 +162,9 @@ void main() {
   ) async {
     final saved = _session(audio);
     await pumpScreen(tester, sessionLibrary: _FakeSessionLibrary([saved]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('bottomNav0')));
     await tester.pumpAndSettle();
 
     expect(find.text('Previously analyzed'), findsOneWidget);
@@ -149,11 +178,34 @@ void main() {
     expect(preparation.calls, 0);
   });
 
+  testWidgets('bottom dock switches between Home, Add Song, and Tuner', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    expect(find.text('Upload'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('bottomNav2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Tuner'), findsOneWidget);
+    expect(find.text('Microphone tuner coming next'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('bottomNav0')));
+    await tester.pumpAndSettle();
+    expect(find.text('Your songs'), findsOneWidget);
+    expect(find.text('No analyzed songs yet'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('bottomNav1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Upload'), findsOneWidget);
+  });
+
   testWidgets('shows safe errors, supports retry, and cancels locally', (
     tester,
   ) async {
     await pumpScreen(tester);
-    await tester.tap(find.text('Choose audio file'));
+    final filesSource = find.byKey(const ValueKey('filesSource'));
+    await tester.ensureVisible(filesSource);
+    await tester.tap(filesSource);
     await tester.pump();
     preparation.nextError = const AnalysisTransportException(
       'private host detail',
@@ -190,7 +242,9 @@ void main() {
       '${directory.path}/private-song.wav',
     );
 
-    await tester.tap(find.text('Choose audio file'));
+    final filesSource = find.byKey(const ValueKey('filesSource'));
+    await tester.ensureVisible(filesSource);
+    await tester.tap(filesSource);
     await tester.pump();
 
     expect(
@@ -218,7 +272,7 @@ void main() {
       tester.view.physicalSize = size;
       await pumpScreen(tester);
       expect(tester.takeException(), isNull);
-      expect(find.text('Choose audio file'), findsOneWidget);
+      expect(find.byKey(const ValueKey('filesSource')), findsOneWidget);
       expect(find.text('Analyze Song'), findsOneWidget);
     }
   });
@@ -232,7 +286,9 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetViewInsets);
       await pumpScreen(tester);
-      await tester.tap(find.text('Choose audio file'));
+      final filesSource = find.byKey(const ValueKey('filesSource'));
+    await tester.ensureVisible(filesSource);
+    await tester.tap(filesSource);
       await tester.pump();
       final title = find.byType(TextFormField);
       tester.view.viewInsets = const FakeViewPadding(bottom: 300);
