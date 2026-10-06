@@ -137,10 +137,13 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
       return;
     }
     if (!mounted || selection == null) return;
-    widget.controller.selectFile(
+    final selected = widget.controller.selectFile(
       selection.file,
       displayName: selection.displayName,
     );
+    // A valid file goes straight into analysis — there is no separate
+    // review step to confirm first.
+    if (selected) unawaited(widget.controller.analyze());
   }
 
   void _showSourceNotice(String title, String message) {
@@ -294,20 +297,6 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
                       if (controller.selectedFile != null) ...[
                         SizedBox(height: compactViewport ? 12 : 16),
                         _SelectedAudioCard(controller: controller),
-                        if (!isFocusedState) ...[
-                          SizedBox(height: compactViewport ? 12 : 16),
-                          TextFormField(
-                            key: ValueKey('title-${controller.filename}'),
-                            initialValue: controller.title,
-                            enabled: !controller.isActive,
-                            maxLength: 200,
-                            decoration: const InputDecoration(
-                              labelText: 'Song title',
-                              prefixIcon: Icon(Icons.edit_outlined),
-                            ),
-                            onChanged: controller.setTitle,
-                          ),
-                        ],
                       ],
                       SizedBox(height: compactViewport ? 8 : 12),
                       _AnalysisStatus(controller: controller),
@@ -328,25 +317,19 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
                             ),
                           ],
                         )
-                      else if (controller.isActive)
-                        TextButton(
-                          key: const ValueKey('cancelAnalysisButton'),
-                          onPressed: controller.cancel,
-                          child: const Text('Stop waiting'),
-                        )
-                      else ...[
+                      else if ((controller.phase == AudioImportPhase.failed ||
+                              controller.phase == AudioImportPhase.cancelled) &&
+                          controller.selectedFile != null)
+                        // A failed or cancelled analysis is the only case
+                        // left needing a manual trigger — picking a file
+                        // always starts analysis by itself now.
                         FilledButton(
-                          key: const ValueKey('analyzeButton'),
+                          key: const ValueKey('retryAnalysisButton'),
                           onPressed: controller.canAnalyze
                               ? controller.analyze
                               : null,
-                          child: Text(
-                            controller.phase == AudioImportPhase.failed
-                                ? 'Retry Analysis'
-                                : 'Analyze Song',
-                          ),
+                          child: const Text('Retry Analysis'),
                         ),
-                      ],
                     ],
                   ),
                 ),

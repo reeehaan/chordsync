@@ -12,7 +12,6 @@ void main() {
     expect(find.text('Shazam'), findsOneWidget);
     expect(find.text('Files'), findsOneWidget);
     expect(find.text('Upload from local files'), findsOneWidget);
-    expect(find.text('Analyze Song'), findsOneWidget);
     expect(find.text('ChordSync Practice'), findsNothing);
   });
 

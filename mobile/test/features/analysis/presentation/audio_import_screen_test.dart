@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:chordsync/features/analysis/application/analysis_job_poller.dart';
 import 'package:chordsync/features/analysis/application/analysis_practice_coordinator.dart';
@@ -72,35 +71,13 @@ void main() {
     final title = tester.widget<Text>(find.text('Upload'));
     expect(title.style?.color, const Color(0xFFF6F2ED));
     expect(find.textContaining('WAV · MP3 · M4A'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Analyze Song'), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Analyze Song'),
-          )
-          .onPressed,
-      isNull,
-    );
-    final disabled = tester.getSemantics(
-      find.byKey(const ValueKey('analyzeButton')),
-    );
-    expect(disabled.flagsCollection.isEnabled, ui.Tristate.isFalse);
-    await tester.tap(find.byKey(const ValueKey('analyzeButton')));
-    await tester.pump();
     expect(preparation.calls, 0);
 
+    // Picking a valid file starts analysis immediately — there is no
+    // separate confirmation step or manual "Analyze" action.
     final filesSource = find.byKey(const ValueKey('filesSource'));
     await tester.ensureVisible(filesSource);
     await tester.tap(filesSource);
-    await tester.pump();
-    expect(find.text('safe_song.wav'), findsOneWidget);
-    expect(find.textContaining('2.0 KB'), findsOneWidget);
-    expect(find.textContaining(directory.path), findsNothing);
-
-    final analyze = find.widgetWithText(FilledButton, 'Analyze Song');
-    await tester.ensureVisible(analyze);
-    await tester.tap(analyze);
-    await tester.tap(analyze);
     await tester.pump();
     expect(preparation.calls, 1);
     expect(find.text('Uploading your song…'), findsOneWidget);
@@ -203,15 +180,17 @@ void main() {
     tester,
   ) async {
     await pumpScreen(tester);
-    final filesSource = find.byKey(const ValueKey('filesSource'));
-    await tester.ensureVisible(filesSource);
-    await tester.tap(filesSource);
-    await tester.pump();
     preparation.nextError = const AnalysisTransportException(
       'private host detail',
     );
-    await tester.runAsync(controller.analyze);
+
+    // Picking the file starts analysis itself, which fails immediately.
+    final filesSource = find.byKey(const ValueKey('filesSource'));
+    await tester.ensureVisible(filesSource);
+    await tester.tap(filesSource);
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     await tester.pump();
+    expect(preparation.calls, 1);
     expect(
       find.text("ChordSync can't reach the analysis service."),
       findsOneWidget,
@@ -229,7 +208,7 @@ void main() {
     await tester.pump();
     expect(preparation.cancellations.last.isCancelled, isTrue);
     expect(find.text('Stopped waiting. You can try again.'), findsOneWidget);
-    expect(find.text('Analyze Song'), findsOneWidget);
+    expect(find.byKey(const ValueKey('retryAnalysisButton')), findsOneWidget);
     expect(find.text('safe_song.wav'), findsOneWidget);
   });
 
@@ -273,39 +252,9 @@ void main() {
       await pumpScreen(tester);
       expect(tester.takeException(), isNull);
       expect(find.byKey(const ValueKey('filesSource')), findsOneWidget);
-      expect(find.text('Analyze Song'), findsOneWidget);
+      expect(find.text('Get the chords for any audio track'), findsOneWidget);
     }
   });
-
-  testWidgets(
-    'short viewport keeps focused title reachable above keyboard inset',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(320, 640);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetViewInsets);
-      await pumpScreen(tester);
-      final filesSource = find.byKey(const ValueKey('filesSource'));
-    await tester.ensureVisible(filesSource);
-    await tester.tap(filesSource);
-      await tester.pump();
-      final title = find.byType(TextFormField);
-      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-      await tester.pump();
-      await tester.ensureVisible(title);
-      await tester.tap(title);
-      await tester.pumpAndSettle();
-      expect(tester.getBottomLeft(title).dy, lessThan(340));
-      expect(tester.takeException(), isNull);
-      FocusManager.instance.primaryFocus?.unfocus();
-      tester.view.viewInsets = FakeViewPadding.zero;
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const ValueKey('analyzeButton')));
-      expect(find.text('Analyze Song'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
 }
 
 class _FakeFileSelector implements AudioFileSelector {
