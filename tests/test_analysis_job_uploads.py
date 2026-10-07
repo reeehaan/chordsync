@@ -12,6 +12,9 @@ from backend.api.app.routers.analysis_jobs import (
 )
 from backend.api.app.services.analysis_input_storage import (
     AnalysisInputStorageError,
+    AudioTooLongError,
+    InvalidAudioError,
+    MAX_AUDIO_DURATION_SECONDS,
     MAX_AUDIO_SIZE_BYTES,
     LocalAnalysisInputStorage,
 )
@@ -28,7 +31,10 @@ def repository():
 
 @pytest.fixture
 def input_storage(tmp_path):
-    return LocalAnalysisInputStorage(tmp_path / "uploads")
+    return LocalAnalysisInputStorage(
+        tmp_path / "uploads",
+        duration_probe=lambda _: 1.0,
+    )
 
 
 @pytest.fixture
@@ -101,6 +107,20 @@ def test_existing_publication_safe_wav_fixture_can_be_uploaded(
     assert stored_path is not None
     assert stored_path.stat().st_size == fixture.stat().st_size
     assert job_service.get(job_id) is not None
+
+
+def test_real_ffprobe_duration_is_recorded_for_valid_audio(tmp_path):
+    fixture = Path("mobile/assets/practice_audio/synthetic_practice.wav")
+    storage = LocalAnalysisInputStorage(tmp_path / "uploads")
+
+    metadata = storage.store(
+        job_id="real-probe",
+        original_filename="synthetic.wav",
+        content_type="audio/wav",
+        source=BytesIO(fixture.read_bytes()),
+    )
+
+    assert metadata.duration_seconds == pytest.approx(9.0, abs=0.1)
 
 
 @pytest.mark.parametrize(
@@ -200,6 +220,99 @@ def test_storage_delete_support_removes_the_job_input(input_storage):
     input_storage.delete("job-id")
 
     assert input_storage.get_path("job-id") is None
+
+
+def test_audio_over_six_minutes_is_rejected_and_removed(tmp_path):
+    storage = LocalAnalysisInputStorage(
+        tmp_path / "uploads",
+        duration_probe=lambda _: MAX_AUDIO_DURATION_SECONDS + 0.001,
+    )
+
+    with pytest.raises(AudioTooLongError):
+        storage.store(
+            job_id="too-long",
+            original_filename="song.mp3",
+            content_type="audio/mpeg",
+            source=BytesIO(b"synthetic audio"),
+        )
+
+    assert list(storage.root.rglob("*")) == []
+
+
+def test_audio_at_six_minutes_is_accepted(tmp_path):
+    storage = LocalAnalysisInputStorage(
+        tmp_path / "uploads",
+        duration_probe=lambda _: MAX_AUDIO_DURATION_SECONDS,
+    )
+
+    metadata = storage.store(
+        job_id="six-minutes",
+        original_filename="song.m4a",
+        content_type="audio/mp4",
+        source=BytesIO(b"synthetic audio"),
+    )
+
+    assert metadata.size_bytes == len(b"synthetic audio")
+    assert storage.get_path("six-minutes") is not None
+
+
+def test_undecodable_audio_is_rejected_and_removed(tmp_path):
+    def fail_probe(_: Path) -> float:
+        raise RuntimeError("ffprobe rejected input")
+
+    storage = LocalAnalysisInputStorage(
+        tmp_path / "uploads",
+        duration_probe=fail_probe,
+    )
+
+    with pytest.raises(InvalidAudioError):
+        storage.store(
+            job_id="invalid",
+            original_filename="song.wav",
+            content_type="audio/wav",
+            source=BytesIO(b"not audio"),
+        )
+
+    assert list(storage.root.rglob("*")) == []
+
+
+@pytest.mark.parametrize("duration", [0.0, -1.0, float("nan"), float("inf")])
+def test_invalid_decoded_duration_is_rejected_and_removed(tmp_path, duration):
+    storage = LocalAnalysisInputStorage(
+        tmp_path / "uploads",
+        duration_probe=lambda _: duration,
+    )
+
+    with pytest.raises(InvalidAudioError):
+        storage.store(
+            job_id="invalid-duration",
+            original_filename="song.wav",
+            content_type="audio/wav",
+            source=BytesIO(b"synthetic audio"),
+        )
+
+    assert list(storage.root.rglob("*")) == []
+
+
+def test_overlong_upload_returns_safe_api_error(client, repository, tmp_path):
+    storage = LocalAnalysisInputStorage(
+        tmp_path / "duration-limited-uploads",
+        duration_probe=lambda _: MAX_AUDIO_DURATION_SECONDS + 1,
+    )
+    service = AnalysisJobService(repository, storage)
+    app.dependency_overrides[get_analysis_job_service] = lambda: service
+
+    response = upload_job(client, filename="long.mp3", content=b"synthetic audio")
+
+    assert response.status_code == 413
+    assert response.json() == {
+        "error": {
+            "code": "audio_too_long",
+            "message": "Audio exceeds the 6-minute limit.",
+        }
+    }
+    assert repository.count() == 0
+    assert list(storage.root.rglob("*")) == []
 
 
 def test_storage_failure_returns_safe_error_and_creates_no_job(client, repository):

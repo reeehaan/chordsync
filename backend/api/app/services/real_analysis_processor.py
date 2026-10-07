@@ -131,14 +131,25 @@ class AnalysisPipelineConfig:
             raise AnalysisPipelineError("chord estimator configuration is invalid") from error
         return cls(
             repo_root=_PROJECT_ROOT,
-            workspace_root=_PROJECT_ROOT / "storage/analysis_jobs",
-            api_python=_PROJECT_ROOT / "backend/api/.venv-api/bin/python",
-            beat_python=_PROJECT_ROOT / "analysis/beats/.venv-beats/bin/python",
-            whisperx_executable=(
-                _PROJECT_ROOT / "analysis/lyrics/.venv-whisperx/bin/whisperx"
+            workspace_root=_environment_path(
+                "CHORDSYNC_WORKSPACE_ROOT",
+                _PROJECT_ROOT / "storage/analysis_jobs",
             ),
-            demucs_executable=(
-                _PROJECT_ROOT / "analysis/separation/.venv-separation/bin/demucs"
+            api_python=_environment_path(
+                "CHORDSYNC_API_PYTHON",
+                _PROJECT_ROOT / "backend/api/.venv-api/bin/python",
+            ),
+            beat_python=_environment_path(
+                "CHORDSYNC_BEAT_PYTHON",
+                _PROJECT_ROOT / "analysis/beats/.venv-beats/bin/python",
+            ),
+            whisperx_executable=_environment_path(
+                "CHORDSYNC_WHISPERX_EXECUTABLE",
+                _PROJECT_ROOT / "analysis/lyrics/.venv-whisperx/bin/whisperx",
+            ),
+            demucs_executable=_environment_path(
+                "CHORDSYNC_DEMUCS_EXECUTABLE",
+                _PROJECT_ROOT / "analysis/separation/.venv-separation/bin/demucs",
             ),
             vamp_simple_host_executable=_optional_executable(
                 "CHORDSYNC_VAMP_SIMPLE_HOST",
@@ -741,6 +752,11 @@ class RealAnalysisProcessor:
 def _optional_path(name: str) -> Path | None:
     value = os.getenv(name)
     return Path(value).expanduser() if value else None
+
+
+def _environment_path(name: str, default: Path) -> Path:
+    value = os.getenv(name)
+    return Path(value).expanduser() if value else default
 
 
 def _optional_executable(environment_name: str, command: str) -> Path | None:

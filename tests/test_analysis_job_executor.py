@@ -88,7 +88,10 @@ class BlockingProcessor(DeterministicProcessor):
 @pytest.fixture
 def executor_context(tmp_path):
     repository = InMemoryAnalysisJobRepository()
-    storage = LocalAnalysisInputStorage(tmp_path / "uploads")
+    storage = LocalAnalysisInputStorage(
+        tmp_path / "uploads",
+        duration_probe=lambda _: 1.0,
+    )
     service = AnalysisJobService(repository, storage)
     return service, storage
 

@@ -885,6 +885,32 @@ def test_local_config_reads_btc_environment_without_importing_model(monkeypatch)
     assert "analysis.chords.btc.btc_inference" not in sys.modules
 
 
+def test_local_config_supports_container_runtime_paths(monkeypatch):
+    monkeypatch.setenv("CHORDSYNC_WORKSPACE_ROOT", "/tmp/chordsync")
+    monkeypatch.setenv("CHORDSYNC_API_PYTHON", "/opt/chordsync/api/bin/python")
+    monkeypatch.setenv("CHORDSYNC_BEAT_PYTHON", "/opt/chordsync/beats/bin/python")
+    monkeypatch.setenv(
+        "CHORDSYNC_WHISPERX_EXECUTABLE",
+        "/opt/chordsync/whisperx/bin/whisperx",
+    )
+    monkeypatch.setenv(
+        "CHORDSYNC_DEMUCS_EXECUTABLE",
+        "/opt/chordsync/demucs/bin/demucs",
+    )
+
+    config = AnalysisPipelineConfig.local()
+
+    assert config.workspace_root == Path("/tmp/chordsync")
+    assert config.api_python == Path("/opt/chordsync/api/bin/python")
+    assert config.beat_python == Path("/opt/chordsync/beats/bin/python")
+    assert config.whisperx_executable == Path(
+        "/opt/chordsync/whisperx/bin/whisperx"
+    )
+    assert config.demucs_executable == Path(
+        "/opt/chordsync/demucs/bin/demucs"
+    )
+
+
 def test_separate_jobs_use_separate_workspaces(processor_context):
     config, first_input = processor_context
     second_input = first_input.parents[1] / "job-two" / "input.wav"
@@ -994,7 +1020,10 @@ def test_api_import_does_not_load_heavy_analysis_packages():
 
 def test_real_adapter_integrates_with_executor_success(processor_context, tmp_path):
     config, _ = processor_context
-    storage = LocalAnalysisInputStorage(tmp_path / "job-inputs")
+    storage = LocalAnalysisInputStorage(
+        tmp_path / "job-inputs",
+        duration_probe=lambda _: 1.0,
+    )
     service = AnalysisJobService(InMemoryAnalysisJobRepository(), storage)
     job = service.create(
         request=AnalysisJobCreateRequest(title="Synthetic integration"),
@@ -1013,7 +1042,10 @@ def test_real_adapter_integrates_with_executor_success(processor_context, tmp_pa
 
 def test_real_adapter_failure_is_sanitized_by_executor(processor_context, tmp_path):
     config, _ = processor_context
-    storage = LocalAnalysisInputStorage(tmp_path / "job-inputs")
+    storage = LocalAnalysisInputStorage(
+        tmp_path / "job-inputs",
+        duration_probe=lambda _: 1.0,
+    )
     service = AnalysisJobService(InMemoryAnalysisJobRepository(), storage)
     job = service.create(
         request=AnalysisJobCreateRequest(title="Synthetic failure"),

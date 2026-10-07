@@ -1,0 +1,175 @@
+# ChordSync private AWS foundation
+
+This directory defines the first private, single-region ChordSync AWS stack in
+Terraform. It is infrastructure definition only: no AWS resource has been
+created, and no credentials belong in this directory.
+
+Terraform was selected because the repository has no existing IaC convention,
+the stack is small, and reviewable HCL adds less project tooling than CDK. Use
+one IaC system only.
+
+## Frozen constraints
+
+- Region: `ap-southeast-1` (Singapore), configurable but single-region.
+- Target budget: approximately USD 20/month.
+- Upload: WAV/MP3/M4A, at most 25 MB and six minutes.
+- Private/student demo: no authentication yet.
+- MUSIC_ONLY remains disabled.
+- No Spotify synchronized playback.
+- The exact analyzed source is retained as playback; worker intermediates are
+  local and disposable.
+
+```text
+Flutter
+   ↓
+FastAPI
+   ↓
+DynamoDB job state
+   ↓
+private S3 source
+   ↓
+SQS analysis queue
+   ↓
+ECS worker task
+   ↓
+private S3 playback + timeline
+   ↓
+DynamoDB completed state
+```
+
+## Defined resources and deliberate omissions
+
+The stack defines one private S3 bucket, one On-Demand DynamoDB table, standard
+analysis and dead-letter queues, private API/worker ECR repositories, distinct
+API/worker/execution IAM roles, an ECS cluster, an EC2-compatible worker task
+definition skeleton, a seven-day worker log group, two native SQS alarms, and
+an optional USD 20 AWS Budget.
+
+It deliberately defines no ECS service, EC2 Auto Scaling Group, GPU instance,
+VPC, NAT Gateway, load balancer, public endpoint, Route 53 record, or API task.
+Therefore the worker foundation has zero running capacity and cannot incur
+compute cost until a benchmark-informed capacity design is added.
+
+The first API hosting recommendation is a cheap externally hosted or
+serverless/lightweight container endpoint that can assume the scoped API role
+through an appropriate deployment mechanism. An always-running ECS/Fargate API
+is viable technically, but Fargate plus an Application Load Balancer introduces
+fixed runtime cost that may consume or exceed the project budget. If ECS API
+hosting is selected later, add its task definition, service, ingress, TLS, and
+logs only after a current Singapore-region estimate.
+
+## Storage and retention
+
+The bucket has all four Block Public Access controls, bucket-owner-enforced
+ownership (ACLs disabled), SSE-S3 default encryption, an HTTPS-only deny policy,
+and no website configuration. Versioning is suspended for the student demo to
+avoid retaining replaced audio copies. Enable it only with a lifecycle/cost
+plan.
+
+Logical private prefixes remain:
+
+```text
+jobs/{job_id}/source/
+jobs/{job_id}/playback/
+jobs/{job_id}/results/
+jobs/{job_id}/debug/
+```
+
+Source expiry is tag-gated: only an object tagged
+`chordsync-expire-source=true` expires after approximately one day. Upload age
+alone never deletes an active analysis. The application does not apply this tag
+yet; add `PutObjectTagging` to exactly one cleanup actor when that workflow is
+implemented. Debug objects tagged `chordsync-artifact-role=debug` expire after
+seven days. Playback and timeline objects have no automatic expiry. A future
+saved-song deletion operation must delete both explicitly. Incomplete multipart
+uploads are aborted after one day.
+
+## State, queues, and encryption
+
+DynamoDB uses `PAY_PER_REQUEST`, `PK` string keys (`JOB#{job_id}` in the
+application), AWS-owned default encryption, no GSI, no TTL, and no provisioned
+capacity. Point-in-time recovery and deletion protection are disabled for this
+re-creatable student environment to minimize cost and friction; reconsider both
+before storing valuable user libraries.
+
+Both SQS queues are standard and use SQS-managed encryption, avoiding a
+customer-managed KMS key's recurring/request cost. The main queue retains
+messages for one day and redrives after three receives. The DLQ retains messages
+for fourteen days. The temporary visibility timeout is 20 minutes, based on the
+~4m47s projected maximum-song Mac runtime plus substantial margin. Benchmark on
+the selected Linux/AWS worker before production and use the application's
+visibility-extension interface for a heartbeat.
+
+## Networking decision
+
+No network is created because worker capacity and API hosting are not yet
+selected. For a private demo, the cost-conscious option is an ECS EC2 worker in
+a public subnet with a public IP, no inbound security-group rules, restricted
+egress, and IAM-scoped access. This exposes the host network interface to the
+internet routing plane but not inbound ports; host patching and egress controls
+remain important. A private subnet plus NAT Gateway is stronger isolation but
+the NAT hourly/data charges can independently threaten USD 20/month. VPC
+endpoints do not solve outbound WhisperX/model/provider access and also carry
+cost. Do not add NAT by default.
+
+## Model cache recommendation
+
+- WhisperX: bake the selected Whisper model and Python environment into a
+  versioned worker image for deterministic first deployment; revisit a managed
+  cache if image size/pull time is unacceptable.
+- Demucs: bake the pinned model into the worker image with its isolated runtime.
+- BTC: bake only the legally redistributable pinned checkpoint/config into the
+  private worker image; never upload commercial audio.
+- alignment models: bake the known language models required for the demo. A
+  controlled private model bucket/cache is a later optimization for broader
+  multilingual coverage.
+
+An EBS cache can reduce repeated downloads on EC2 but becomes a small fixed cost
+and complicates scale-to-zero. Framework downloads at task start are the least
+deterministic and require outbound internet, so they are not the first choice.
+
+## Monitoring and budget protection
+
+Worker logs expire after seven days. Native AWS/SQS metrics drive queue-depth
+and DLQ-nonempty alarms; Container Insights and custom metrics are disabled.
+The alarm definitions have no notification topic yet—connect an SNS destination
+during controlled provisioning.
+
+Set `budget_alert_email` to create a USD 20 monthly AWS Budget with forecasted
+50%, 80%, and 100% email alerts. AWS Budgets alerts; it does **not** hard-stop
+services or guarantee a spending ceiling.
+
+Cost classification:
+
+- Near-zero/usage-based: S3 at demo volume, On-Demand DynamoDB, SQS, ECR storage,
+  short-retention logs, native alarms, and AWS Budget.
+- Small fixed/retained cost: ECR images, CloudWatch logs, and any later EBS cache.
+- Potentially over USD 20 independently: NAT Gateway, ALB, always-on Fargate,
+  always-on EC2/GPU, large EBS volumes, excessive logs/custom metrics, model
+  downloads, and internet data transfer.
+
+Always review current `ap-southeast-1` pricing before provisioning; this document
+does not claim a precise monthly total.
+
+## Local validation only
+
+```sh
+cd infrastructure/aws
+terraform init -backend=false
+terraform fmt -check -recursive
+terraform validate
+```
+
+Initialization downloads provider schemas but does not create resources. Never
+run `terraform apply` or any deploy command as part of this ticket. Before the
+first controlled provisioning, configure a reviewed remote state backend and
+run `terraform plan` with the intended AWS identity.
+
+Application configuration comes from the non-secret outputs:
+
+- `AWS_REGION`
+- `CHORDSYNC_S3_BUCKET`
+- `CHORDSYNC_DYNAMODB_JOB_TABLE`
+- `CHORDSYNC_SQS_ANALYSIS_QUEUE_URL`
+
+Role/task ARNs and the ECR URL are deployment metadata, not credentials.

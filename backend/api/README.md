@@ -11,8 +11,10 @@ from the eventual analysis worker.
 - `title`: a trimmed title between 1 and 200 characters
 - `audio`: a `.wav`, `.mp3`, or `.m4a` upload
 
-Uploads are limited to 25 MB and empty files are rejected. A successful request
-stores one input copy under the application-controlled local development path
+Uploads are limited to 25 MB and empty files are rejected. Audio duration is
+decoded server-side with ffprobe; files longer than 360 seconds or files that
+cannot be decoded are removed before a job record is created. A successful
+request stores one input copy under the application-controlled local development path
 `storage/uploads/analysis_jobs/`, then creates a job in the `queued` state and
 returns `202 Accepted`. Client filenames never determine the stored path, and
 absolute server paths are not exposed by the public API.
@@ -51,6 +53,51 @@ implementations. Subprocess orchestration is local and development-grade;
 persistent jobs, a durable remote worker/queue, authentication, input retention
 policies, and malware scanning remain deferred. Uploaded audio is retained after
 execution so it remains available for future playback support.
+
+## Independent worker command
+
+The same `RealAnalysisProcessor` used by the in-process executor can run as one
+independent job:
+
+```sh
+python -m backend.api.app.analysis_worker \
+  --job-id JOB_ID \
+  --title "Song title" \
+  --input /inputs/JOB_ID/input.mp3 \
+  --workspace-root /tmp/chordsync \
+  --result /results/JOB_ID/timeline.json
+```
+
+The input must be inside a directory named exactly as the job ID. The workspace
+must be empty for that job because the processor deliberately refuses to reuse
+an existing job workspace. The result is written atomically. The title is part
+of the worker descriptor for future durable job transport; current LRCLIB song
+identity continues to use embedded audio metadata, preserving existing behavior.
+
+The cloud-ready queue consumer can process one delivery and exit:
+
+```sh
+CHORDSYNC_RUNTIME_MODE=aws \
+CHORDSYNC_DISPATCH_MODE=queue \
+python -m backend.api.app.analysis_worker_consumer --once
+```
+
+AWS mode additionally requires `AWS_REGION`, `CHORDSYNC_S3_BUCKET`,
+`CHORDSYNC_DYNAMODB_JOB_TABLE`, and `CHORDSYNC_SQS_ANALYSIS_QUEUE_URL`. It uses
+the normal AWS credential provider chain. The command never creates AWS
+resources. Local API development remains on the existing in-process executor;
+see `docs/cloud/s6-t04-queue-worker.md` for the migration seam and limitations.
+
+Cloud-mode multipart API integration now persists job state and source/result
+artifacts behind the cloud interfaces. Dispatch failures remain recoverable via:
+
+```sh
+python -m backend.api.app.reconcile_dispatch --once
+```
+
+This compatibility path does not expose object keys or presigned URLs. The
+existing local Flutter workflow remains the default. Architecture and recovery
+semantics are documented in `docs/cloud/s6-t05-cloud-api-integration.md`.
 
 ## Optional development lyrics verification
 

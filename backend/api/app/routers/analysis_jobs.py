@@ -15,6 +15,24 @@ from backend.api.app.services.analysis_jobs import (
     AnalysisJobService,
     InMemoryAnalysisJobRepository,
 )
+from backend.api.app.services.analysis_application import (
+    AnalysisApplication,
+    AnalysisFailedError,
+    CloudAnalysisApplication,
+    JobNotFoundError,
+    LocalAnalysisApplication,
+    ResultArtifactCorruptError,
+    ResultArtifactMissingError,
+    ResultArtifactUnavailableError,
+    ResultNotReadyError,
+    SourceArtifactStorageError,
+)
+from backend.api.app.services.cloud_runtime import (
+    CloudRuntimeConfig,
+    RuntimeMode,
+    compose_analysis_dispatcher,
+    compose_cloud_runtime,
+)
 from backend.api.app.services.analysis_job_executor import (
     AnalysisJobExecutor,
     InProcessAnalysisJobExecutor,
@@ -22,8 +40,10 @@ from backend.api.app.services.analysis_job_executor import (
 from backend.api.app.services.real_analysis_processor import RealAnalysisProcessor
 from backend.api.app.services.analysis_input_storage import (
     AnalysisInputStorageError,
+    AudioTooLongError,
     AudioTooLargeError,
     EmptyAudioError,
+    InvalidAudioError,
     LocalAnalysisInputStorage,
     UnsupportedAudioFormatError,
 )
@@ -47,6 +67,32 @@ def get_analysis_job_service() -> AnalysisJobService:
 
 def get_analysis_job_executor() -> AnalysisJobExecutor:
     return _executor
+
+
+_cloud_application: AnalysisApplication | None = None
+
+
+def get_analysis_application_service(
+    service: AnalysisJobService = Depends(get_analysis_job_service),
+    executor: AnalysisJobExecutor = Depends(get_analysis_job_executor),
+) -> AnalysisApplication:
+    config = CloudRuntimeConfig.from_env()
+    if config.mode is RuntimeMode.LOCAL:
+        return LocalAnalysisApplication(service, executor)
+    global _cloud_application
+    if _cloud_application is None:
+        runtime = compose_cloud_runtime(config)
+        dispatcher = compose_analysis_dispatcher(config, runtime)
+        staging = LocalAnalysisInputStorage(
+            config.storage_root / "cloud_api_staging"
+        )
+        _cloud_application = CloudAnalysisApplication(
+            runtime.repository,
+            runtime.artifact_storage,
+            dispatcher,
+            staging,
+        )
+    return _cloud_application
 
 
 def error_response(status_code: int, code: str, message: str) -> JSONResponse:
@@ -73,19 +119,16 @@ def create_analysis_job(
         Form(min_length=1, max_length=200, pattern=r".*\S.*"),
     ],
     audio: Annotated[UploadFile, File()],
-    service: AnalysisJobService = Depends(get_analysis_job_service),
-    executor: AnalysisJobExecutor = Depends(get_analysis_job_executor),
+    application: AnalysisApplication = Depends(get_analysis_application_service),
 ) -> AnalysisJobResponse | Response:
     request = AnalysisJobCreateRequest(title=title)
     try:
-        response = service.create(
+        return application.create(
             request=request,
             original_filename=audio.filename or "",
             content_type=audio.content_type,
             source=audio.file,
         )
-        executor.submit(response.job_id)
-        return response
     except UnsupportedAudioFormatError:
         return error_response(
             415,
@@ -94,12 +137,26 @@ def create_analysis_job(
         )
     except AudioTooLargeError:
         return error_response(413, "audio_too_large", "Audio exceeds the 25 MB limit.")
+    except AudioTooLongError:
+        return error_response(
+            413,
+            "audio_too_long",
+            "Audio exceeds the 6-minute limit.",
+        )
+    except InvalidAudioError:
+        return error_response(400, "invalid_audio", "Audio could not be decoded.")
     except EmptyAudioError:
         return error_response(400, "empty_audio", "Audio file must not be empty.")
     except AnalysisInputStorageError:
         return error_response(
             500,
             "audio_storage_failed",
+            "Audio could not be stored.",
+        )
+    except SourceArtifactStorageError:
+        return error_response(
+            500,
+            "source_storage_failed",
             "Audio could not be stored.",
         )
 
@@ -111,12 +168,12 @@ def create_analysis_job(
 )
 def get_analysis_job(
     job_id: str,
-    service: AnalysisJobService = Depends(get_analysis_job_service),
+    application: AnalysisApplication = Depends(get_analysis_application_service),
 ) -> AnalysisJobResponse | Response:
-    job = service.get(job_id)
-    if job is None:
+    response = application.status(job_id)
+    if response is None:
         return error_response(404, "job_not_found", "Analysis job was not found.")
-    return service.response(job)
+    return response
 
 
 @router.get(
@@ -125,23 +182,37 @@ def get_analysis_job(
     responses={
         404: {"model": AnalysisJobErrorResponse},
         409: {"model": AnalysisJobErrorResponse},
+        500: {"model": AnalysisJobErrorResponse},
+        503: {"model": AnalysisJobErrorResponse},
     },
 )
 def get_analysis_job_result(
     job_id: str,
-    service: AnalysisJobService = Depends(get_analysis_job_service),
+    application: AnalysisApplication = Depends(get_analysis_application_service),
 ) -> SharedTimeline | Response:
-    job = service.get(job_id)
-    if job is None:
+    try:
+        return application.result(job_id)
+    except JobNotFoundError:
         return error_response(404, "job_not_found", "Analysis job was not found.")
-    if job.status in (AnalysisJobStatus.QUEUED, AnalysisJobStatus.PROCESSING):
+    except ResultNotReadyError:
         return error_response(409, "result_not_ready", "Analysis result is not ready.")
-    if job.status == AnalysisJobStatus.FAILED:
-        error = job.error or AnalysisJobError(
-            code="analysis_failed",
-            message="Analysis could not be completed.",
-        )
+    except AnalysisFailedError as error:
         return error_response(409, error.code, error.message)
-    if job.result is None:
-        return error_response(409, "result_not_ready", "Analysis result is not ready.")
-    return job.result
+    except ResultArtifactMissingError:
+        return error_response(
+            409,
+            "result_artifact_missing",
+            "Analysis result is unavailable.",
+        )
+    except ResultArtifactCorruptError:
+        return error_response(
+            500,
+            "result_artifact_corrupt",
+            "Analysis result could not be read.",
+        )
+    except ResultArtifactUnavailableError:
+        return error_response(
+            503,
+            "result_temporarily_unavailable",
+            "Analysis result is temporarily unavailable.",
+        )

@@ -23,7 +23,10 @@ from backend.api.app.services.analysis_input_storage import LocalAnalysisInputSt
 def job_service(tmp_path):
     service = AnalysisJobService(
         InMemoryAnalysisJobRepository(),
-        LocalAnalysisInputStorage(tmp_path / "uploads"),
+        LocalAnalysisInputStorage(
+            tmp_path / "uploads",
+            duration_probe=lambda _: 1.0,
+        ),
     )
     app.dependency_overrides[get_analysis_job_service] = lambda: service
     app.dependency_overrides[get_analysis_job_executor] = lambda: DeferredExecutor()

@@ -1,11 +1,15 @@
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
-from typing import BinaryIO, Protocol
+from typing import BinaryIO, Callable, Protocol
+
+from analysis.preprocessing.audio_preprocessor import get_audio_metadata
 
 
 SUPPORTED_AUDIO_EXTENSIONS = frozenset({".wav", ".mp3", ".m4a"})
 MAX_AUDIO_SIZE_BYTES = 25 * 1024 * 1024
+MAX_AUDIO_DURATION_SECONDS = 360.0
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_ANALYSIS_INPUT_ROOT = _PROJECT_ROOT / "storage/uploads/analysis_jobs"
 _COPY_CHUNK_SIZE = 1024 * 1024
@@ -27,6 +31,14 @@ class AudioTooLargeError(AnalysisInputValidationError):
     code = "audio_too_large"
 
 
+class AudioTooLongError(AnalysisInputValidationError):
+    code = "audio_too_long"
+
+
+class InvalidAudioError(AnalysisInputValidationError):
+    code = "invalid_audio"
+
+
 class AnalysisInputStorageError(Exception):
     pass
 
@@ -38,6 +50,7 @@ class AnalysisInputMetadata:
     extension: str
     content_type: str | None
     size_bytes: int
+    duration_seconds: float
 
 
 class AnalysisInputStorage(Protocol):
@@ -59,9 +72,13 @@ class LocalAnalysisInputStorage:
         self,
         root: Path = DEFAULT_ANALYSIS_INPUT_ROOT,
         max_size_bytes: int = MAX_AUDIO_SIZE_BYTES,
+        max_duration_seconds: float = MAX_AUDIO_DURATION_SECONDS,
+        duration_probe: Callable[[Path], float] | None = None,
     ) -> None:
         self.root = root
         self.max_size_bytes = max_size_bytes
+        self.max_duration_seconds = max_duration_seconds
+        self._duration_probe = duration_probe or _probe_duration_seconds
 
     def store(
         self,
@@ -91,6 +108,14 @@ class LocalAnalysisInputStorage:
             if size_bytes == 0:
                 raise EmptyAudioError
             temporary_path.replace(final_path)
+            try:
+                duration_seconds = self._duration_probe(final_path)
+            except Exception as error:
+                raise InvalidAudioError from error
+            if not math.isfinite(duration_seconds) or duration_seconds <= 0:
+                raise InvalidAudioError
+            if duration_seconds > self.max_duration_seconds:
+                raise AudioTooLongError
         except AnalysisInputValidationError:
             self._remove_job_directory(job_directory)
             raise
@@ -104,6 +129,7 @@ class LocalAnalysisInputStorage:
             extension=extension,
             content_type=content_type,
             size_bytes=size_bytes,
+            duration_seconds=duration_seconds,
         )
 
     def get_path(self, job_id: str) -> Path | None:
@@ -133,3 +159,7 @@ class LocalAnalysisInputStorage:
     def _remove_job_directory(job_directory: Path) -> None:
         if job_directory.exists():
             rmtree(job_directory)
+
+
+def _probe_duration_seconds(audio_path: Path) -> float:
+    return float(get_audio_metadata(audio_path)["duration"])

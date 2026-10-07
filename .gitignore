@@ -60,6 +60,7 @@ secrets.json
 
 uploads/
 storage/
+/storage/cloud_local/
 temp/
 tmp/
 
@@ -146,6 +147,9 @@ logs/
 # --------------------------
 
 docker-data/
+
+# Terraform provider/module cache (lock files remain tracked)
+.terraform/
 
 
 # --------------------------
