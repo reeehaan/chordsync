@@ -122,9 +122,7 @@ class AnalysisPipelineConfig:
         btc_python = _optional_path("CHORDSYNC_BTC_PYTHON")
         btc_checkpoint = _optional_path("CHORDSYNC_BTC_CHECKPOINT")
         btc_source = _optional_path("CHORDSYNC_BTC_SOURCE")
-        btc_configured = bool(btc_python and btc_checkpoint and btc_source)
-        default_estimator = "btc" if btc_configured else "chordino"
-        estimator_text = os.getenv("CHORDSYNC_CHORD_ESTIMATOR", default_estimator)
+        estimator_text = os.getenv("CHORDSYNC_CHORD_ESTIMATOR", "btc")
         try:
             estimator = ChordEstimator(estimator_text)
         except ValueError as error:
@@ -164,8 +162,7 @@ class AnalysisPipelineConfig:
                 in {"1", "true", "yes"}
             ),
             multilingual_lyrics_enabled=(
-                os.getenv("CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED", "").casefold()
-                in {"1", "true", "yes"}
+                _enabled_by_default("CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED")
             ),
             lrclib_reference_enabled=(
                 os.getenv("CHORDSYNC_LRCLIB_REFERENCE_ENABLED", "").casefold()
@@ -757,6 +754,11 @@ def _optional_path(name: str) -> Path | None:
 def _environment_path(name: str, default: Path) -> Path:
     value = os.getenv(name)
     return Path(value).expanduser() if value else default
+
+
+def _enabled_by_default(name: str) -> bool:
+    value = os.getenv(name)
+    return value is None or value.casefold() in {"1", "true", "yes"}
 
 
 def _optional_executable(environment_name: str, command: str) -> Path | None:

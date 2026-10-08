@@ -101,12 +101,13 @@ semantics are documented in `docs/cloud/s6-t05-cloud-api-integration.md`.
 
 ## Optional development lyrics verification
 
-Set `CHORDSYNC_LRCLIB_REFERENCE_ENABLED=1` to enable the development/academic
-LRCLIB reference lookup. It uses embedded title and artist metadata, validates
-the provider identity, and only applies conservatively verified corrections
-with fresh WhisperX alignment timing. The feature is off by default. Provider
-failure, weak identity, unsafe context, or invalid timing always preserves the
-original WhisperX transcript and does not fail analysis.
+The development/academic LRCLIB reference lookup is opt-in and disabled by
+default. Set `CHORDSYNC_LRCLIB_REFERENCE_ENABLED=1` to enable it. Enabling it
+does not imply production redistribution or licensing approval. It uses
+embedded title and artist metadata, validates the provider identity, and only
+applies conservatively verified corrections with fresh WhisperX alignment
+timing. Provider failure, weak identity, unsafe context, or invalid timing
+always preserves the original WhisperX transcript and does not fail analysis.
 
 Optional transport settings are `CHORDSYNC_LRCLIB_TIMEOUT` and
 `CHORDSYNC_LRCLIB_USER_AGENT`. Full provider responses and reference lyrics are
@@ -115,14 +116,19 @@ flow through the existing `SharedTimeline` output.
 
 ## Optional multilingual lyrics
 
-Set `CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED=1` to let WhisperX detect the sung
-language and convert detected non-English lyrics to Latin-script display text
-after word alignment. Alignment is performed against the native transcript;
-romanization does not change word timestamps. English results are passed
-through unchanged. The established forced-English production path remains the
-default when the variable is unset.
+Multilingual WhisperX detection and Latin-script lyric display are enabled by
+default. Set `CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED=0` to disable them. WhisperX
+detects the sung language and converts detected non-English lyrics to
+Latin-script display text after word alignment. Alignment is performed against
+the native transcript; romanization does not change word timestamps. English
+results are passed through unchanged.
 
 Romanization is best-effort and character based. It supports practically all
 Unicode scripts, but context-sensitive writing systems may not match a native
 speaker's preferred spelling. Non-English transcripts skip the existing
 English-only LRCLIB correction pass and continue safely with WhisperX output.
+
+BTC is the default production chord estimator; set
+`CHORDSYNC_CHORD_ESTIMATOR=chordino` to select Chordino explicitly. Automatic
+MUSIC_ONLY generation is disabled by default and can be enabled explicitly with
+`CHORDSYNC_MUSIC_ONLY_ENABLED=1`.

@@ -545,7 +545,7 @@ def test_btc_selection_requires_all_local_configuration(processor_context):
     assert runner.calls == []
 
 
-def test_local_config_defaults_to_chordino_without_btc_paths(monkeypatch):
+def test_local_config_defaults_to_btc_without_silently_falling_back(monkeypatch):
     monkeypatch.delenv("CHORDSYNC_CHORD_ESTIMATOR", raising=False)
     monkeypatch.delenv("CHORDSYNC_BTC_PYTHON", raising=False)
     monkeypatch.delenv("CHORDSYNC_BTC_CHECKPOINT", raising=False)
@@ -558,7 +558,7 @@ def test_local_config_defaults_to_chordino_without_btc_paths(monkeypatch):
 
     config = AnalysisPipelineConfig.local()
 
-    assert config.chord_estimator is ChordEstimator.CHORDINO
+    assert config.chord_estimator is ChordEstimator.BTC
     assert config.btc_python is None
     assert config.btc_checkpoint is None
     assert config.btc_source is None
@@ -573,6 +573,12 @@ def test_local_config_enables_lrclib_only_for_explicit_true_values(
     monkeypatch.setenv("CHORDSYNC_LRCLIB_REFERENCE_ENABLED", value)
 
     assert AnalysisPipelineConfig.local().lrclib_reference_enabled is True
+
+
+def test_local_config_disables_lrclib_when_environment_is_unset(monkeypatch):
+    monkeypatch.delenv("CHORDSYNC_LRCLIB_REFERENCE_ENABLED", raising=False)
+
+    assert AnalysisPipelineConfig.local().lrclib_reference_enabled is False
 
 
 @pytest.mark.parametrize("value", ["", "0", "false", "no", "unexpected"])
@@ -614,10 +620,17 @@ def test_local_config_enables_music_only_for_explicit_true_values(
     assert AnalysisPipelineConfig.local().music_only_enabled is True
 
 
-def test_local_config_disables_multilingual_lyrics_when_environment_is_unset(
+def test_local_config_enables_multilingual_lyrics_when_environment_is_unset(
     monkeypatch,
 ):
     monkeypatch.delenv("CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED", raising=False)
+
+    assert AnalysisPipelineConfig.local().multilingual_lyrics_enabled is True
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "unexpected"])
+def test_local_config_can_disable_multilingual_lyrics(monkeypatch, value):
+    monkeypatch.setenv("CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED", value)
 
     assert AnalysisPipelineConfig.local().multilingual_lyrics_enabled is False
 
