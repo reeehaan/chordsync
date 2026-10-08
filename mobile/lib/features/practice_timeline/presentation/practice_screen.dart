@@ -10,6 +10,7 @@ import '../application/practice_playback_speeds.dart';
 import '../application/practice_playback_synchronizer.dart';
 import '../application/practice_session_factory.dart';
 import '../data/playback_state.dart';
+import '../data/chord_transposition.dart';
 import '../data/shared_timeline_asset_loader.dart';
 import '../data/shared_timeline.dart';
 import 'chord_diagram_strip.dart';
@@ -44,6 +45,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   double _maximumPosition = 0;
   bool _isLoaded = false;
   Object? _loadError;
+  int _capoFret = 0;
 
   @override
   void initState() {
@@ -239,6 +241,16 @@ class _PracticeScreenState extends State<PracticeScreen> {
     }
 
     final state = controller.state;
+    final timeline = _timeline!;
+    final displayTimeline = ChordTransposition.timelineForCapo(
+      timeline,
+      _capoFret,
+    );
+    final songChords = ChordTransposition.songChords(
+      timeline,
+      capoFret: _capoFret,
+    );
+    final isBeforePlayback = controller.position == Duration.zero;
     return SafeArea(
       child: Column(
         children: [
@@ -259,17 +271,39 @@ class _PracticeScreenState extends State<PracticeScreen> {
               }
             },
             onClearLoop: synchronizer.clearLoop,
+            capoFret: _capoFret,
+            onCapoPressed: () => _showCapoSettings(timeline),
+            onSimplifyPressed: () {
+              setState(() {
+                _capoFret = ChordTransposition.recommendedCapo(timeline);
+              });
+            },
           ),
           if (state.isMusicOnly)
             const _MusicOnlyChordFocus()
           else
             ChordDiagramStrip(
-              previousChord: state.previousChord,
-              currentChord: state.currentChord,
-              nextChord: state.nextChord,
-              progression: state.chordProgression,
+              previousChord: state.previousChord == null
+                  ? null
+                  : ChordTransposition.forCapo(state.previousChord!, _capoFret),
+              currentChord: ChordTransposition.forCapo(
+                state.currentChord,
+                _capoFret,
+              ),
+              nextChord: state.nextChord == null
+                  ? null
+                  : ChordTransposition.forCapo(state.nextChord!, _capoFret),
+              progression: isBeforePlayback
+                  ? songChords
+                  : state.chordProgression
+                        .map(
+                          (chord) =>
+                              ChordTransposition.forCapo(chord, _capoFret),
+                        )
+                        .toList(),
               chordProgress: state.chordProgress,
               chordStart: state.currentChordStart,
+              showAllChords: isBeforePlayback,
             ),
           const Divider(height: 1, thickness: 1),
           Expanded(
@@ -279,7 +313,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               child: state.isMusicOnly
                   ? _MusicOnlyLyrics(state: state)
                   : SongSheetLyrics(
-                      timeline: _timeline!,
+                      timeline: displayTimeline,
                       playbackTime: state.playbackTime,
                     ),
             ),
@@ -293,7 +327,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
             speed: synchronizer.speed,
             chordLabel: state.isMusicOnly
                 ? 'Music only'
-                : 'Current ${state.currentChord}',
+                : 'Current ${ChordTransposition.forCapo(state.currentChord, _capoFret)}',
             canGoPrevious: synchronizer.canSeekToPreviousBar,
             canGoNext: synchronizer.canSeekToNextBar,
             onPrevious: () => _runAudioAction(() async {
@@ -313,6 +347,98 @@ class _PracticeScreenState extends State<PracticeScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showCapoSettings(SharedTimeline timeline) async {
+    var selected = _capoFret;
+    final recommended = ChordTransposition.recommendedCapo(timeline);
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: PracticeStageColors.surface,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final chords = ChordTransposition.songChords(
+            timeline,
+            capoFret: selected,
+          );
+          return SafeArea(
+            child: DefaultTextStyle.merge(
+              style: const TextStyle(color: Colors.white),
+              child: IconTheme.merge(
+                data: const IconThemeData(color: Colors.white),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Capo settings',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleLarge?.copyWith(color: Colors.white),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Recommended: ${recommended == 0 ? 'No capo' : 'fret $recommended'}',
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            selected == 0 ? 'No capo' : 'Capo: fret $selected',
+                          ),
+                          Row(
+                            children: [
+                              IconButton(
+                                tooltip: 'Lower capo',
+                                color: Colors.white,
+                                disabledColor: Colors.white54,
+                                onPressed: selected == 0
+                                    ? null
+                                    : () => setModalState(() => selected--),
+                                icon: const Icon(Icons.remove),
+                              ),
+                              IconButton(
+                                tooltip: 'Raise capo',
+                                color: Colors.white,
+                                disabledColor: Colors.white54,
+                                onPressed: selected == 11
+                                    ? null
+                                    : () => setModalState(() => selected++),
+                                icon: const Icon(Icons.add),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Shapes: ${chords.join('  ·  ')}'),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: PracticeStageColors.surfaceRaised,
+                          ),
+                          onPressed: () => Navigator.pop(context, selected),
+                          child: const Text('Apply'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (result != null && mounted) setState(() => _capoFret = result);
   }
 
   String _headerSubtitle() {
@@ -336,6 +462,9 @@ class _SheetHeader extends StatelessWidget {
     required this.onSetLoopEnd,
     required this.onToggleLoop,
     required this.onClearLoop,
+    required this.capoFret,
+    required this.onCapoPressed,
+    required this.onSimplifyPressed,
   });
 
   final String title;
@@ -347,6 +476,9 @@ class _SheetHeader extends StatelessWidget {
   final VoidCallback onSetLoopEnd;
   final VoidCallback onToggleLoop;
   final VoidCallback onClearLoop;
+  final int capoFret;
+  final VoidCallback onCapoPressed;
+  final VoidCallback onSimplifyPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -406,6 +538,26 @@ class _SheetHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                _ToolPill(
+                  label: capoFret == 0 ? 'Capo' : 'Capo $capoFret',
+                  icon: Icons.tune,
+                  isActive: capoFret > 0,
+                  onPressed: onCapoPressed,
+                ),
+                const SizedBox(width: 8),
+                _ToolPill(
+                  label: 'Simplify',
+                  icon: Icons.star_rounded,
+                  onPressed: onSimplifyPressed,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             key: const ValueKey('practiceToolsSection'),
             children: [

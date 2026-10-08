@@ -16,6 +16,7 @@ class ChordDiagramStrip extends StatefulWidget {
     required this.progression,
     required this.chordProgress,
     required this.chordStart,
+    this.showAllChords = false,
   });
 
   final String? previousChord;
@@ -24,6 +25,7 @@ class ChordDiagramStrip extends StatefulWidget {
   final List<String> progression;
   final double? chordProgress;
   final double? chordStart;
+  final bool showAllChords;
 
   static const compactHeight = 196.0;
   static const expandedHeight = 254.0;
@@ -82,7 +84,7 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
       ?widget.nextChord,
       ...upcoming.where((chord) => chord != widget.nextChord),
     ];
-    return [
+    final entries = [
       if (widget.previousChord case final previous?)
         _StripEntry(
           chord: previous,
@@ -105,6 +107,22 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
         _StripEntry(
           chord: following[1],
           valueKey: const ValueKey('upcomingChordValue4'),
+        ),
+    ];
+    if (!widget.showAllChords) return entries;
+
+    final seen = <String>{widget.currentChord};
+    final songChords = widget.progression
+        .where((chord) => chord != 'N' && seen.add(chord))
+        .toList(growable: false);
+    return [
+      entries.firstWhere((entry) => entry.isCurrent),
+      for (var index = 0; index < songChords.length; index++)
+        _StripEntry(
+          chord: songChords[index],
+          valueKey: index == 0
+              ? const ValueKey('nextChordValue')
+              : ValueKey('songChordValue${songChords[index]}'),
         ),
     ];
   }
