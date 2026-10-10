@@ -9,8 +9,10 @@ client_secret*.json
 secrets.json
 **/.venv
 **/.venv-*
+**/.terraform
 **/__pycache__
 **/.pytest_cache
+**/.cache
 **/.dart_tool
 **/build
 storage
@@ -29,7 +31,10 @@ tests
 *.pth
 *.ckpt
 *.onnx
+*.tfstate
+*.tfstate.*
 *.lab
 *.lrc
+**/.DS_Store
 coverage.xml
 .coverage
