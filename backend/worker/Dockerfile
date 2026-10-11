@@ -1,4 +1,4 @@
-FROM python:3.10-slim-bookworm@sha256:5be5aaecb962a41567bc8041f1e9e3432cb085b037fe057f9a562630b2e4b370 AS beats-builder
+FROM python:3.10-slim-trixie@sha256:6ff506466f8b1e981719b468cc0023b8ef000b983cdec0eafe119d01f379e31d AS beats-builder
 
 ENV PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
 
@@ -18,7 +18,7 @@ RUN python -m venv /opt/chordsync/venvs/beats \
     && /opt/chordsync/venvs/beats/bin/pip install --no-build-isolation --no-cache-dir \
         --requirement analysis/beats/requirements.txt
 
-FROM python:3.11-slim-bookworm@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89
+FROM python:3.11-slim-trixie@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \

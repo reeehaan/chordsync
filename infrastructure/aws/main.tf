@@ -237,20 +237,33 @@ resource "aws_cloudwatch_log_group" "worker" {
   retention_in_days = 7
 }
 
+locals {
+  # Digest reference only: a re-pushed tag can never change what the task runs.
+  worker_image = "${aws_ecr_repository.worker.repository_url}@${var.worker_image_digest}"
+}
+
 resource "aws_ecs_task_definition" "worker" {
-  family                   = "${local.name_prefix}-worker"
-  requires_compatibilities = ["EC2"]
+  family = "${local.name_prefix}-worker"
+  # CPU-only runs use Fargate so a one-shot RunTask needs no EC2 capacity.
+  # GPU requirements are only schedulable on EC2 container instances.
+  requires_compatibilities = var.worker_gpu_count > 0 ? ["EC2"] : ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = tostring(var.worker_cpu_units)
   memory                   = tostring(var.worker_memory_mib)
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.worker.arn
 
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "ARM64"
+  }
+
   container_definitions = jsonencode([{
     name      = "analysis-worker"
-    image     = "${aws_ecr_repository.worker.repository_url}:${var.worker_image_tag}"
+    image     = local.worker_image
     essential = true
-    command   = ["python", "-m", "backend.api.app.analysis_worker_consumer", "--once"]
+    # One delivery per task: exits after one job or one empty 20 s long poll.
+    command = ["python", "-m", "backend.api.app.analysis_worker_consumer", "--once"]
     environment = [
       { name = "CHORDSYNC_RUNTIME_MODE", value = "aws" },
       { name = "CHORDSYNC_DISPATCH_MODE", value = "queue" },
@@ -258,6 +271,24 @@ resource "aws_ecs_task_definition" "worker" {
       { name = "CHORDSYNC_S3_BUCKET", value = aws_s3_bucket.artifacts.id },
       { name = "CHORDSYNC_DYNAMODB_JOB_TABLE", value = aws_dynamodb_table.jobs.name },
       { name = "CHORDSYNC_SQS_ANALYSIS_QUEUE_URL", value = aws_sqs_queue.analysis.url },
+      # Paths below match the approved image layout; set explicitly so the
+      # deployment does not silently depend on image defaults.
+      { name = "CHORDSYNC_WORKSPACE_ROOT", value = "/tmp/chordsync" },
+      { name = "CHORDSYNC_BTC_PYTHON", value = "/opt/chordsync/venvs/btc/bin/python" },
+      { name = "CHORDSYNC_BTC_SOURCE", value = "/opt/chordsync/models/btc/source" },
+      { name = "CHORDSYNC_BTC_CHECKPOINT", value = "/opt/chordsync/models/btc/btc_model.pt" },
+      { name = "CHORDSYNC_BEAT_PYTHON", value = "/opt/chordsync/venvs/beats/bin/python" },
+      { name = "CHORDSYNC_WHISPERX_EXECUTABLE", value = "/opt/chordsync/venvs/whisperx/bin/whisperx" },
+      { name = "CHORDSYNC_DEMUCS_EXECUTABLE", value = "/opt/chordsync/venvs/demucs/bin/demucs" },
+      { name = "XDG_CACHE_HOME", value = "/opt/chordsync/cache" },
+      { name = "HF_HOME", value = "/opt/chordsync/cache/huggingface" },
+      { name = "TORCH_HOME", value = "/opt/chordsync/cache/torch" },
+      # Models come only from the staged private cache; fail fast instead of
+      # attempting uncontrolled Hugging Face downloads.
+      { name = "HF_HUB_OFFLINE", value = "1" },
+      # Bootstrap installs and verifies this release before polling the queue.
+      { name = "CHORDSYNC_MODEL_RELEASE", value = var.model_release_id },
+      { name = "CHORDSYNC_MODEL_MANIFEST_KEY", value = "models/releases/${var.model_release_id}/manifest.json" },
     ]
     resourceRequirements = var.worker_gpu_count > 0 ? [{
       type  = "GPU"

@@ -41,14 +41,16 @@ DynamoDB completed state
 
 The stack defines one private S3 bucket, one On-Demand DynamoDB table, standard
 analysis and dead-letter queues, private API/worker ECR repositories, distinct
-API/worker/execution IAM roles, an ECS cluster, an EC2-compatible worker task
-definition skeleton, a seven-day worker log group, two native SQS alarms, and
-an optional USD 20 AWS Budget.
+API/worker/execution IAM roles, an ECS cluster, a Fargate ARM64 worker task
+definition pinned to the approved image digest (`worker_image_digest`), a
+seven-day worker log group, two native SQS alarms, and an optional USD 20 AWS
+Budget. See `docs/cloud/s6-t12-worker-deployment.md` for the controlled
+runtime-test configuration.
 
 It deliberately defines no ECS service, EC2 Auto Scaling Group, GPU instance,
 VPC, NAT Gateway, load balancer, public endpoint, Route 53 record, or API task.
-Therefore the worker foundation has zero running capacity and cannot incur
-compute cost until a benchmark-informed capacity design is added.
+Therefore the worker foundation has zero running capacity; compute cost is
+incurred only while an explicitly started one-shot task runs.
 
 The first API hosting recommendation is a cheap externally hosted or
 serverless/lightweight container endpoint that can assume the scoped API role
@@ -102,31 +104,29 @@ visibility-extension interface for a heartbeat.
 
 ## Networking decision
 
-No network is created because worker capacity and API hosting are not yet
-selected. For a private demo, the cost-conscious option is an ECS EC2 worker in
-a public subnet with a public IP, no inbound security-group rules, restricted
-egress, and IAM-scoped access. This exposes the host network interface to the
-internet routing plane but not inbound ports; host patching and egress controls
-remain important. A private subnet plus NAT Gateway is stronger isolation but
-the NAT hourly/data charges can independently threaten USD 20/month. VPC
-endpoints do not solve outbound WhisperX/model/provider access and also carry
-cost. Do not add NAT by default.
+Terraform defines only the egress-only `chordsync-analysis-worker` security
+group and reads the default VPC's public subnets (`network.tf`); no VPC,
+subnet, NAT, or endpoint is created. For the private demo, the selected direction is a
+one-shot Fargate worker task in a public subnet with a public IP, a security
+group with no inbound rules and HTTPS-only egress, and IAM-scoped access. The
+task exposes no inbound ports; models come from the private S3 model prefix,
+not public downloads. A private subnet plus NAT Gateway is stronger isolation
+but the NAT hourly/data charges can independently threaten USD 20/month. The
+interface endpoints a private Fargate task would need (ECR API, ECR DKR, Logs,
+SQS) also carry hourly cost that exceeds the budget. Do not add NAT by default.
 
 ## Model cache recommendation
 
-- WhisperX: bake the selected Whisper model and Python environment into a
-  versioned worker image for deterministic first deployment; revisit a managed
-  cache if image size/pull time is unacceptable.
-- Demucs: bake the pinned model into the worker image with its isolated runtime.
-- BTC: bake only the legally redistributable pinned checkpoint/config into the
-  private worker image; never upload commercial audio.
-- alignment models: bake the known language models required for the demo. A
-  controlled private model bucket/cache is a later optimization for broader
-  multilingual coverage.
+The approved worker image contains no model weights or BTC assets, and its
+digest is bound to a security exception, so models are not baked into it.
+Model assets are staged under a private, SHA-256-manifested S3 prefix and
+copied into the task's ephemeral cache by a bootstrap step before analysis.
+`HF_HUB_OFFLINE=1` prevents uncontrolled Hugging Face downloads. The manifest
+format, key layout, provenance, and bootstrap behaviour are in
+`docs/cloud/s6-t13-model-bootstrap.md`.
 
-An EBS cache can reduce repeated downloads on EC2 but becomes a small fixed cost
-and complicates scale-to-zero. Framework downloads at task start are the least
-deterministic and require outbound internet, so they are not the first choice.
+EFS and EBS caches add fixed cost and complicate scale-to-zero; framework
+downloads at task start are non-deterministic, so neither is the first choice.
 
 ## Monitoring and budget protection
 

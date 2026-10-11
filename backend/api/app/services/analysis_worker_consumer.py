@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from contextlib import AbstractContextManager
 from enum import Enum
+from typing import Callable
 
 from backend.api.app.services.analysis_job_queue import (
     AnalysisJobQueue,
@@ -28,6 +30,10 @@ from backend.api.app.services.result_publication import (
     PublicationRequest,
 )
 from backend.api.app.services.source_materialization import SourceMaterializer
+from backend.api.app.services.visibility_heartbeat import VisibilityHeartbeat
+
+
+HeartbeatFactory = Callable[[QueueDelivery], AbstractContextManager[object]]
 
 
 class WorkerOutcome(str, Enum):
@@ -53,6 +59,8 @@ class AnalysisWorkerConsumer:
         processor: AnalysisProcessor,
         publisher: AnalysisResultPublisher,
         cleanup: ArtifactCleanup,
+        *,
+        heartbeat_factory: HeartbeatFactory | None = None,
     ) -> None:
         self._queue = queue
         self._repository = repository
@@ -61,6 +69,9 @@ class AnalysisWorkerConsumer:
         self._processor = processor
         self._publisher = publisher
         self._cleanup = cleanup
+        self._heartbeat_factory: HeartbeatFactory = heartbeat_factory or (
+            lambda delivery: VisibilityHeartbeat(queue, delivery)
+        )
 
     def process_once(self) -> WorkerOutcome:
         delivery = self._queue.receive()
@@ -108,36 +119,48 @@ class AnalysisWorkerConsumer:
         job: CloudJobRecord,
     ) -> WorkerOutcome:
         try:
-            source = self._materializer.materialize(
-                job.job_id,
-                delivery.descriptor.source_artifact_key,
-            )
-            timeline = self._processor.process(source.path)
-            latest = self._repository.get(job.job_id)
-            if latest is None or latest.status is CloudJobStatus.CANCELLED:
-                self._queue.acknowledge(delivery)
-                return WorkerOutcome.ACKNOWLEDGED_STALE
-            if latest.status is not CloudJobStatus.PROCESSING:
+            # The heartbeat covers only the claimed PROCESSING work. It is
+            # stopped (and joined) before any acknowledge or release below.
+            with self._heartbeat_factory(delivery):
+                outcome = self._analyze_and_publish(delivery, job)
+            if outcome is WorkerOutcome.RELEASED_BUSY:
                 self._queue.release(delivery, visibility_timeout_seconds=60)
-                return WorkerOutcome.RELEASED_BUSY
-            self._publisher.publish(
-                PublicationRequest(
-                    job_id=job.job_id,
-                    playback_bytes=source.content,
-                    playback_extension=source.path.suffix,
-                    playback_content_type=_content_type(source.path.suffix),
-                    timeline_bytes=json.dumps(
-                        timeline.model_dump(mode="json"),
-                        separators=(",", ":"),
-                    ).encode("utf-8"),
-                )
-            )
-            self._queue.acknowledge(delivery)
-            return WorkerOutcome.COMPLETED
+            else:
+                self._queue.acknowledge(delivery)
+            return outcome
         except Exception as error:
             return self._handle_failure(delivery, job, error)
         finally:
             self._cleanup.delete_workspace(job.job_id)
+
+    def _analyze_and_publish(
+        self,
+        delivery: QueueDelivery,
+        job: CloudJobRecord,
+    ) -> WorkerOutcome:
+        source = self._materializer.materialize(
+            job.job_id,
+            delivery.descriptor.source_artifact_key,
+        )
+        timeline = self._processor.process(source.path)
+        latest = self._repository.get(job.job_id)
+        if latest is None or latest.status is CloudJobStatus.CANCELLED:
+            return WorkerOutcome.ACKNOWLEDGED_STALE
+        if latest.status is not CloudJobStatus.PROCESSING:
+            return WorkerOutcome.RELEASED_BUSY
+        self._publisher.publish(
+            PublicationRequest(
+                job_id=job.job_id,
+                playback_bytes=source.content,
+                playback_extension=source.path.suffix,
+                playback_content_type=_content_type(source.path.suffix),
+                timeline_bytes=json.dumps(
+                    timeline.model_dump(mode="json"),
+                    separators=(",", ":"),
+                ).encode("utf-8"),
+            )
+        )
+        return WorkerOutcome.COMPLETED
 
     def _handle_failure(
         self,

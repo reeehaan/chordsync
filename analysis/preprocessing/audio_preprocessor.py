@@ -1,6 +1,7 @@
 import json
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 TARGET_SAMPLE_RATE = 44100
 
@@ -13,6 +14,9 @@ def preprocess_audio(input_path: Path, output_path: Path) -> Path:
     - 44.1 kHz
     - PCM 16-bit
     """
+
+    input_path = _require_local_path(input_path, "Input audio")
+    output_path = _require_local_path(output_path, "Output audio")
 
     if not input_path.exists():
         raise FileNotFoundError(f"Input audio not found: {input_path}")
@@ -50,10 +54,13 @@ def preprocess_audio(input_path: Path, output_path: Path) -> Path:
 
     return output_path
 
+
 def get_audio_metadata(audio_path: Path) -> dict[str, object]:
     """
     Extract technical audio metadata using ffprobe.
     """
+
+    audio_path = _require_local_path(audio_path, "Audio")
 
     if not audio_path.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
@@ -107,6 +114,17 @@ def get_audio_metadata(audio_path: Path) -> dict[str, object]:
         "version": _optional_tag(tags.get("version")),
         "comment": _optional_tag(tags.get("comment")),
     }
+
+
+def _require_local_path(path: Path, label: str) -> Path:
+    candidate = Path(path)
+    candidate_text = str(candidate)
+    if (
+        urlsplit(candidate_text).scheme
+        or candidate_text.casefold().startswith("subfile,,")
+    ):
+        raise ValueError(f"{label} must be a local filesystem path: {candidate}")
+    return candidate
 
 
 def _optional_tag(value: object) -> str | None:

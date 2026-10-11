@@ -8,6 +8,9 @@ from backend.api.app.services.analysis_job_queue import (
     QueueMessageError,
 )
 from backend.api.app.services.aws_errors import translate_provider_error
+from backend.api.app.services.visibility_heartbeat import (
+    DEFAULT_VISIBILITY_POLICY,
+)
 
 
 class SqsAnalysisJobQueue:
@@ -17,7 +20,9 @@ class SqsAnalysisJobQueue:
         queue_url: str,
         *,
         wait_time_seconds: int = 20,
-        visibility_timeout_seconds: int = 900,
+        visibility_timeout_seconds: int = (
+            DEFAULT_VISIBILITY_POLICY.initial_timeout_seconds
+        ),
     ) -> None:
         if not queue_url.strip():
             raise ValueError("SQS analysis queue URL is required")

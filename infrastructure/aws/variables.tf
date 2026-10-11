@@ -26,20 +26,46 @@ variable "environment" {
   }
 }
 
-variable "worker_image_tag" {
-  description = "Worker image tag used by the task-definition skeleton."
+variable "worker_image_digest" {
+  description = <<-EOT
+    Content digest of the approved ARM64 worker image in the worker ECR
+    repository. Tags are deliberately not accepted: the task definition must
+    reference one immutable, scanned image. Changing this value requires a
+    matching approved entry in docs/security/container-exceptions.md.
+  EOT
   type        = string
-  default     = "latest"
+  # worker-f548bd0-runtime1; CRITICAL-finding exception expires 2026-11-09.
+  default = "sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c"
+
+  validation {
+    condition     = can(regex("^sha256:[0-9a-f]{64}$", var.worker_image_digest))
+    error_message = "worker_image_digest must be an exact sha256 digest, not a tag."
+  }
+}
+
+variable "model_release_id" {
+  description = <<-EOT
+    Model asset release the worker installs at startup. The worker reads
+    models/releases/<id>/manifest.json and refuses to poll the queue unless
+    every required asset verifies against the manifest's SHA-256 values.
+  EOT
+  type        = string
+  default     = "2026.10.1"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9._-]{0,63}$", var.model_release_id))
+    error_message = "model_release_id must be 1-64 lowercase letters, digits, '.', '_' or '-'."
+  }
 }
 
 variable "worker_cpu_units" {
-  description = "ECS CPU units reserved by the worker task skeleton."
+  description = "ECS CPU units for the CPU-only ARM64 worker (4096 = 4 vCPU)."
   type        = number
   default     = 4096
 }
 
 variable "worker_memory_mib" {
-  description = "Memory reserved by the worker task skeleton."
+  description = "Memory for the worker task; 16 GiB is valid with 4 vCPU on Fargate."
   type        = number
   default     = 16384
 }

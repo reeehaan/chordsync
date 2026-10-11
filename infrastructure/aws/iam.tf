@@ -84,6 +84,14 @@ data "aws_iam_policy_document" "worker" {
   }
 
   statement {
+    # Model bootstrap reads the release manifest and verified model assets.
+    # Read-only; the worker never lists, writes, or deletes under models/.
+    sid       = "ReadModelAssets"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.artifacts.arn}/models/*"]
+  }
+
+  statement {
     sid = "ConsumeAnalysisQueue"
     actions = [
       "sqs:ChangeMessageVisibility",

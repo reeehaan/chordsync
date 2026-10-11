@@ -14,6 +14,9 @@ from backend.api.app.services.aws_errors import (
     CloudProviderErrorKind,
 )
 from backend.api.app.services.sqs_analysis_job_queue import SqsAnalysisJobQueue
+from backend.api.app.services.visibility_heartbeat import (
+    DEFAULT_VISIBILITY_POLICY,
+)
 from tests.test_aws_cloud_adapters import FakeAwsError
 
 
@@ -136,7 +139,10 @@ def test_sqs_enqueue_receive_ack_and_long_poll_shape():
     assert json.loads(client.calls[0][1]["MessageBody"])["schema_version"] == 1
     receive = client.calls[1][1]
     assert receive["WaitTimeSeconds"] == 20
-    assert receive["VisibilityTimeout"] == 900
+    assert receive["VisibilityTimeout"] == (
+        DEFAULT_VISIBILITY_POLICY.initial_timeout_seconds
+    )
+    assert receive["VisibilityTimeout"] == 1800
     assert delivery.descriptor == _descriptor()
     assert queue.receive() is None
 

@@ -28,6 +28,16 @@ output "worker_task_definition_arn" {
   value       = aws_ecs_task_definition.worker.arn
 }
 
+output "worker_security_group_id" {
+  description = "Egress-only security group for worker RunTask network configuration."
+  value       = aws_security_group.analysis_worker.id
+}
+
+output "worker_task_subnet_ids" {
+  description = "Public default-VPC subnets for worker RunTask (assignPublicIp=ENABLED)."
+  value       = data.aws_subnets.worker_public.ids
+}
+
 output "worker_ecr_repository_url" {
   description = "Private worker image repository URL."
   value       = aws_ecr_repository.worker.repository_url
