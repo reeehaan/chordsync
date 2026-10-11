@@ -380,7 +380,8 @@ def test_optional_reference_payload_is_not_logged_or_persisted(
     )
 
     processor = RealAnalysisProcessor(config, FakePipelineRunner())
-    timeline = processor.process(input_path)
+    outcome = processor.analyze(input_path)
+    timeline = outcome.timeline
 
     persisted_text = "".join(
         path.read_text(encoding="utf-8", errors="ignore")
@@ -389,7 +390,7 @@ def test_optional_reference_payload_is_not_logged_or_persisted(
     )
     assert lyric_marker not in persisted_text
     assert lyric_marker not in caplog.text
-    assert processor.last_lyrics_verification_diagnostics is not None
+    assert outcome.lyrics_verification_diagnostics is not None
 
 
 def test_trusted_reference_uses_safely_corrected_transcript_for_fusion(
@@ -433,7 +434,8 @@ def test_trusted_reference_uses_safely_corrected_transcript_for_fusion(
         runner,
         reference_aligner=Aligner(),
     )
-    timeline = processor.process(input_path)
+    outcome = processor.analyze(input_path)
+    timeline = outcome.timeline
 
     fuse_call = next(
         call for call in runner.calls if runner._stage(call.argv) == "fuse"
@@ -444,7 +446,7 @@ def test_trusted_reference_uses_safely_corrected_transcript_for_fusion(
     assert not (config.workspace_root / "job-one/whisperx/vocals.verified.json").exists()
     assert corrected == {"word": "cross", "start": 0.92, "end": 1.18}
     assert timeline.lyrics[0].words[2].text == "cross"
-    assert len(processor.last_lyrics_timing_provenance) == 1
+    assert len(outcome.lyrics_timing_provenance) == 1
 
 
 def test_btc_estimator_uses_isolated_python_and_explicit_model_paths(
@@ -749,11 +751,12 @@ def test_non_english_multilingual_lyrics_skips_english_reference_alignment(
         runner,
         reference_aligner=EnglishOnlyAligner(),
     )
-    timeline = processor.process(input_path)
+    outcome = processor.analyze(input_path)
+    timeline = outcome.timeline
 
     assert timeline.lyrics[0].words[0].text == "mhasmumd"
     assert alignment_calls == []
-    assert processor.last_lyrics_verification_diagnostics is None
+    assert outcome.lyrics_verification_diagnostics is None
 
 
 def test_disabled_music_only_preserves_timeline_and_skips_diagnostics(

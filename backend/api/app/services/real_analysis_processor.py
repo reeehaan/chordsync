@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -19,8 +19,14 @@ from analysis.lyrics.lrclib_transport import (
     DEFAULT_USER_AGENT,
     LrclibTransport,
 )
-from analysis.lyrics.lyrics_api_reference import LyricsReferenceResult
+from analysis.lyrics.lyrics_api_reference import (
+    IdentityConfidence,
+    LyricsReferenceResult,
+)
 from analysis.lyrics.production_verification import (
+    CorrectionTimingProvenance,
+    LyricsVerificationDiagnostics,
+    ProductionLyricsVerificationResult,
     ReferenceAligner,
     verify_and_correct_whisperx,
 )
@@ -179,6 +185,79 @@ class AnalysisPipelineConfig:
         )
 
 
+@dataclass(frozen=True)
+class JobWorkspace:
+    """Layout of one job's disposable working files."""
+
+    root: Path
+    demucs_model: str
+
+    @property
+    def normalized_audio(self) -> Path:
+        return self.root / "normalized.wav"
+
+    @property
+    def chords(self) -> Path:
+        return self.root / "chords.json"
+
+    @property
+    def btc_uncertainty(self) -> Path:
+        return self.root / "btc_uncertainty.json"
+
+    @property
+    def chordino_diagnostic(self) -> Path:
+        return self.root / "chordino_diagnostic.json"
+
+    @property
+    def practice_regions(self) -> Path:
+        return self.root / "practice_regions.json"
+
+    @property
+    def beats(self) -> Path:
+        return self.root / "beats.json"
+
+    @property
+    def separation_directory(self) -> Path:
+        return self.root / "separated"
+
+    @property
+    def vocals(self) -> Path:
+        return (
+            self.separation_directory
+            / self.demucs_model
+            / self.normalized_audio.stem
+            / "vocals.wav"
+        )
+
+    @property
+    def whisperx_directory(self) -> Path:
+        return self.root / "whisperx"
+
+    @property
+    def whisperx(self) -> Path:
+        return self.whisperx_directory / f"{self.vocals.stem}.json"
+
+    @property
+    def timeline(self) -> Path:
+        return self.root / "timeline.json"
+
+
+@dataclass(frozen=True)
+class AnalysisOutcome:
+    """A finished analysis: the timeline plus optional lyrics diagnostics."""
+
+    timeline: SharedTimeline
+    reference_identity_confidence: IdentityConfidence | None = None
+    lyrics_verification_diagnostics: LyricsVerificationDiagnostics | None = None
+    lyrics_timing_provenance: tuple[CorrectionTimingProvenance, ...] = ()
+
+
+@dataclass(frozen=True)
+class _FusionLyrics:
+    whisperx_path: Path
+    verification: ProductionLyricsVerificationResult | None = None
+
+
 class RealAnalysisProcessor:
     def __init__(
         self,
@@ -189,142 +268,188 @@ class RealAnalysisProcessor:
         self._config = config or AnalysisPipelineConfig.local()
         self._runner = runner or LocalSubprocessRunner()
         self._reference_aligner = reference_aligner
-        self.last_reference_identity_confidence = None
-        self.last_lyrics_verification_diagnostics = None
-        self.last_lyrics_timing_provenance = ()
 
     def process(self, input_path: Path) -> SharedTimeline:
-        self.last_reference_identity_confidence = None
-        self.last_lyrics_verification_diagnostics = None
-        self.last_lyrics_timing_provenance = ()
+        return self.analyze(input_path).timeline
+
+    def analyze(self, input_path: Path) -> AnalysisOutcome:
         if not input_path.is_file():
             raise AnalysisPipelineError("input stage output is missing")
-        if self._config.chord_estimator is ChordEstimator.BTC:
-            if not all(
-                (
-                    self._config.btc_python,
-                    self._config.btc_checkpoint,
-                    self._config.btc_source,
-                )
-            ):
-                raise AnalysisPipelineError("BTC is not configured")
+        self._require_configured_chord_estimator()
 
         job_id = input_path.parent.name
         reference = self._obtain_optional_lyrics_reference(input_path, job_id)
-        workspace = self._config.workspace_root / job_id
-        try:
-            workspace.mkdir(parents=True, exist_ok=False)
-        except OSError as error:
-            raise AnalysisPipelineError("workspace stage failed") from error
+        workspace = self._create_workspace(job_id)
 
-        normalized_path = workspace / "normalized.wav"
-        chord_path = workspace / "chords.json"
-        btc_uncertainty_path = workspace / "btc_uncertainty.json"
-        chordino_diagnostic_path = workspace / "chordino_diagnostic.json"
-        practice_regions_path = workspace / "practice_regions.json"
-        beat_path = workspace / "beats.json"
-        separation_directory = workspace / "separated"
-        vocals_path = (
-            separation_directory
-            / self._config.demucs_model
-            / normalized_path.stem
-            / "vocals.wav"
-        )
-        whisperx_directory = workspace / "whisperx"
-        whisperx_path = whisperx_directory / f"{vocals_path.stem}.json"
-        timeline_path = workspace / "timeline.json"
-
-        self._run_stage(
-            "preprocess",
-            [
-                str(self._config.api_python),
-                "-m",
-                self._config.stage_module,
-                "preprocess",
-                "--input",
-                str(input_path),
-                "--output",
-                str(normalized_path),
-            ],
-            self._config.preprocessing_timeout,
-            normalized_path,
-            json_output=False,
-        )
+        self._run_preprocess(input_path, workspace)
         self._run_stage(
             "chords",
-            self._chord_command(normalized_path, chord_path),
+            self._chord_command(workspace.normalized_audio, workspace.chords),
             self._config.chord_timeout,
-            chord_path,
+            workspace.chords,
         )
+        self._run_beats(workspace)
+        practice_regions = self._run_practice_regions(workspace, job_id)
+        self._run_separation(workspace)
+        self._run_lyrics(workspace, job_id)
+        with tempfile.TemporaryDirectory(
+            prefix="chordsync-verified-lyrics-"
+        ) as temporary_directory:
+            lyrics = self._prepare_fusion_lyrics(
+                reference,
+                workspace,
+                Path(temporary_directory),
+                job_id,
+            )
+            self._run_fusion_stage(
+                workspace.chords,
+                workspace.beats,
+                lyrics.whisperx_path,
+                workspace.timeline,
+                practice_regions,
+            )
+
+        verification = lyrics.verification
+        return AnalysisOutcome(
+            timeline=self._read_timeline(workspace.timeline),
+            reference_identity_confidence=getattr(
+                reference, "identity_confidence", None
+            ),
+            lyrics_verification_diagnostics=(
+                verification.diagnostics if verification else None
+            ),
+            lyrics_timing_provenance=(
+                verification.timing_provenance if verification else ()
+            ),
+        )
+
+    def _require_configured_chord_estimator(self) -> None:
+        if self._config.chord_estimator is not ChordEstimator.BTC:
+            return
+        if not all(
+            (
+                self._config.btc_python,
+                self._config.btc_checkpoint,
+                self._config.btc_source,
+            )
+        ):
+            raise AnalysisPipelineError("BTC is not configured")
+
+    def _create_workspace(self, job_id: str) -> JobWorkspace:
+        workspace = JobWorkspace(
+            self._config.workspace_root / job_id,
+            self._config.demucs_model,
+        )
+        try:
+            workspace.root.mkdir(parents=True, exist_ok=False)
+        except OSError as error:
+            raise AnalysisPipelineError("workspace stage failed") from error
+        return workspace
+
+    def _run_preprocess(self, input_path: Path, workspace: JobWorkspace) -> None:
+        self._run_stage(
+            "preprocess",
+            self._module_command(
+                self._config.api_python,
+                "preprocess",
+                input_path,
+                workspace.normalized_audio,
+            ),
+            self._config.preprocessing_timeout,
+            workspace.normalized_audio,
+            json_output=False,
+        )
+
+    def _run_beats(self, workspace: JobWorkspace) -> None:
         self._run_stage(
             "beats",
             self._module_command(
                 self._config.beat_python,
                 "beats",
-                normalized_path,
-                beat_path,
+                workspace.normalized_audio,
+                workspace.beats,
             ),
             self._config.beat_timeout,
-            beat_path,
+            workspace.beats,
         )
-        practice_regions_available = False
+
+    def _run_practice_regions(
+        self,
+        workspace: JobWorkspace,
+        job_id: str,
+    ) -> Path | None:
+        """Optional MUSIC_ONLY diagnostics; returns the regions file if made."""
         if not self._config.music_only_enabled:
             logger.info("[job %s] music_only_enabled=false", job_id)
-        elif self._config.chord_estimator is ChordEstimator.BTC:
-            chordino_available = False
-            if self._config.vamp_simple_host_executable is None:
-                logger.warning(
-                    "[job %s] chordino diagnostic unavailable; "
-                    "vamp-simple-host was not found; continuing without "
-                    "practice_regions",
-                    job_id,
-                )
-            else:
-                chordino_available = self._run_optional_stage(
-                    "chordino diagnostic",
-                    [
-                        str(self._config.api_python),
-                        "-m",
-                        self._config.stage_module,
-                        "chordino-diagnostic",
-                        "--input",
-                        str(normalized_path),
-                        "--output",
-                        str(chordino_diagnostic_path),
-                        "--executable",
-                        str(self._config.vamp_simple_host_executable),
-                    ],
-                    self._config.chord_timeout,
-                    chordino_diagnostic_path,
-                )
-            if _has_nonempty_json_list(btc_uncertainty_path) and chordino_available:
-                practice_regions_available = self._run_optional_stage(
-                    "strumming suitability",
-                    [
-                        str(self._config.api_python),
-                        "-m",
-                        self._config.stage_module,
-                        "strumming-suitability",
-                        "--chords",
-                        str(chord_path),
-                        "--chordino",
-                        str(chordino_diagnostic_path),
-                        "--beats",
-                        str(beat_path),
-                        "--uncertainty",
-                        str(btc_uncertainty_path),
-                        "--output",
-                        str(practice_regions_path),
-                    ],
-                    self._config.fusion_timeout,
-                    practice_regions_path,
-                )
-            else:
-                logger.warning(
-                    "[job %s] strumming suitability diagnostics unavailable; "
-                    "continuing without practice_regions",
-                    job_id,
-                )
+            return None
+        if self._config.chord_estimator is not ChordEstimator.BTC:
+            return None
+        chordino_available = self._run_chordino_diagnostic(workspace, job_id)
+        if not (
+            _has_nonempty_json_list(workspace.btc_uncertainty)
+            and chordino_available
+        ):
+            logger.warning(
+                "[job %s] strumming suitability diagnostics unavailable; "
+                "continuing without practice_regions",
+                job_id,
+            )
+            return None
+        produced = self._run_optional_stage(
+            "strumming suitability",
+            [
+                str(self._config.api_python),
+                "-m",
+                self._config.stage_module,
+                "strumming-suitability",
+                "--chords",
+                str(workspace.chords),
+                "--chordino",
+                str(workspace.chordino_diagnostic),
+                "--beats",
+                str(workspace.beats),
+                "--uncertainty",
+                str(workspace.btc_uncertainty),
+                "--output",
+                str(workspace.practice_regions),
+            ],
+            self._config.fusion_timeout,
+            workspace.practice_regions,
+        )
+        return workspace.practice_regions if produced else None
+
+    def _run_chordino_diagnostic(
+        self,
+        workspace: JobWorkspace,
+        job_id: str,
+    ) -> bool:
+        if self._config.vamp_simple_host_executable is None:
+            logger.warning(
+                "[job %s] chordino diagnostic unavailable; "
+                "vamp-simple-host was not found; continuing without "
+                "practice_regions",
+                job_id,
+            )
+            return False
+        return self._run_optional_stage(
+            "chordino diagnostic",
+            [
+                str(self._config.api_python),
+                "-m",
+                self._config.stage_module,
+                "chordino-diagnostic",
+                "--input",
+                str(workspace.normalized_audio),
+                "--output",
+                str(workspace.chordino_diagnostic),
+                "--executable",
+                str(self._config.vamp_simple_host_executable),
+            ],
+            self._config.chord_timeout,
+            workspace.chordino_diagnostic,
+        )
+
+    def _run_separation(self, workspace: JobWorkspace) -> None:
         self._run_stage(
             "separate",
             [
@@ -336,16 +461,18 @@ class RealAnalysisProcessor:
                 "-d",
                 "cpu",
                 "-o",
-                str(separation_directory),
-                str(normalized_path),
+                str(workspace.separation_directory),
+                str(workspace.normalized_audio),
             ],
             self._config.separation_timeout,
-            vocals_path,
+            workspace.vocals,
             json_output=False,
         )
+
+    def _run_lyrics(self, workspace: JobWorkspace, job_id: str) -> None:
         lyrics_command = [
             str(self._config.whisperx_executable),
-            str(vocals_path),
+            str(workspace.vocals),
             "--model",
             self._config.whisperx_model,
         ]
@@ -358,7 +485,7 @@ class RealAnalysisProcessor:
                 "--compute_type",
                 "int8",
                 "--output_dir",
-                str(whisperx_directory),
+                str(workspace.whisperx_directory),
                 "--output_format",
                 "json",
                 "--verbose",
@@ -369,39 +496,43 @@ class RealAnalysisProcessor:
             "lyrics",
             lyrics_command,
             self._config.lyric_timeout,
-            whisperx_path,
+            workspace.whisperx,
             retry_without_alignment=self._config.multilingual_lyrics_enabled,
         )
         if self._config.multilingual_lyrics_enabled:
             self._retry_misdetected_sinhala(
                 lyrics_command,
-                whisperx_path,
+                workspace.whisperx,
                 job_id,
-            )
-        with tempfile.TemporaryDirectory(
-            prefix="chordsync-verified-lyrics-"
-        ) as temporary_directory:
-            fusion_whisperx_path = self._verify_optional_lyrics(
-                reference,
-                whisperx_path,
-                Path(temporary_directory) / "vocals.verified.json",
-                vocals_path,
-                job_id,
-            )
-            if self._config.multilingual_lyrics_enabled:
-                fusion_whisperx_path = self._romanize_optional_lyrics(
-                    fusion_whisperx_path,
-                    Path(temporary_directory) / "vocals.romanized.json",
-                    job_id,
-                )
-            self._run_fusion_stage(
-                chord_path,
-                beat_path,
-                fusion_whisperx_path,
-                timeline_path,
-                practice_regions_path if practice_regions_available else None,
             )
 
+    def _prepare_fusion_lyrics(
+        self,
+        reference: LyricsReferenceResult | None,
+        workspace: JobWorkspace,
+        temporary_directory: Path,
+        job_id: str,
+    ) -> _FusionLyrics:
+        lyrics = self._verify_optional_lyrics(
+            reference,
+            workspace.whisperx,
+            temporary_directory / "vocals.verified.json",
+            workspace.vocals,
+            job_id,
+        )
+        if not self._config.multilingual_lyrics_enabled:
+            return lyrics
+        return replace(
+            lyrics,
+            whisperx_path=self._romanize_optional_lyrics(
+                lyrics.whisperx_path,
+                temporary_directory / "vocals.romanized.json",
+                job_id,
+            ),
+        )
+
+    @staticmethod
+    def _read_timeline(timeline_path: Path) -> SharedTimeline:
         try:
             payload = json.loads(timeline_path.read_text(encoding="utf-8"))
             return SharedTimeline.model_validate(payload)
@@ -435,12 +566,6 @@ class RealAnalysisProcessor:
             job_id,
             "matched" if reference is not None else "unavailable",
         )
-        if reference is not None:
-            self.last_reference_identity_confidence = getattr(
-                reference,
-                "identity_confidence",
-                None,
-            )
         return reference
 
     def _verify_optional_lyrics(
@@ -450,9 +575,10 @@ class RealAnalysisProcessor:
         verified_whisperx_path: Path,
         audio_path: Path,
         job_id: str,
-    ) -> Path:
+    ) -> _FusionLyrics:
         if reference is None:
-            return whisperx_path
+            return _FusionLyrics(whisperx_path)
+        verification: ProductionLyricsVerificationResult | None = None
         try:
             whisperx_result = json.loads(whisperx_path.read_text(encoding="utf-8"))
             language = str(whisperx_result.get("language", "")).casefold()
@@ -466,7 +592,7 @@ class RealAnalysisProcessor:
                     job_id,
                     language or "unknown",
                 )
-                return whisperx_path
+                return _FusionLyrics(whisperx_path)
             aligner = self._reference_aligner or WhisperXReferenceAligner(
                 python_executable=(
                     self._config.whisperx_executable.parent / "python"
@@ -474,15 +600,13 @@ class RealAnalysisProcessor:
                 repo_root=self._config.repo_root,
                 timeout_seconds=self._config.lyric_timeout,
             )
-            result = verify_and_correct_whisperx(
+            verification = verify_and_correct_whisperx(
                 whisperx_result,
                 reference.plain_lyrics,
                 audio_path,
                 aligner,
             )
-            diagnostics = result.diagnostics
-            self.last_lyrics_verification_diagnostics = diagnostics
-            self.last_lyrics_timing_provenance = result.timing_provenance
+            diagnostics = verification.diagnostics
             logger.info(
                 "[job %s] lyrics verification: matches=%d substitutions=%d "
                 "insertions=%d deletions=%d candidates=%d forced_candidates=%d "
@@ -505,13 +629,13 @@ class RealAnalysisProcessor:
                 diagnostics.raw_wer,
                 diagnostics.corrected_wer,
             )
-            if not result.changed:
-                return whisperx_path
+            if not verification.changed:
+                return _FusionLyrics(whisperx_path, verification)
             verified_whisperx_path.write_text(
-                json.dumps(result.whisperx_result, indent=2),
+                json.dumps(verification.whisperx_result, indent=2),
                 encoding="utf-8",
             )
-            return verified_whisperx_path
+            return _FusionLyrics(verified_whisperx_path, verification)
         except Exception as error:
             logger.warning(
                 "[job %s] optional lyrics verification unavailable (%s); "
@@ -519,7 +643,7 @@ class RealAnalysisProcessor:
                 job_id,
                 type(error).__name__,
             )
-            return whisperx_path
+            return _FusionLyrics(whisperx_path, verification)
 
     def _romanize_optional_lyrics(
         self,
