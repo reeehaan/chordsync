@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
@@ -51,48 +52,66 @@ from backend.api.app.services.analysis_input_storage import (
 
 router = APIRouter(prefix="/analysis/jobs", tags=["Analysis jobs"])
 
-_repository = InMemoryAnalysisJobRepository()
-_input_storage = LocalAnalysisInputStorage()
-_service = AnalysisJobService(_repository, _input_storage)
-_executor = InProcessAnalysisJobExecutor(
-    _service,
-    _input_storage,
-    RealAnalysisProcessor(),
-)
+
+# Components are composed on first use and then reused for the process
+# lifetime, so importing this module has no side effects. Tests replace the
+# get_* dependencies through app.dependency_overrides.
+
+
+@lru_cache(maxsize=1)
+def _runtime_config() -> CloudRuntimeConfig:
+    return CloudRuntimeConfig.from_env()
+
+
+@lru_cache(maxsize=1)
+def _local_input_storage() -> LocalAnalysisInputStorage:
+    return LocalAnalysisInputStorage()
+
+
+@lru_cache(maxsize=1)
+def _local_job_service() -> AnalysisJobService:
+    return AnalysisJobService(
+        InMemoryAnalysisJobRepository(),
+        _local_input_storage(),
+    )
+
+
+@lru_cache(maxsize=1)
+def _local_job_executor() -> AnalysisJobExecutor:
+    return InProcessAnalysisJobExecutor(
+        _local_job_service(),
+        _local_input_storage(),
+        RealAnalysisProcessor(),
+    )
+
+
+@lru_cache(maxsize=1)
+def _cloud_application(config: CloudRuntimeConfig) -> AnalysisApplication:
+    runtime = compose_cloud_runtime(config)
+    return CloudAnalysisApplication(
+        runtime.repository,
+        runtime.artifact_storage,
+        compose_analysis_dispatcher(config, runtime),
+        LocalAnalysisInputStorage(config.storage_root / "cloud_api_staging"),
+    )
 
 
 def get_analysis_job_service() -> AnalysisJobService:
-    return _service
+    return _local_job_service()
 
 
 def get_analysis_job_executor() -> AnalysisJobExecutor:
-    return _executor
-
-
-_cloud_application: AnalysisApplication | None = None
+    return _local_job_executor()
 
 
 def get_analysis_application_service(
     service: AnalysisJobService = Depends(get_analysis_job_service),
     executor: AnalysisJobExecutor = Depends(get_analysis_job_executor),
 ) -> AnalysisApplication:
-    config = CloudRuntimeConfig.from_env()
+    config = _runtime_config()
     if config.mode is RuntimeMode.LOCAL:
         return LocalAnalysisApplication(service, executor)
-    global _cloud_application
-    if _cloud_application is None:
-        runtime = compose_cloud_runtime(config)
-        dispatcher = compose_analysis_dispatcher(config, runtime)
-        staging = LocalAnalysisInputStorage(
-            config.storage_root / "cloud_api_staging"
-        )
-        _cloud_application = CloudAnalysisApplication(
-            runtime.repository,
-            runtime.artifact_storage,
-            dispatcher,
-            staging,
-        )
-    return _cloud_application
+    return _cloud_application(config)
 
 
 def error_response(status_code: int, code: str, message: str) -> JSONResponse:
