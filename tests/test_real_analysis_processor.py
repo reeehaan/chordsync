@@ -381,7 +381,6 @@ def test_optional_reference_payload_is_not_logged_or_persisted(
 
     processor = RealAnalysisProcessor(config, FakePipelineRunner())
     outcome = processor.analyze(input_path)
-    timeline = outcome.timeline
 
     persisted_text = "".join(
         path.read_text(encoding="utf-8", errors="ignore")

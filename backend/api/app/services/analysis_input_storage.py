@@ -2,7 +2,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
-from typing import BinaryIO, Callable, Protocol
+from typing import BinaryIO, Callable, Protocol, cast
 
 from analysis.preprocessing.audio_preprocessor import get_audio_metadata
 
@@ -162,4 +162,6 @@ class LocalAnalysisInputStorage:
 
 
 def _probe_duration_seconds(audio_path: Path) -> float:
-    return float(get_audio_metadata(audio_path)["duration"])
+    # ffprobe reports duration as a number or numeric string.
+    duration = cast("float | str", get_audio_metadata(audio_path)["duration"])
+    return float(duration)

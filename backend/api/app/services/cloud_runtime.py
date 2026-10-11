@@ -174,6 +174,16 @@ def compose_cloud_runtime(
         dynamodb_resource = dynamodb_resource or session.resource("dynamodb")
         sqs_client = sqs_client or session.client("sqs")
 
+    # validate() guarantees these in AWS mode; the check narrows the types.
+    if (
+        config.s3_bucket is None
+        or config.dynamodb_job_table is None
+        or config.sqs_analysis_queue_url is None
+    ):
+        raise CloudProviderError(
+            CloudProviderErrorKind.CONFIGURATION,
+            "AWS runtime configuration is incomplete",
+        )
     return CloudRuntime(
         repository=DynamoDbCloudJobRepository(
             dynamodb_resource.Table(config.dynamodb_job_table)

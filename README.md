@@ -181,6 +181,16 @@ Run the Python tests from the repository root:
 pytest
 ```
 
+Run static analysis from the repository root (tools are listed in
+`requirements-dev.txt` and configured in `pyproject.toml`):
+
+```sh
+python3.11 -m venv .venv-dev
+.venv-dev/bin/python -m pip install -r requirements-dev.txt
+.venv-dev/bin/ruff check .
+.venv-dev/bin/mypy
+```
+
 Run Flutter verification from `mobile/`:
 
 ```sh

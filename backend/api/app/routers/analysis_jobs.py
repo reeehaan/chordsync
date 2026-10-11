@@ -10,7 +10,6 @@ from backend.api.app.models.analysis_job import (
     AnalysisJobError,
     AnalysisJobErrorResponse,
     AnalysisJobResponse,
-    AnalysisJobStatus,
 )
 from backend.api.app.services.analysis_jobs import (
     AnalysisJobService,

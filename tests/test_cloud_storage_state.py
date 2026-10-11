@@ -21,7 +21,6 @@ from backend.api.app.services.cloud_job_repository import (
 )
 from backend.api.app.services.result_publication import (
     AnalysisResultPublisher,
-    PublicationError,
     PublicationRequest,
 )
 
