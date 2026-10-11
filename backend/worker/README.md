@@ -35,7 +35,7 @@ not a runtime write location, and the container runs as the non-root
 | Chordino/Vamp host and plugin | UNRESOLVED | Debian packaging/provenance and plugin discovery must be proven before enabling the optional diagnostic in this image. |
 | application source | BAKED_IN_IMAGE | Copied from the reviewed build context. |
 | BTC source | EXTERNAL_MOUNT | Upstream MIT-licensed source is not vendored by ChordSync. |
-| BTC checkpoint | EXTERNAL_MOUNT | Upstream does not clearly license pretrained checkpoint redistribution; its SHA-256 must be checked before use. |
+| BTC checkpoint | EXTERNAL_MOUNT | Not bundled in the image. Upstream states no terms for the weights; approved for non-commercial research use only within the private AWS account (`docs/licensing/btc-checkpoint.md`). Installed from private S3 by the SHA-256-verified bootstrap. |
 | madmom packaged models | BAKED_IN_IMAGE | Supplied by the pinned package in a Python 3.10 multi-stage environment; the remaining environments use Python 3.11. |
 | WhisperX model | MODEL_CACHE | Downloaded on first use into the persistent Hugging Face cache. |
 | WhisperX alignment model | MODEL_CACHE | Language-dependent first-use download. |

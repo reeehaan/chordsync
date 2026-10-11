@@ -21,7 +21,9 @@ analysis/chords/btc/.venv-btc/bin/python -m pip install \
 Keep an upstream BTC checkout and checkpoint outside Git. The upstream
 repository contains an MIT license, but does not state separate terms for its
 pretrained checkpoints. ChordSync therefore neither commits nor redistributes
-the weights. The verified upstream checkout was commit
+the weights. The project owner approved the checkpoint for non-commercial
+research use only, within ChordSync's private AWS account; see
+`docs/licensing/btc-checkpoint.md`. The verified upstream checkout was commit
 `2682317be668032e6e4b269ded36adaa2ad57df0`; verify the local 25-class model
 against `checkpoint.sha256` before use.
 

@@ -123,7 +123,7 @@ re-verify them against upstream.
 Asset | Upstream | Revision | SHA-256 | Size | Licence / redistribution
 --- | --- | --- | --- | --- | ---
 BTC source | github.com/jayg996/BTC-ISMIR19 | `2682317be668032e6e4b269ded36adaa2ad57df0` | per-file at staging | small | MIT (LICENSE in checkout). Redistribution allowed with notice.
-BTC checkpoint | same repository, `test/btc_model.pt` | same commit | `71c2c5db17e8c43b8a9a9da5db36ef2d667158c07a214eba16344c154c00bf54` | 12,154,754 | **UNRESOLVED.** No separate terms for the weights; the project README declines to redistribute them.
+BTC checkpoint | same repository, `test/btc_model.pt` | same commit | `71c2c5db17e8c43b8a9a9da5db36ef2d667158c07a214eba16344c154c00bf54` | 12,154,754 | **Approved for non-commercial research use only, within the private AWS account** (owner decision 2026-10-11, `docs/licensing/btc-checkpoint.md`). Not MIT; not redistributable.
 WhisperX ASR | huggingface.co/Systran/faster-whisper-small | `536b0662742c02347bc0e980a01041f333bce120` | `model.bin` `3e305921…d671` | 483,546,902 (model.bin) | Believed MIT (model card). Verify before staging.
 WhisperX VAD | bundled in whisperx 3.8.6 | package | in image | — | Ships in the image; not staged.
 English alignment | download.pytorch.org/torchaudio/models | torchaudio 2.8.0 bundle | `488fd4f16de84438ffc945334278c1b9fb9b7159a806c1080b16111a958c945d` | 377,664,473 | fairseq wav2vec 2.0 weights. Believed MIT. Verify before staging.
@@ -134,14 +134,16 @@ Remaining faster-whisper files: `config.json` `b55496ac…b828` (2,370 bytes),
 (459,861), and `refs/main` `8d5d066a…44c9` (40). The full staged set is about
 0.96 GB, which fits the 20 GiB ephemeral storage beside the 5.1 GB image.
 
-**BTC blocker:** the upstream MIT license covers the BTC source code. Its text
-does not mention the pretrained checkpoint, and no other evidence states terms
-for it, so the checkpoint's licensing and redistribution status is
-**unresolved**. It is not covered by MIT for this project's purposes, and no
-public or commercial redistribution is permitted. Upload to private S3 remains
-blocked pending a separate licensing decision. The bootstrap refuses assets
-marked `unresolved`, so the worker cannot run BTC until that decision is
-recorded or another chord estimator is chosen.
+**BTC checkpoint decision (2026-10-11):** the upstream MIT license covers the
+BTC source code only. Its text does not mention the pretrained checkpoint, and
+upstream says the model was trained on audio collected from online music
+services. The project owner approved the checkpoint for **non-commercial
+research use only, within ChordSync's private AWS account**. It is not
+redistributed, not bundled in the app, and not publicly accessible. This is not
+a finding that the checkpoint is MIT licensed. Its manifest entry uses
+`"license_status": "approved"`; see `docs/licensing/btc-checkpoint.md` for the
+conditions and the re-review required before any public or commercial
+release.
 
 ## Worker IAM
 
