@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from analysis.lyrics.compare_whisper_whisperx import (
+from analysis.evaluation.compare_whisper_whisperx import (
     parse_arguments as parse_comparison_arguments,
 )
-from analysis.lyrics.evaluate_word_alignment import (
+from analysis.evaluation.evaluate_word_alignment import (
     calculate_metrics,
     parse_arguments as parse_evaluation_arguments,
 )

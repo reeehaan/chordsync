@@ -57,3 +57,13 @@ Formal comparison is ready only after the harness and normalization are frozen,
 estimator versions/checksums are recorded, and several authorized real tracks
 with trusted references and complete provenance are available. Synthetic scores
 validate the workflow only and are not evidence of real-song accuracy.
+
+## Lyrics research tools
+
+Two standard-library-only lyrics research CLIs also live here. Neither is
+used by the production pipeline:
+
+- `python -m analysis.evaluation.compare_whisper_whisperx` compares Whisper
+  and WhisperX transcripts of the same clip.
+- `python -m analysis.evaluation.evaluate_word_alignment` scores word timings
+  against a locally supplied reference CSV.
