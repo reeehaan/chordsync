@@ -1,0 +1,3 @@
+# Patch files keep upstream blank context lines (" "); do not flag them as
+# trailing whitespace. Their bytes are pinned by hash in model manifests.
+analysis/chords/btc/patches/*.patch -whitespace

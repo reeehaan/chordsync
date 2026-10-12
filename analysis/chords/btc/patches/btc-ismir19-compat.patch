@@ -1,0 +1,51 @@
+diff --git a/utils/hparams.py b/utils/hparams.py
+index a78cf42..8832420 100644
+--- a/utils/hparams.py
++++ b/utils/hparams.py
+@@ -26,7 +26,7 @@ class HParams(object):
+     @classmethod
+     def load(cls, path):
+         with open(path, 'r') as f:
+-            return cls(**yaml.load(f))
++            return cls(**yaml.safe_load(f))
+ 
+ 
+ if __name__ == '__main__':
+diff --git a/utils/mir_eval_modules.py b/utils/mir_eval_modules.py
+index b385b00..957bfab 100644
+--- a/utils/mir_eval_modules.py
++++ b/utils/mir_eval_modules.py
+@@ -29,17 +29,15 @@ def idx2voca_chord():
+ def audio_file_to_features(audio_file, config):
+     original_wav, sr = librosa.load(audio_file, sr=config.mp3['song_hz'], mono=True)
+     currunt_sec_hz = 0
++    feature = None
+     while len(original_wav) > currunt_sec_hz + config.mp3['song_hz'] * config.mp3['inst_len']:
+         start_idx = int(currunt_sec_hz)
+         end_idx = int(currunt_sec_hz + config.mp3['song_hz'] * config.mp3['inst_len'])
+         tmp = librosa.cqt(original_wav[start_idx:end_idx], sr=sr, n_bins=config.feature['n_bins'], bins_per_octave=config.feature['bins_per_octave'], hop_length=config.feature['hop_length'])
+-        if start_idx == 0:
+-            feature = tmp
+-        else:
+-            feature = np.concatenate((feature, tmp), axis=1)
++        feature = tmp if feature is None else np.concatenate((feature, tmp), axis=1)
+         currunt_sec_hz = end_idx
+     tmp = librosa.cqt(original_wav[currunt_sec_hz:], sr=sr, n_bins=config.feature['n_bins'], bins_per_octave=config.feature['bins_per_octave'], hop_length=config.feature['hop_length'])
+-    feature = np.concatenate((feature, tmp), axis=1)
++    feature = tmp if feature is None else np.concatenate((feature, tmp), axis=1)
+     feature = np.log(np.abs(feature) + 1e-6)
+     feature_per_second = config.mp3['inst_len'] / config.model['timestep']
+     song_length_second = len(original_wav)/config.mp3['song_hz']
+diff --git a/utils/transformer_modules.py b/utils/transformer_modules.py
+index dd5996e..cd78123 100644
+--- a/utils/transformer_modules.py
++++ b/utils/transformer_modules.py
+@@ -27,7 +27,7 @@ def _gen_timing_signal(length, channels, min_timescale=1.0, max_timescale=1.0e4)
+             math.log(float(max_timescale) / float(min_timescale)) /
+             (float(num_timescales) - 1))
+     inv_timescales = min_timescale * np.exp(
+-        np.arange(num_timescales).astype(np.float) * -log_timescale_increment)
++        np.arange(num_timescales).astype(float) * -log_timescale_increment)
+     scaled_time = np.expand_dims(position, 1) * np.expand_dims(inv_timescales, 0)
+ 
+     signal = np.concatenate([np.sin(scaled_time), np.cos(scaled_time)], axis=1)
