@@ -7,7 +7,7 @@ import tempfile
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Protocol
+from typing import Mapping, Protocol
 
 from pydantic import ValidationError
 
@@ -69,7 +69,35 @@ class SubprocessRunner(Protocol):
     ) -> SubprocessResult: ...
 
 
+# Loopback "discard" port: nothing listens, so proxied requests fail at once.
+BLACKHOLE_PROXY = "http://127.0.0.1:9"
+_PROXY_VARIABLES = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
+
+
+def offline_stage_environment(base: Mapping[str, str]) -> dict[str, str]:
+    """Environment for analysis subprocesses that must never reach the network.
+
+    Model libraries fetch over HTTP(S) when a cached file is missing (NLTK,
+    torch hub, Hugging Face). Routing every proxy-aware client to a closed
+    loopback port makes such fallbacks fail immediately instead of reaching
+    the internet; NLTK additionally refuses unverifiable proxied fetches.
+    """
+    environment = dict(base)
+    for name in _PROXY_VARIABLES:
+        environment[name] = BLACKHOLE_PROXY
+        environment[name.lower()] = BLACKHOLE_PROXY
+    for name in ("NO_PROXY", "no_proxy", "NLTK_ALLOW_PROXIED_URLOPEN"):
+        environment.pop(name, None)
+    environment["HF_HUB_OFFLINE"] = "1"
+    environment["TRANSFORMERS_OFFLINE"] = "1"
+    return environment
+
+
 class LocalSubprocessRunner:
+    def __init__(self, environment: Mapping[str, str] | None = None) -> None:
+        # None inherits the worker's environment unchanged.
+        self._environment = dict(environment) if environment is not None else None
+
     def run(
         self,
         argv: list[str],
@@ -85,6 +113,7 @@ class LocalSubprocessRunner:
                 text=True,
                 shell=False,
                 check=False,
+                env=self._environment,
             )
         except subprocess.TimeoutExpired as error:
             raise SubprocessRunnerTimeout from error
@@ -122,6 +151,7 @@ class AnalysisPipelineConfig:
     lrclib_reference_enabled: bool = False
     lrclib_timeout: float = DEFAULT_TIMEOUT_SECONDS
     lrclib_user_agent: str = DEFAULT_USER_AGENT
+    stage_network_disabled: bool = False
 
     @classmethod
     def local(cls) -> "AnalysisPipelineConfig":
@@ -181,6 +211,9 @@ class AnalysisPipelineConfig:
             lrclib_user_agent=os.getenv(
                 "CHORDSYNC_LRCLIB_USER_AGENT",
                 DEFAULT_USER_AGENT,
+            ),
+            stage_network_disabled=(
+                os.getenv("CHORDSYNC_STAGE_NETWORK", "").casefold() == "disabled"
             ),
         )
 
@@ -266,7 +299,11 @@ class RealAnalysisProcessor:
         reference_aligner: ReferenceAligner | None = None,
     ) -> None:
         self._config = config or AnalysisPipelineConfig.local()
-        self._runner = runner or LocalSubprocessRunner()
+        self._runner = runner or LocalSubprocessRunner(
+            offline_stage_environment(os.environ)
+            if self._config.stage_network_disabled
+            else None
+        )
         self._reference_aligner = reference_aligner
 
     def process(self, input_path: Path) -> SharedTimeline:

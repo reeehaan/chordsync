@@ -34,8 +34,8 @@ variable "worker_image_digest" {
     matching approved entry in docs/security/container-exceptions.md.
   EOT
   type        = string
-  # worker-f548bd0-runtime1; CRITICAL-finding exception expires 2026-11-09.
-  default = "sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c"
+  # worker-d9ef4a3-runtime2; CRITICAL-finding exception expires 2026-11-09.
+  default = "sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa"
 
   validation {
     condition     = can(regex("^sha256:[0-9a-f]{64}$", var.worker_image_digest))

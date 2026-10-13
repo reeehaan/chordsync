@@ -77,6 +77,23 @@ COPY --from=beats-builder /usr/local/lib/libpython3.10.so.1.0 /usr/local/lib/lib
 COPY --from=beats-builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
 COPY --from=beats-builder /opt/chordsync/venvs/beats /opt/chordsync/venvs/beats
 
+# NLTK punkt_tab for WhisperX alignment: pinned commit + SHA-256 so the build
+# fails on any change, and root-owned so the runtime cannot alter it. Approved
+# for non-commercial research use (docs/licensing/nltk-punkt-tab.md).
+ADD --checksum=sha256:e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106 \
+    https://raw.githubusercontent.com/nltk/nltk_data/550b6625bcef1f2abff2ff770a5a0d272c9c6b2a/packages/tokenizers/punkt_tab.zip \
+    /tmp/punkt_tab.zip
+RUN mkdir -p /opt/chordsync/share/nltk_data/tokenizers \
+    && python -m zipfile -e /tmp/punkt_tab.zip /opt/chordsync/share/nltk_data/tokenizers \
+    && rm /tmp/punkt_tab.zip \
+    && chmod -R a+rX,go-w /opt/chordsync/share/nltk_data
+
+# Declared after the dependency layers so adding them leaves those layers
+# (and their scanned packages) unchanged.
+ENV NLTK_DATA=/opt/chordsync/share/nltk_data \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    CHORDSYNC_STAGE_NETWORK=disabled
+
 COPY analysis /opt/chordsync/app/analysis
 COPY backend /opt/chordsync/app/backend
 

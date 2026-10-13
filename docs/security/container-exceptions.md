@@ -7,12 +7,16 @@ not claim that the CVE is fixed or absent from its source package.
 
 ## Scope and approval
 
-- Bound image: `worker-f548bd0-runtime1` (S6-T13 runtime image)
-- ECR digest: `sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c`
-- ECR scan completed: 2026-10-11
-- ECR scan result: 3 CRITICAL, 18 HIGH, 7 MEDIUM, 1 LOW, 1 UNDEFINED
-- Previously bound image: `worker-24025ef0-guard2`
-  (`sha256:9c027714e07bad4bb1916f364c04c5ea2ce8545d5be41babfecdcbcbd65f11c5`), superseded; see "Re-binding record" below.
+- Bound image: `worker-d9ef4a3-runtime2` (S6-T14C offline-lyrics image)
+- ECR digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`
+- ECR scan completed: 2026-10-13
+- ECR scan result: 1 CRITICAL, 17 HIGH, 17 MEDIUM, 4 LOW. The scanner no
+  longer reports the two GnuTLS CVEs, but the installed GnuTLS package is
+  unchanged and Debian still lists it as vulnerable, so both GnuTLS exceptions
+  remain bound. See the 2026-10-13 re-binding record.
+- Previously bound images, superseded: `worker-f548bd0-runtime1`
+  (`sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c`) and `worker-24025ef0-guard2`
+  (`sha256:9c027714e07bad4bb1916f364c04c5ea2ce8545d5be41babfecdcbcbd65f11c5`).
 - Owner: ChordSync project owner
 - Approval status: **APPROVED — TIME-LIMITED — BOUND TO IMAGE DIGEST**
 - Approval date: 2026-10-10
@@ -49,9 +53,9 @@ or the worker becomes public or multi-user.
 ## CVE-2026-52490 — TIFF tiffcrop
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-f548bd0-runtime1`
-- Bound ECR digest: `sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c`
-- Scan date: 2026-10-11 (re-bound; first assessed 2026-10-10)
+- Bound image: `worker-d9ef4a3-runtime2`
+- Bound ECR digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`
+- Scan date: 2026-10-13 (re-bound; first assessed 2026-10-10)
 - Source package: `tiff`
 - Installed binary package: `libtiff6:arm64 4.7.0-3+deb13u3`
 - Affected functionality: command processing in `tools/tiffcrop.c`
@@ -97,9 +101,9 @@ Authoritative status:
 ## CVE-2026-95210 — GnuTLS certificate validation
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-f548bd0-runtime1`
-- Bound ECR digest: `sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c`
-- Scan date: 2026-10-11 (re-bound; first assessed 2026-10-10)
+- Bound image: `worker-d9ef4a3-runtime2`
+- Bound ECR digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`
+- Scan date: 2026-10-13 (re-bound; first assessed 2026-10-10)
 - Source package: `gnutls28`
 - Installed binary package: `libgnutls30t64:arm64 3.8.9-3+deb13u4`
 - Affected functionality: certificate validation in GnuTLS.
@@ -152,9 +156,9 @@ Authoritative status:
 ## CVE-2026-88647 — GnuTLS hostname verification
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-f548bd0-runtime1`
-- Bound ECR digest: `sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c`
-- Scan date: 2026-10-11 (re-bound; first assessed 2026-10-10)
+- Bound image: `worker-d9ef4a3-runtime2`
+- Bound ECR digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`
+- Scan date: 2026-10-13 (re-bound; first assessed 2026-10-10)
 - Source package: `gnutls28`
 - Installed binary package: `libgnutls30t64:arm64 3.8.9-3+deb13u4`
 - Affected operation: `gnutls_x509_crt_check_hostname2()` can fall back to a
@@ -202,6 +206,47 @@ Upstream behavior:
 <https://gitlab.com/gnutls/gnutls/-/issues/1802>
 
 ## Re-binding record
+
+### 2026-10-13 — `worker-f548bd0-runtime1` → `worker-d9ef4a3-runtime2`
+
+All three exceptions were re-bound without any change to scope, rationale,
+approval date, or the 2026-11-09 expiry.
+
+- New digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa` (linux/arm64, user `chordsync`)
+- Image changes: the first 20 layers (base images, every apt package, and
+  every Python environment) are byte-identical to runtime1. The new layers add
+  only the pinned NLTK `punkt_tab` data, the `NLTK_DATA`, `MPLCONFIGDIR`, and
+  `CHORDSYNC_STAGE_NETWORK=disabled` environment, and application code with the
+  stage network guard.
+- Installed packages: `libgnutls30t64 3.8.9-3+deb13u4`,
+  `libc6 2.41-12+deb13u4`, `libtiff6 4.7.0-3+deb13u3`, and
+  `libfreetype6 2.13.3+dfsg-1+deb13u1` are identical in both images.
+- Scan evidence: ECR scan COMPLETE 2026-10-13: 1 CRITICAL (CVE-2026-52490,
+  tiff), 17 HIGH, 17 MEDIUM, 4 LOW. No new CRITICAL. Differences from the
+  2026-10-11 runtime1 scan come from scanner database updates, not package
+  changes:
+  - The scanner no longer reports CVE-2026-95210, CVE-2026-88647, or the
+    related GnuTLS HIGH findings. On 2026-10-13 the Debian tracker still marks
+    trixie `3.8.9-3+deb13u4` vulnerable to both CRITICAL CVEs, so the GnuTLS
+    exceptions remain bound and are not treated as resolved.
+  - New glibc findings (HIGH CVE-2026-19499 `strfmon`/`strfmon_l` and HIGH
+    CVE-2026-5435 deprecated `ns_printrr`/`fp_nquery`, plus MEDIUM/LOW) and a
+    MEDIUM freetype finding apply to packages also present in runtime1. They are
+    below the CRITICAL gate and ChordSync does not call those functions
+    directly. Track them for the next base-image refresh.
+- FFmpeg/ffprobe applicability: no ChordSync call site changed. WhisperX's own
+  `whisperx.audio.load_audio` also invokes the `ffmpeg` CLI, only on the
+  worker-generated local `vocals.wav` path, which is consistent with the
+  local-file-only rationale.
+- Network posture improved: analysis subprocesses now run with every HTTP(S)
+  proxy routed to a closed loopback port (`CHORDSYNC_STAGE_NETWORK=disabled`),
+  so library download fallbacks fail without leaving the host. NLTK refuses the
+  proxied fetch before connecting. Verified in the exact image.
+- Exact-image validation: the 16 S6-T13 offline checks passed with
+  `--network none`. With networking disabled, WhisperX transcribed and aligned
+  synthetic text-to-speech (27/27 words timed). With networking available and
+  `punkt_tab` hidden, the stage failed closed and NLTK refused the download
+  (`scripts/worker_offline_lyrics_smoke.sh`).
 
 ### 2026-10-11 — `worker-24025ef0-guard2` → `worker-f548bd0-runtime1`
 

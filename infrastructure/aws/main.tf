@@ -286,6 +286,12 @@ resource "aws_ecs_task_definition" "worker" {
       # Models come only from the staged private cache; fail fast instead of
       # attempting uncontrolled Hugging Face downloads.
       { name = "HF_HUB_OFFLINE", value = "1" },
+      # Bundled NLTK punkt_tab for WhisperX alignment (read-only in the image).
+      { name = "NLTK_DATA", value = "/opt/chordsync/share/nltk_data" },
+      { name = "MPLCONFIGDIR", value = "/tmp/matplotlib" },
+      # Analysis subprocesses get no usable network: proxies point at a closed
+      # loopback port, so library download fallbacks fail immediately.
+      { name = "CHORDSYNC_STAGE_NETWORK", value = "disabled" },
       # Bootstrap installs and verifies this release before polling the queue.
       { name = "CHORDSYNC_MODEL_RELEASE", value = var.model_release_id },
       { name = "CHORDSYNC_MODEL_MANIFEST_KEY", value = "models/releases/${var.model_release_id}/manifest.json" },
