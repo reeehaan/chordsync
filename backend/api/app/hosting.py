@@ -1,8 +1,7 @@
-"""How the API process is hosted: a local development server or AWS Lambda.
+"""How the API is hosted: local dev server or AWS Lambda.
 
-Hosting mode is explicit (``CHORDSYNC_API_HOSTING_MODE``) rather than inferred
-from AWS environment variables, so a misconfigured deployment fails at startup
-instead of silently running local-only behaviour.
+The mode is set explicitly (CHORDSYNC_API_HOSTING_MODE), so a bad deployment
+fails at startup instead of quietly running local-only behaviour.
 """
 
 from __future__ import annotations
@@ -34,15 +33,13 @@ class HostingConfigurationError(RuntimeError):
 @dataclass(frozen=True)
 class ApiHostingConfig:
     mode: HostingMode
-    # Only used in Lambda mode; local mode keeps STORAGE_PATH-based paths.
+    # Lambda mode only; local mode uses STORAGE_PATH.
     staging_root: Path = DEFAULT_LAMBDA_STAGING_ROOT
-    # How long a presigned source-upload URL stays valid (hosted mode).
+    # How long a presigned upload URL stays valid.
     upload_url_ttl_seconds: int = DEFAULT_UPLOAD_URL_TTL_SECONDS
-    # SSM parameter holding the demo-token verifier document. Required when
-    # hosted (authentication cannot be switched off there); optional locally.
+    # SSM parameter with the token verifiers. Required when hosted.
     demo_token_parameter: str | None = None
-    # Local development only: the verifier document inline, to try auth without
-    # AWS. Never read in hosted mode.
+    # Local only: the verifier document inline. Ignored when hosted.
     demo_token_verifier_document: str | None = None
 
     @property
@@ -81,7 +78,7 @@ class ApiHostingConfig:
 
         runtime_mode = values.get("CHORDSYNC_RUNTIME_MODE", "").strip().casefold()
         if runtime_mode != "aws":
-            # The local runtime runs analysis in-process; never inside Lambda.
+            # The local runtime runs analysis in-process, never in Lambda.
             raise HostingConfigurationError(
                 "Lambda hosting requires CHORDSYNC_RUNTIME_MODE=aws"
             )
@@ -107,7 +104,7 @@ def _parameter_name(value: str | None, *, required: bool) -> str | None:
     name = (value or "").strip()
     if not name:
         if required:
-            # Never fall back to "no authentication".
+            # Never fall back to no authentication.
             raise HostingConfigurationError(
                 "Lambda hosting requires CHORDSYNC_DEMO_TOKEN_PARAMETER"
             )

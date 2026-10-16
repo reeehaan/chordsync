@@ -1,5 +1,5 @@
 class MediaInspectionError(Exception):
     """The file is not valid audio in a supported format.
 
-    Messages are for server-side diagnosis only and are never sent to clients.
+    The message is for server logs only and is never sent to clients.
     """

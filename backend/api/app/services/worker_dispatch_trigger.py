@@ -1,8 +1,7 @@
 """Fire-and-forget nudge to the worker dispatcher after a job is queued.
 
-The job and its SQS message are already durable when this runs, so a failure
-here must never fail job creation: the scheduled reconcile starts the worker
-instead. Nothing is wired to this in production yet.
+The job and message are already saved, so a failure here must never fail job
+creation; the scheduled run starts the worker instead.
 """
 
 from __future__ import annotations

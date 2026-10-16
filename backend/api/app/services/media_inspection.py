@@ -1,24 +1,15 @@
-"""Deterministic audio inspection for the hosted API (no ffmpeg or ffprobe).
+"""Audio inspection for the hosted API, without ffmpeg or ffprobe.
 
-The API only has to decide three things about an upload: which supported
-format it really is, how long it is, and how big it is. Detection uses the
-file's own signature, never its extension or the client's Content-Type, and
-the caller then requires the detected format to match the extension.
+The format is detected from the file contents, never the extension. The
+caller then checks it matches the extension.
 
-- WAV: a small RIFF chunk reader. The standard library ``wave`` module is not
-  used because it rejects 24-bit WAVE_FORMAT_EXTENSIBLE and 32-bit float files
-  that ffprobe (and therefore the worker pipeline) accept.
-- MP3: ``mpeg_audio``, an MPEG frame-header reader that skips ID3 tags
-  (including cover art) by their declared size and requires a run of
-  consistent frames.
-- M4A: ``mp4_audio``, an ISO base media box reader that requires every
-  top-level box to fit in the file and an AAC or Apple Lossless audio track.
+- WAV: a small RIFF chunk reader (the stdlib wave module rejects 24-bit and
+  float files that ffprobe accepts).
+- MP3: mpeg_audio, which skips ID3 tags and needs several consistent frames.
+- M4A: mp4_audio, a box reader for AAC or Apple Lossless audio.
 
-All three parsers are small, dependency-free, and read only headers.
-
-Durations come from container headers, as they do with ffprobe. A hostile file
-can understate its length; the 25 MB size cap and the worker's per-stage
-timeouts bound the consequence.
+Durations come from container headers, so a hostile file can understate its
+length. The 25 MB cap and worker timeouts limit the damage.
 """
 
 from __future__ import annotations
@@ -46,8 +37,7 @@ EXTENSION_FORMATS: Mapping[str, AudioFormat] = {
     ".wav": AudioFormat.WAV,
 }
 
-# What the server stores for a validated upload, regardless of what the client
-# declared.
+# Content type stored for a validated upload (not the client's header).
 CANONICAL_CONTENT_TYPES: Mapping[AudioFormat, str] = {
     AudioFormat.MP3: "audio/mpeg",
     AudioFormat.M4A: "audio/mp4",
@@ -97,7 +87,7 @@ def inspect_audio(path: Path) -> MediaInfo:
     except MediaInspectionError:
         raise
     except Exception as error:
-        # Parsers raise many exception types; none of them may reach a client.
+        # Parsers raise many exception types; none may reach the client.
         raise MediaInspectionError("unreadable or unsupported audio") from error
     if not math.isfinite(duration) or duration <= 0:
         raise MediaInspectionError("non-positive duration")
@@ -126,7 +116,7 @@ def _wav_duration(handle: BinaryIO, file_size: int) -> float:
             if declared > available:
                 if declared != _UNKNOWN_DATA_SIZE:
                     raise MediaInspectionError("WAV data is truncated")
-                declared = available  # streamed WAV with an unknown length
+                declared = available  # streamed WAV, unknown length
             return (declared // block_align) / sample_rate
 
         # Chunks are padded to an even size.

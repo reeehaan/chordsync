@@ -56,8 +56,7 @@ class AnalysisInputMetadata:
     content_type: str | None
     size_bytes: int
     duration_seconds: float
-    # The format found by inspecting the file's contents; it always agrees with
-    # ``extension`` for stored uploads.
+    # Format found from the file contents; matches the extension for stored uploads.
     detected_format: AudioFormat | None = None
 
 

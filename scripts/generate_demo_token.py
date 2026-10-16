@@ -1,11 +1,10 @@
-"""Generate a demo bearer token and the verifier document to store in SSM.
+"""Generate demo bearer tokens and the verifier document for SSM.
 
     python scripts/generate_demo_token.py --id tester-1 [--id tester-2 ...]
 
-Prints each token ONCE (give it to that tester; it is not stored anywhere) and
-then the verifier document, which holds only SHA-256 hashes. Store the document
-as the SecureString SSM parameter named by ``demo_token_parameter_name``; this
-script never talks to AWS. Do not commit or log the tokens.
+Each token is printed once to stderr; give it to that tester. The verifier
+document (SHA-256 hashes only) goes to stdout. Store it as the SecureString
+SSM parameter. This script never talks to AWS. Don't commit or log the tokens.
 """
 
 from __future__ import annotations

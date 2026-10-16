@@ -1,20 +1,16 @@
-"""Decide whether to start one Fargate worker; never touch the work itself.
+"""Decide whether to start one Fargate worker. Never touches the work itself.
 
-The dispatcher answers one question: is work waiting, and is a worker already
-active? It reads SQS queue *attributes* only, so it can never receive, delete,
-or hide a message; the worker stays the only consumer. It is idempotent: any
-number of invocations, from the API or a schedule, start at most one task per
-lease window.
+It only reads SQS queue attributes, so it can't receive, delete or hide a
+message. Any number of invocations start at most one task per lease window.
 
-Order of checks (cheapest and least contended first):
+Order of checks:
 
-1. queue has visible work?            no  -> ``no_work``
-2. a worker task is active?           yes -> ``worker_already_active``
-3. acquire the DynamoDB lease         no  -> ``lock_not_acquired``
-4. re-check active workers under the lease (closes the list/start race)
-5. RunTask. On success the lease is kept as a cool-down so ECS's eventually
-   consistent task list cannot show "no worker" to a second dispatcher; on
-   failure it is released so the next trigger can try at once.
+1. Is there visible work? If not: no_work.
+2. Is a worker already active? If so: worker_already_active.
+3. Take the DynamoDB lease. If not acquired: lock_not_acquired.
+4. Recheck for active workers while holding the lease.
+5. RunTask. On success the lease is kept as a short cool-down (ECS lists new
+   tasks late); on failure it is released.
 """
 
 from __future__ import annotations
@@ -28,10 +24,8 @@ from enum import Enum
 from typing import Callable, Protocol
 
 logger = logging.getLogger("chordsync.dispatcher")
-# The Lambda Python runtime leaves the root logger at WARNING, which silently
-# dropped every INFO event below. Setting the level on this logger alone lets its
-# records through to the runtime's handler without touching boto3/botocore or the
-# root logger.
+# Lambda's root logger is at WARNING, which dropped our INFO events. Set the
+# level on this logger only (not boto3 or the root logger).
 logger.setLevel(logging.INFO)
 
 REASON_JOB_DISPATCHED = "job_dispatched"
@@ -133,8 +127,7 @@ class WorkerDispatcher:
     def _dispatch(self, reason: str) -> DispatchResult:
         depth = self._look_for_work(reason)
         if depth.visible <= 0:
-            # In-flight messages belong to a live worker, or return on their own
-            # when their visibility timeout ends; the next trigger sees them.
+            # In-flight messages belong to a live worker, or reappear on their own.
             return self._finish(reason, Outcome.NO_WORK, depth=depth)
         if len(self._workers.active()) >= self._max_active:
             return self._finish(reason, Outcome.WORKER_ALREADY_ACTIVE, depth=depth)
@@ -158,7 +151,7 @@ class WorkerDispatcher:
         depth = self._queue.depth()
         if reason != REASON_JOB_DISPATCHED:
             return depth
-        # SQS counters trail a just-sent message by seconds; look again briefly.
+        # SQS counts lag a few seconds behind; look again briefly.
         for _ in range(self._recheck_attempts):
             if depth.visible > 0 or depth.in_flight > 0 or depth.delayed > 0:
                 break

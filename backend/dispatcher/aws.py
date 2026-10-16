@@ -1,8 +1,7 @@
-"""boto3 adapters for the dispatcher. Each call is the narrowest one that works.
+"""boto3 adapters for the dispatcher, using the narrowest calls that work.
 
-SQS:      GetQueueAttributes (never Receive/Delete/ChangeMessageVisibility)
-ECS:      ListTasks, DescribeTasks, RunTask
-DynamoDB: conditional PutItem and DeleteItem on one lock item
+SQS: GetQueueAttributes. ECS: ListTasks, DescribeTasks, RunTask.
+DynamoDB: conditional PutItem and DeleteItem on one lock item.
 """
 
 from __future__ import annotations
@@ -18,8 +17,8 @@ from backend.dispatcher.dispatcher import (
     RunTaskRejected,
 )
 
-# lastStatus values for a task that is, or is about to be, using the slot.
-# PENDING counts as active so two dispatchers never start duplicates.
+# Task states that count as active. PENDING counts so two dispatchers
+# never start duplicates.
 ACTIVE_TASK_STATUSES = frozenset({"PROVISIONING", "PENDING", "ACTIVATING", "RUNNING"})
 _LIST_PAGE_LIMIT = 10
 _QUEUE_ATTRIBUTES = [
@@ -93,7 +92,7 @@ class EcsWorkerTasks:
                     cluster=self._config.cluster, tasks=arns[start : start + 100]
                 )
                 for task in response.get("tasks", []):
-                    # Only this worker family counts; unrelated tasks are ignored.
+                    # Only this worker family counts.
                     definition = str(task.get("taskDefinitionArn", ""))
                     if definition.rsplit("/", 1)[-1].rsplit(":", 1)[0] != family:
                         continue
@@ -126,19 +125,17 @@ class EcsWorkerTasks:
         failures = response.get("failures") or []
         tasks = response.get("tasks") or []
         if failures or not tasks:
-            # ``reason`` is ECS's short code, e.g. "RESOURCE:FARGATE" or
-            # "Capacity is unavailable at this time".
+            # ECS's short reason, e.g. "RESOURCE:FARGATE".
             reason = str((failures[0] or {}).get("reason", "NoTaskStarted")) if failures else "NoTaskStarted"
             raise RunTaskRejected(reason[:120])
         return str(tasks[0]["taskArn"])
 
 
 class DynamoDbLease:
-    """A short lease on one item in the jobs table (key ``LOCK#worker-dispatch``).
+    """A short lease on one item in the jobs table.
 
-    Acquired by a conditional PutItem that succeeds only if the item is absent
-    or its ``expires_at`` has passed, so a crashed holder blocks nobody beyond
-    the lease.
+    Taken with a conditional PutItem that succeeds only if the item is missing or
+    expired, so a crashed holder blocks nobody past the lease.
     """
 
     def __init__(
@@ -178,5 +175,5 @@ class DynamoDbLease:
             )
         except Exception as error:
             if _code(error) in self._conflict_codes:
-                return  # the lease already expired and someone else holds it
+                return  # lease already expired; someone else holds it
             raise DependencyError(_code(error)) from error

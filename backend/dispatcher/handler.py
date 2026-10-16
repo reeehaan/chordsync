@@ -1,8 +1,7 @@
-"""AWS Lambda entry point: ``backend.dispatcher.handler.lambda_handler``.
+"""Lambda entry point: backend.dispatcher.handler.lambda_handler.
 
-The event is advisory. Only ``reason`` is read, and only to label the log line
-and to allow a brief re-read of SQS counters after an API trigger. Nothing in
-the event can select a task definition, command, image, role, network, or queue.
+Only "reason" is read from the event. Nothing in it can choose the task,
+command, image, role, network or queue.
 """
 
 from __future__ import annotations
@@ -58,5 +57,5 @@ def handle(event: Mapping[str, Any] | None, dispatcher: WorkerDispatcher) -> dic
 
 
 def lambda_handler(event: Mapping[str, Any] | None, _context: Any = None) -> dict[str, Any]:
-    # Misconfiguration raises here, which fails the invocation loudly.
+    # A bad configuration raises here and fails the invocation.
     return handle(event, _default_dispatcher())

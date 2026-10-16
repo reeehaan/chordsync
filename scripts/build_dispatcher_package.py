@@ -1,9 +1,9 @@
-"""Build the worker dispatcher Lambda zip (pure Python; boto3 comes from the runtime).
+"""Build the dispatcher Lambda zip (boto3 comes from the Lambda runtime).
 
     python scripts/build_dispatcher_package.py [output.zip]
 
-The zip holds ``backend/__init__.py`` and ``backend/dispatcher/*.py`` only, with
-fixed timestamps so the same source always produces the same bytes.
+The zip holds backend/__init__.py and backend/dispatcher/*.py, with fixed
+timestamps so the same source gives the same bytes.
 """
 
 from __future__ import annotations

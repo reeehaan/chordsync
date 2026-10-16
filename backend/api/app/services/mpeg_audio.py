@@ -1,18 +1,12 @@
-"""MPEG audio (MP3) stream inspection, written from the public frame format.
+"""MP3 (MPEG audio) inspection from the public frame format.
 
-Only headers are read; no audio is decoded. A file is accepted as MPEG audio
-only when it contains a run of consecutive, mutually consistent frame headers
-(``_REQUIRED_FRAMES`` of them), found by scanning the first megabyte after any
-ID3v2 tags. Random data, text, other media, and streams cut inside their first
-frames fail that test, so a lone frame-sync-looking byte pair is never enough.
+Only headers are read. A file counts as MP3 only if the first MiB after any
+ID3 tags holds several consecutive, consistent frame headers, so one
+frame-looking byte pair is never enough.
 
-Duration comes from a Xing/Info or VBRI frame count when the first frame
-carries one, and otherwise from the audio byte count divided by the bitrate
-(exact for constant bitrate). ID3v2 tags are skipped by their declared size,
-so embedded cover art is never read or parsed.
-
-Layout reference: the MPEG-1/2/2.5 audio frame header (ISO/IEC 11172-3 and
-13818-3) and the widely documented Xing/Info and VBRI header fields.
+Duration comes from the Xing/Info/VBRI frame count if present, otherwise from
+the audio size and bitrate. ID3 tags are skipped by their declared size, so
+cover art is never parsed.
 """
 
 from __future__ import annotations
@@ -28,14 +22,13 @@ _ID3V2_FOOTER_BYTES = 10
 _ID3V1_BYTES = 128
 _MAX_STACKED_ID3V2_TAGS = 16
 _SCAN_BYTES = 1024 * 1024
-# The largest real frame is under 2 KB; the slack lets a run that starts near
-# the end of the scan window be verified in full.
+# Real frames are under 2 KB; the slack lets a run near the window end be checked.
 _FRAME_SLACK_BYTES = 8 * 1024
 _MAX_SYNC_CANDIDATES = 1500
 _REQUIRED_FRAMES = 4
 
-# Bitrates in kbit/s by header index, keyed by (is MPEG-1, layer). Index 0 is
-# "free format" and index 15 is invalid; neither is supported.
+# Bitrates (kbit/s) by header index, keyed by (is MPEG-1, layer).
+# Index 0 (free format) and 15 (invalid) are not supported.
 _BITRATES_KBPS: dict[tuple[bool, int], tuple[int | None, ...]] = {
     (True, 1): (None, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, None),
     (True, 2): (None, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, None),
@@ -50,7 +43,7 @@ _SAMPLE_RATES: dict[int, tuple[int, int, int]] = {
     2: (22050, 24000, 16000),
     25: (11025, 12000, 8000),
 }
-# Header version bits -> version (01 is reserved) and layer bits -> layer (00 is reserved).
+# Header bits -> MPEG version and layer (the reserved values are left out).
 _VERSIONS = {0b11: 1, 0b10: 2, 0b00: 25}
 _LAYERS = {0b11: 1, 0b10: 2, 0b01: 3}
 
@@ -186,7 +179,7 @@ def _is_frame_run(window: bytes, start: int, first: _FrameHeader) -> bool:
             return False
         position += header.size
         if position > len(window):
-            return False  # the frame is cut off by the end of the file
+            return False  # frame is cut off by the end of the file
     return True
 
 

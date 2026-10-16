@@ -62,7 +62,7 @@ class CloudRuntimeConfig:
     dynamodb_job_table: str | None = None
     dispatch_mode: DispatchMode = DispatchMode.IN_PROCESS
     sqs_analysis_queue_url: str | None = None
-    # Optional: asynchronously nudge the worker dispatcher after a job is queued.
+    # Optional: nudge the worker dispatcher after a job is queued.
     worker_dispatcher_function: str | None = None
 
     @classmethod
@@ -152,7 +152,7 @@ class CloudRuntime:
     repository: CloudJobRepository
     artifact_storage: ArtifactStorage
     queue: AnalysisJobQueue | None = None
-    # Presigned source uploads (AWS runtime only).
+    # Presigned uploads (AWS runtime only).
     source_uploads: SourceUploadStore | None = None
     worker_trigger: WorkerDispatchTrigger | None = None
 
@@ -188,8 +188,7 @@ def compose_cloud_runtime(
                 "boto3 is required for AWS runtime mode",
             ) from error
         session = boto3.session.Session(region_name=config.aws_region)
-        # Signature Version 4 with the regional endpoint: presigned URLs must be
-        # SigV4 so the Content-Length and encryption headers are signed.
+        # SigV4 is required so presigned URLs sign Content-Length and encryption.
         s3_client = s3_client or session.client(
             "s3",
             config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
@@ -197,7 +196,7 @@ def compose_cloud_runtime(
         dynamodb_resource = dynamodb_resource or session.resource("dynamodb")
         sqs_client = sqs_client or session.client("sqs")
 
-    # validate() guarantees these in AWS mode; the check narrows the types.
+    # validate() guarantees these in AWS mode; this narrows the types.
     if (
         config.s3_bucket is None
         or config.dynamodb_job_table is None

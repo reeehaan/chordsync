@@ -58,9 +58,8 @@ from backend.api.app.services.source_upload_store import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_UPLOAD_URL_TTL_SECONDS = 600
-# A confirm request that dies mid-validation (Lambda timeout, crash) leaves the
-# job VALIDATING. After this lease, another confirm may take it over. It must
-# exceed the API function's timeout so a live request is never taken over.
+# If a confirm dies mid-validation the job stays VALIDATING. After this many
+# seconds another confirm may take over (must exceed the Lambda timeout).
 VALIDATION_LEASE_SECONDS = 120
 
 
@@ -138,7 +137,7 @@ class UploadRejectedError(AnalysisInputValidationError):
 @dataclass(frozen=True)
 class ConfirmOutcome:
     response: AnalysisJobResponse
-    # False when the job had already been confirmed: nothing new was sent.
+    # False if the job was already confirmed (nothing new was sent).
     newly_confirmed: bool
 
 
@@ -174,7 +173,7 @@ class LocalAnalysisApplication:
         original_filename: str,
         content_type: str | None,
         source: BinaryIO,
-        owner_id: str | None = None,  # local jobs are not owner-scoped
+        owner_id: str | None = None,  # unused for local jobs
     ) -> AnalysisJobResponse:
         response = self._jobs.create(
             request,
@@ -228,7 +227,7 @@ class CloudAnalysisApplication:
         self._uploads = source_uploads
         self._upload_ttl = upload_url_ttl_seconds
         self._clock = clock or (lambda: datetime.now(timezone.utc))
-        # Hosted mode: a job is visible only to the principal that created it.
+        # Hosted mode: only the creator can see a job.
         self._enforce_ownership = enforce_ownership
 
     def create(
@@ -259,8 +258,7 @@ class CloudAnalysisApplication:
             self._artifacts.put_bytes(
                 source_key,
                 local_path.read_bytes(),
-                # The stored type comes from the validated file, never from the
-                # client's Content-Type header.
+                # Use the validated type, not the client's header.
                 content_type=_content_type(metadata.extension),
             )
             job.source_object_key = source_key.value
@@ -276,8 +274,7 @@ class CloudAnalysisApplication:
         try:
             self._dispatcher.dispatch(job_id)
         except CloudProviderError:
-            # QUEUED + dispatch_pending is durable and can be reconciled without
-            # another upload. Return the existing compatible queued response.
+            # Queued + dispatch_pending is saved and gets retried later.
             pass
         current = self._repository.get(job_id)
         if current is None:
@@ -298,7 +295,7 @@ class CloudAnalysisApplication:
             return True
         return owner_id is not None and job.owner_id == owner_id
 
-    # --- hosted presigned-upload lifecycle ---------------------------------
+    # --- hosted presigned upload ---
 
     def initiate_upload(
         self, request: UploadInitiationRequest, owner_id: str | None = None
@@ -306,7 +303,7 @@ class CloudAnalysisApplication:
         """Phase 1: record the job and sign one PUT. No audio passes through here."""
         uploads = self._require_uploads()
         if self._enforce_ownership and owner_id is None:
-            raise AuthenticationRequiredError  # a hosted job always has an owner
+            raise AuthenticationRequiredError  # hosted jobs need an owner
         extension = _extension_of(request.filename)
         canonical = _content_type(extension)
         _check_declared_content_type(request.content_type, extension)
@@ -316,7 +313,7 @@ class CloudAnalysisApplication:
             raise AudioTooLargeError
 
         job_id = str(uuid4())
-        # The key is derived here from the job ID and validated extension only.
+        # The key comes only from the job ID and the checked extension.
         key = ArtifactKeyFactory().source(job_id, extension)
         expires_at = self._clock() + timedelta(seconds=self._upload_ttl)
         presigned = uploads.presign_put(
@@ -332,7 +329,7 @@ class CloudAnalysisApplication:
         job.declared_size_bytes = request.declared_size_bytes
         job.upload_expires_at = expires_at
         job.transition_to(CloudJobStatus.AWAITING_UPLOAD, stage="upload_pending")
-        self._repository.add(job)  # one atomic write; nothing is queued yet
+        self._repository.add(job)  # nothing is queued yet
         return UploadInitiationResponse(
             job_id=job_id,
             status=AnalysisJobStatus.AWAITING_UPLOAD,
@@ -348,8 +345,7 @@ class CloudAnalysisApplication:
     ) -> ConfirmOutcome:
         """Phase 2: validate the uploaded object, then queue the job exactly once.
 
-        A job owned by someone else is reported as not found, before any state
-        change, S3 call, or SQS message.
+        Someone else's job is reported as not found, before anything changes.
         """
         uploads = self._require_uploads()
         job = self._claim_for_validation(job_id, owner_id)
@@ -360,10 +356,10 @@ class CloudAnalysisApplication:
     def _claim_for_validation(
         self, job_id: str, owner_id: str | None
     ) -> CloudJobRecord | ConfirmOutcome:
-        """Move AWAITING_UPLOAD (or an abandoned VALIDATING) to VALIDATING.
+        """Move the job to VALIDATING (or take over an abandoned validation).
 
-        The versioned conditional save lets exactly one caller win; the others
-        see the new state and are answered without touching S3 or SQS.
+        A versioned write lets only one caller win; the rest are answered without
+        touching S3 or SQS.
         """
         for _ in range(3):
             job = self._repository.get(job_id)
@@ -379,7 +375,7 @@ class CloudAnalysisApplication:
             previous = job.status
             if previous is CloudJobStatus.AWAITING_UPLOAD:
                 job.transition_to(CloudJobStatus.VALIDATING, stage="validating")
-            else:  # take over an abandoned validation: refresh the lease
+            else:  # take over an abandoned validation
                 job.updated_at = self._clock()
                 job.stage = "validating"
             try:
@@ -425,7 +421,7 @@ class CloudAnalysisApplication:
             self._repository.save(job, expected_status=CloudJobStatus.VALIDATING)
             self._dispatcher.dispatch(job_id)
         except JobWriteConflictError:
-            # Another request took over after our lease lapsed. It owns dispatch.
+            # Another request took over; it handles dispatch.
             current = self._repository.get(job_id)
             if current is None:
                 raise JobNotFoundError(job_id)
@@ -433,8 +429,7 @@ class CloudAnalysisApplication:
         except CloudProviderError:
             current = self._repository.get(job_id)
             if current is not None and current.status is CloudJobStatus.QUEUED:
-                # QUEUED + dispatch_pending is durable and is reconciled later;
-                # the upload does not need to be repeated.
+                # Queued + dispatch_pending is retried later; no re-upload needed.
                 return ConfirmOutcome(_cloud_response(current), newly_confirmed=True)
             self._release(job)
             raise
@@ -451,7 +446,7 @@ class CloudAnalysisApplication:
             self._release(job)
             raise InvalidJobStateError("job has no valid source extension") from error
         if job.source_object_key != key.value:
-            # The record names a key this job would never be given.
+            # The stored key doesn't belong to this job.
             self._release(job)
             raise InvalidJobStateError("job source key does not match the job")
         return key, extension
@@ -486,12 +481,11 @@ class CloudAnalysisApplication:
         key: ArtifactKey,
         extension: str,
     ) -> AnalysisInputMetadata:
-        # /tmp persists between warm invocations: clear any leftovers first.
+        # /tmp survives between invocations, so clear leftovers first.
         self._staging.delete(job_id)
         stream = uploads.open(key)
         try:
-            # Streams with a hard size cap, then runs inspect_audio, requires the
-            # detected format to match the extension, and enforces 360 s.
+            # Stream with a size cap, then check format, extension and duration.
             return self._staging.store(
                 job_id, f"input{extension}", _content_type(extension), stream
             )
@@ -548,8 +542,8 @@ class CloudAnalysisApplication:
         try:
             self._repository.save(job, expected_status=expected)
         except (JobWriteConflictError, CloudProviderError):
-            # The lease covers a failed hand-back; a conflict means someone else
-            # already moved the job.
+            # The lease covers a failed hand-back; a conflict means someone
+            # else already moved the job.
             logger.warning("could not record a job state change")
 
     def _require_uploads(self) -> SourceUploadStore:

@@ -10,7 +10,7 @@ from typing import Any
 class CloudJobStatus(str, Enum):
     CREATED = "created"
     AWAITING_UPLOAD = "awaiting_upload"
-    # A confirm-upload request holds the job while it checks the uploaded object.
+    # Held by a confirm-upload request while it checks the uploaded object.
     VALIDATING = "validating"
     QUEUED = "queued"
     PROCESSING = "processing"
@@ -77,7 +77,7 @@ class CloudJobRecord:
     last_attempt_at: datetime | None = None
     dispatch_pending: bool = False
     version: int = 0
-    # Presigned-upload lifecycle (hosted API); unset for multipart uploads.
+    # Presigned-upload fields (hosted API); unset for multipart uploads.
     declared_size_bytes: int | None = None
     upload_expires_at: datetime | None = None
 

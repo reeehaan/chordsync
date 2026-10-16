@@ -70,9 +70,8 @@ from backend.api.app.services.analysis_input_storage import (
 )
 
 
-# Components are composed on first use and then reused for the process
-# lifetime, so importing this module has no side effects. Tests replace the
-# get_* dependencies through app.dependency_overrides.
+# Components are built on first use and reused, so importing has no side
+# effects. Tests replace the get_* dependencies via dependency_overrides.
 
 
 @lru_cache(maxsize=1)
@@ -95,7 +94,7 @@ def _local_job_service() -> AnalysisJobService:
 
 @lru_cache(maxsize=1)
 def _local_job_executor() -> AnalysisJobExecutor:
-    # Imported here so a hosted API never loads the analysis pipeline's modules.
+    # Imported here so the hosted API never loads the analysis pipeline.
     from backend.api.app.services.real_analysis_processor import RealAnalysisProcessor
 
     return InProcessAnalysisJobExecutor(
@@ -112,11 +111,9 @@ def _hosting_config() -> ApiHostingConfig:
 
 @lru_cache(maxsize=4)
 def _auth_provider(hosting: ApiHostingConfig) -> VerifierProvider | None:
-    """The token-verifier source, or None when authentication is not configured.
+    """Where token verifiers come from, or None if auth is not configured.
 
-    Hosted mode always has one (``ApiHostingConfig`` refuses to start without
-    the SSM parameter name). The SSM client is created on first use, and its
-    result is cached per warm environment by ``CachedVerifierProvider``.
+    Hosted mode always has one. The SSM client is created on first use.
     """
     if hosting.demo_token_parameter:
         try:
@@ -136,17 +133,16 @@ def get_principal(
     request: Request,
     authorization: Annotated[str | None, Header()] = None,
 ) -> AuthenticatedPrincipal | None:
-    """Authenticate the caller, or raise (401 for the caller, 503 for the verifier).
+    """Authenticate the caller: 401 for bad credentials, 503 if the verifier is down.
 
-    The hosting configuration is the one the app was built with
-    (``create_app``), so a hosted app can never run with authentication off.
+    Uses the hosting config the app was built with, so a hosted app can't run unauthenticated.
     """
     hosting = getattr(request.app.state, "hosting", None) or _hosting_config()
     provider = _auth_provider(hosting)
     if provider is None:
         if hosting.is_hosted:
             raise AuthUnavailableError("authentication is not configured")
-        return None  # local development, authentication not enabled
+        return None  # local dev, auth not enabled
     return authenticate(authorization, provider)
 
 
@@ -190,21 +186,16 @@ def get_analysis_application_service(
 
 
 def get_hosted_analysis_application() -> CloudAnalysisApplication:
-    """Lambda-hosted provider: cloud runtime only, staging under /tmp.
-
-    It has no local service/executor dependencies, so the in-process
-    analysis pipeline is never constructed in a hosted API.
-    """
+    """Hosted provider: cloud runtime only, staging under /tmp, no local pipeline."""
     config = _runtime_config()
     if config.mode is not RuntimeMode.AWS:
         raise RuntimeError("Hosted API requires the AWS runtime mode")
     return _cloud_application(config, _hosting_config().staging_root / "cloud_api_staging")
 
 
-# Local development: multipart create. Hosted (Lambda): create-upload + confirm.
-# Both share the same status and result routes.
-# Every route on both routers requires a principal (a no-op only in local mode
-# with authentication not configured), so a route added later is protected too.
+# Local: multipart create. Hosted: create-upload + confirm. Both share the
+# status and result routes. Every route needs a principal (a no-op only in
+# local mode without auth), so new routes are protected by default.
 router = APIRouter(
     prefix="/analysis/jobs", tags=["Analysis jobs"], dependencies=[Depends(get_principal)]
 )
@@ -352,7 +343,7 @@ router.include_router(_read_routes)
 hosted_router.include_router(_read_routes)
 
 
-# --- hosted presigned-upload lifecycle -----------------------------------------
+# --- hosted presigned upload ---
 
 _UPLOAD_ERRORS = {
     503: {"model": AnalysisJobErrorResponse},
@@ -409,10 +400,10 @@ def confirm_upload(
     application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
     principal: AuthenticatedPrincipal | None = Depends(get_principal),
 ) -> AnalysisJobResponse | Response:
-    """Phase 2: validate the stored object and queue the job exactly once.
+    """Phase 2: validate the stored object and queue the job once.
 
-    202 when this request queued the job; 200 with the current state when it
-    had already been confirmed (safe to retry, never a second message).
+    Returns 202 when this call queued it, or 200 with the current state if it
+    was already confirmed.
     """
     try:
         outcome = application.confirm_upload(job_id, _owner(principal))
@@ -446,7 +437,7 @@ def confirm_upload(
     except SourceArtifactStorageError:
         return error_response(500, "source_storage_failed", "Audio could not be read.")
     except SourceStorageUnavailableError:
-        # Same body as any dependency outage; the cause is in the server log.
+        # Same response as any dependency outage; the cause is in the log.
         return error_response(
             503, "service_unavailable", "Analysis service is temporarily unavailable."
         )

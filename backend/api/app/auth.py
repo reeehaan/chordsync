@@ -1,28 +1,13 @@
-"""Authentication for the hosted API: a private-demo bearer token, Cognito-ready.
+"""Bearer-token authentication for the hosted API.
 
-Routes depend only on ``AuthenticatedPrincipal`` (a stable, non-secret
-``principal_id``). Everything specific to demo tokens lives behind the
-``TokenVerifier`` protocol, so replacing it with a Cognito/JWT verifier later
-changes this module and the composition in ``routers/analysis_jobs.py``, not
-the job routes or the ownership checks.
+Routes only see an AuthenticatedPrincipal. The demo-token check sits behind
+TokenVerifier, so it can be swapped for Cognito later.
 
-Demo-token model
-----------------
-* The client sends ``Authorization: Bearer <token>``. The token is a random
-  secret (see ``scripts/generate_demo_token.py``) that never appears in the
-  repository, the image, a response, a job record, an S3 key, or a log.
-* The server keeps only SHA-256 verifiers, in one SSM parameter (JSON, below).
-  A plain SHA-256 is appropriate here because the token is 256 bits of
-  randomness, not a human-chosen password.
-* Verification hashes the presented token and compares against every entry
-  with ``hmac.compare_digest``, so timing does not reveal which entry (or how
-  much of one) matched.
-* The principal for a match is ``demo:<id>`` where ``<id>`` is the operator's
-  label for that token. It is stored as the job's ``owner_id``.
-
-Verifier document (the SSM parameter value)::
+The server keeps only SHA-256 hashes of the tokens, in one SSM parameter:
 
     {"version": 1, "tokens": [{"id": "tester-1", "sha256": "<64 hex>"}]}
+
+A token's owner id is "demo:<id>".
 """
 
 from __future__ import annotations
@@ -76,14 +61,13 @@ class VerifierProvider(Protocol):
         ...
 
 
-# --- bearer header ------------------------------------------------------------------
+# --- bearer header ---
 
 
 def bearer_token(authorization: str | None) -> str:
-    """The token from ``Authorization: Bearer <token>``.
+    """Return the token from "Authorization: Bearer <token>".
 
-    Anything else (absent, other scheme, empty, extra parts, odd characters,
-    absurd length) raises the same error, so callers cannot tell the cases apart.
+    Every bad header raises the same error, so callers can't tell the cases apart.
     """
     if not authorization:
         raise AuthenticationRequiredError
@@ -104,7 +88,7 @@ def authenticate(authorization: str | None, provider: VerifierProvider) -> Authe
     return principal
 
 
-# --- demo-token verifier -------------------------------------------------------------
+# --- demo-token verifier ---
 
 
 def token_sha256(token: str) -> str:
@@ -120,9 +104,8 @@ class DemoTokenVerifier:
 
     @classmethod
     def from_document(cls, document: str) -> DemoTokenVerifier:
-        """Parse the verifier document; any defect is ``AuthUnavailableError``.
-
-        Errors never include the document, which holds verifiers.
+        """Parse the verifier document. Any problem raises AuthUnavailableError,
+        without echoing the document.
         """
         if not isinstance(document, str) or len(document.encode("utf-8")) > _MAX_DOCUMENT_BYTES:
             raise AuthUnavailableError("verifier document is unusable")
@@ -154,13 +137,13 @@ class DemoTokenVerifier:
     def verify(self, token: str) -> AuthenticatedPrincipal | None:
         presented = hashlib.sha256(token.encode("ascii", "replace")).digest()
         match: str | None = None
-        for label, digest in self._entries:  # no early exit: constant work per entry
+        for label, digest in self._entries:  # no early exit, so timing doesn't leak
             if hmac.compare_digest(presented, digest) and match is None:
                 match = label
         return AuthenticatedPrincipal(f"demo:{match}") if match is not None else None
 
 
-# --- providers -----------------------------------------------------------------------
+# --- providers ---
 
 
 class StaticVerifierProvider:
@@ -174,15 +157,11 @@ class StaticVerifierProvider:
 
 
 class CachedVerifierProvider:
-    """Loads the verifier document once per warm environment, not per request.
+    """Loads the verifier document once and caches it, instead of once per request.
 
-    * Success is cached for ``cache_seconds`` and then refreshed, so a rotated
-      token takes effect without a cold start.
-    * If a refresh fails but a verifier was loaded before, the last good one is
-      kept (and the failure logged); a rotated-out token can live that long.
-    * With nothing loaded yet, a failure raises ``AuthUnavailableError`` and is
-      remembered for ``failure_backoff_seconds`` so a broken parameter is not
-      re-fetched on every request.
+    The cache refreshes after cache_seconds. If a refresh fails, the last good
+    verifier keeps working. If nothing is loaded yet, the failure raises
+    AuthUnavailableError and is remembered briefly to avoid hammering SSM.
     """
 
     def __init__(
@@ -219,7 +198,7 @@ class CachedVerifierProvider:
                 loaded = DemoTokenVerifier.from_document(self._load_document())
             except AuthUnavailableError as error:
                 return self._failed(now, error)
-            except Exception as error:  # SSM/network faults: only the type is logged
+            except Exception as error:  # only the error type is logged
                 return self._failed(now, AuthUnavailableError(type(error).__name__))
             self._verifier = loaded
             self._expires_at = now + self._cache_seconds

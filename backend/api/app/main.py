@@ -30,9 +30,7 @@ logging.basicConfig(
 def _dependency_unavailable(_request: Request, error: Exception) -> JSONResponse:
     """Answer 503 when an AWS dependency is temporarily unreachable.
 
-    Only transient failures are mapped. Anything else (configuration, access,
-    unexpected provider errors) is re-raised and behaves as it always did. The
-    response never includes the provider's message, endpoint, or ARNs.
+    Other provider errors are re-raised. The response never includes provider details.
     """
     if (
         not isinstance(error, CloudProviderError)
@@ -77,8 +75,7 @@ def create_app(hosting: ApiHostingConfig | None = None) -> FastAPI:
     application = FastAPI(
         title="ChordSync API",
         version="0.1.0",
-        # Hosted: no public schema or docs pages (the gateway does not route them
-        # either). ``application.openapi()`` still works for tests and tooling.
+        # Hosted: no public docs or schema pages (openapi() still works for tests).
         docs_url=None if hosting.is_hosted else "/docs",
         redoc_url=None if hosting.is_hosted else "/redoc",
         openapi_url=None if hosting.is_hosted else "/openapi.json",
@@ -89,9 +86,8 @@ def create_app(hosting: ApiHostingConfig | None = None) -> FastAPI:
     application.add_exception_handler(AuthUnavailableError, _auth_unavailable)
 
     if hosting.is_hosted:
-        # The analysis routes use the cloud-only provider, so the local
-        # in-process pipeline is never constructed. The legacy upload route,
-        # which writes to local disk unauthenticated, is not registered at all.
+        # Cloud-only provider (no local pipeline). The legacy upload route
+        # writes to local disk without auth, so it is not registered.
         application.dependency_overrides[get_analysis_application_service] = (
             get_hosted_analysis_application
         )

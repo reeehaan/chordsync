@@ -65,8 +65,7 @@ class QueueBackedDispatcher:
         job = self._repository.get(job_id)
         if job is None:
             raise KeyError(job_id)
-        # AWAITING_UPLOAD: multipart create. VALIDATING: confirm-upload, whose
-        # claim already excluded every other confirm request.
+        # AWAITING_UPLOAD: multipart create. VALIDATING: confirm-upload.
         previous = job.status
         if previous not in {CloudJobStatus.AWAITING_UPLOAD, CloudJobStatus.VALIDATING}:
             raise ValueError("Job must be awaiting upload before dispatch")
@@ -94,10 +93,9 @@ class QueueBackedDispatcher:
 
 
 class DispatchReconciler:
-    """Re-sends SQS messages for jobs stuck in ``dispatch_pending``.
+    """Re-sends SQS messages for jobs stuck in dispatch_pending.
 
-    Deliberately limited to the message: starting compute is the worker
-    dispatcher's job (``backend/dispatcher``), driven by queue depth.
+    Starting workers is the dispatcher Lambda's job, not this class's.
     """
 
     def __init__(
@@ -142,6 +140,5 @@ def _mark_dispatched(repository: CloudJobRepository, job_id: str) -> None:
     try:
         repository.save(current, expected_status=CloudJobStatus.QUEUED)
     except JobWriteConflictError:
-        # A worker may have claimed the just-enqueued delivery already. Its
-        # conditional claim also clears dispatch_pending.
+        # A worker may already have claimed it; that also clears dispatch_pending.
         return

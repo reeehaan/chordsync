@@ -1,9 +1,7 @@
-"""Direct-to-S3 source uploads: sign, inspect, read, and delete one object.
+"""Direct-to-S3 uploads: sign, inspect, read and delete one source object.
 
-The hosted API never receives audio bytes. It signs a PUT for one server-chosen
-key, later inspects what the client stored, and reads it back for validation.
-Every operation takes an ``ArtifactKey`` (already a safe relative key); callers
-never pass a bucket or a raw string.
+The API never receives audio. It signs a PUT for a server-chosen key, then
+checks and reads back what the client stored.
 """
 
 from __future__ import annotations
@@ -27,9 +25,8 @@ from backend.api.app.services.aws_errors import (
 logger = logging.getLogger(__name__)
 
 SSE_S3 = "AES256"
-# Every presigned upload carries this tag (a signed header), so a bucket
-# lifecycle rule can expire uploads that never became a job without touching
-# playback, result, or model objects. See docs/cloud/s7-t05-api-infrastructure.md.
+# Every upload carries this tag, so a lifecycle rule can expire abandoned
+# uploads without touching other objects.
 UPLOAD_TAG = "chordsync-upload=presigned"
 ACCEPTED_ENCRYPTIONS = frozenset({"AES256", "aws:kms"})
 
@@ -38,7 +35,7 @@ ACCEPTED_ENCRYPTIONS = frozenset({"AES256", "aws:kms"})
 class PresignedUpload:
     url: str
     method: str
-    # Headers the client must send exactly; they are part of the signature.
+    # Headers the client must send exactly (they are signed).
     headers: dict[str, str]
 
 
@@ -87,9 +84,8 @@ class S3SourceUploadStore:
         content_length: int,
         expires_in: int,
     ) -> PresignedUpload:
-        # Content-Type, Content-Length and the encryption header are all signed,
-        # so S3 rejects an upload that differs from what was declared. No ACL
-        # parameter is signed, and the bucket blocks public ACLs regardless.
+        # Content-Type, Content-Length and encryption are signed, so S3 rejects
+        # an upload that differs from what was declared.
         try:
             url = self._client.generate_presigned_url(
                 "put_object",
@@ -125,9 +121,8 @@ class S3SourceUploadStore:
             if code in {"404", "NoSuchKey", "NotFound"}:
                 return None
             if code in {"403", "AccessDenied", "Forbidden"}:
-                # Only a definite 404 means "not uploaded". A 403 is never read
-                # as absence: it is a permission or configuration fault, and it
-                # is reported as one (a 503 to the client, an error in the log).
+                # Only a 404 means "not uploaded". A 403 is a permission or
+                # config problem, reported as 503 and logged.
                 logger.error("source object access denied (%s): check the API role", code)
                 raise CloudProviderError(
                     CloudProviderErrorKind.CONFIGURATION,
@@ -168,8 +163,7 @@ class _StoredObject:
 class InMemorySourceUploadStore:
     """Test double: records signing requests and holds "uploaded" objects."""
 
-    # Optional artifact store that mirrors the bucket, so the dispatcher's
-    # existence check and a worker can see "uploaded" objects.
+    # Optional store that mirrors uploads, so other fakes can see them.
     mirror: ArtifactStorage | None = None
     objects: dict[str, _StoredObject] = field(default_factory=dict)
     presign_requests: list[dict[str, Any]] = field(default_factory=list)

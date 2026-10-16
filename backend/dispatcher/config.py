@@ -1,8 +1,7 @@
-"""Dispatcher configuration, read from the Lambda environment.
+"""Dispatcher settings, read from the Lambda environment.
 
-Everything that decides *what* gets started (cluster, task definition,
-network, queue) comes from here and nowhere else: the invocation event can
-never override it. No credentials are read; the Lambda role supplies them.
+Everything that decides what gets started comes from here; the invocation
+event can't override it. No credentials are read.
 """
 
 from __future__ import annotations
@@ -19,8 +18,8 @@ MAX_WORKER_TASKS_LIMIT = 5
 
 _REGION = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d$")
 _CLUSTER = re.compile(r"^[A-Za-z0-9_-]{1,255}$")
-# A family name or a task-definition ARN without a revision. A pinned
-# ``family:revision`` is refused so a stale revision cannot be started by habit.
+# A family name or task-definition ARN without a revision (a pinned
+# family:revision is refused so a stale revision can't be started).
 _TASK_DEFINITION = re.compile(
     r"^([A-Za-z0-9_-]{1,255}|arn:aws:ecs:[a-z0-9-]+:\d{12}:task-definition/[A-Za-z0-9_-]{1,255})$"
 )
@@ -45,7 +44,7 @@ class DispatcherConfig:
     lock_table: str
     max_worker_tasks: int = 1
     lease_seconds: int = DEFAULT_LEASE_SECONDS
-    # SQS counters lag; after an API-triggered call that sees an empty queue,
+    # SQS counts lag; after an API-triggered call that sees an empty queue,
     # look again this many times, this many seconds apart.
     recheck_attempts: int = 2
     recheck_delay_seconds: float = 3.0

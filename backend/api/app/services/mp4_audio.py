@@ -1,21 +1,12 @@
-"""M4A (MP4 audio) inspection from the ISO base media file format box structure.
+"""M4A (MP4 audio) inspection from the box structure.
 
-Only box headers and a few small fields are read; no media samples are
-decoded and no metadata (tags, cover art) is parsed. The file is accepted only
-when:
+Only box headers and a few small fields are read. A file is accepted when:
 
-- every top-level box fits inside the file, so a file cut anywhere, even by a
-  single byte, is rejected;
-- ``moov`` holds an audio track (handler ``soun``) with a media header giving
-  a positive timescale and duration; and
-- that track's first sample entry is an accepted audio form: ``mp4a`` (AAC and
-  other MPEG-4 audio) or ``alac`` (Apple Lossless).
+- every top-level box fits inside the file (so a truncated file is rejected);
+- moov has an audio track (handler soun) with a positive timescale and duration;
+- that track's first sample entry is mp4a (AAC) or alac (Apple Lossless).
 
-Fragmented MP4 keeps its duration outside ``mdhd`` (the media header holds
-zero), so it is rejected.
-
-Layout reference: ISO/IEC 14496-12 (box and full-box headers, ``moov``,
-``trak``, ``mdia``, ``mdhd``, ``hdlr``, ``minf``, ``stbl``, ``stsd``).
+Fragmented MP4 has a zero duration in mdhd, so it is rejected.
 """
 
 from __future__ import annotations
@@ -50,10 +41,10 @@ def audio_duration_seconds(handle: BinaryIO, file_size: int) -> float:
 
 
 def _boxes(handle: BinaryIO, start: int, end: int) -> Iterator[tuple[bytes, int, int]]:
-    """Child boxes in ``[start, end)`` as ``(type, payload_start, payload_end)``.
+    """Child boxes in [start, end) as (type, payload_start, payload_end).
 
-    Every box must lie entirely inside its parent. Fewer stray bytes than a box
-    header after the last box (such as a QuickTime terminator) are ignored.
+    Every box must fit inside its parent. Stray bytes shorter than a box header
+    after the last box are ignored.
     """
     position = start
     for _ in range(_MAX_BOXES_PER_LEVEL):
