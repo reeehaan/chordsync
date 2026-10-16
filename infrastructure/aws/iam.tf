@@ -10,48 +10,6 @@ data "aws_iam_policy_document" "ecs_tasks_trust" {
   }
 }
 
-resource "aws_iam_role" "api" {
-  name               = "${local.name_prefix}-api-task"
-  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_trust.json
-}
-
-data "aws_iam_policy_document" "api" {
-  statement {
-    sid = "JobState"
-    actions = [
-      "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:Scan",
-      "dynamodb:UpdateItem",
-    ]
-    resources = [aws_dynamodb_table.jobs.arn]
-  }
-
-  statement {
-    sid       = "StoreSourceUploads"
-    actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = ["${aws_s3_bucket.artifacts.arn}/jobs/*/source/*"]
-  }
-
-  statement {
-    sid       = "ReadTimelineResults"
-    actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.artifacts.arn}/jobs/*/results/*"]
-  }
-
-  statement {
-    sid       = "DispatchAnalysis"
-    actions   = ["sqs:SendMessage"]
-    resources = [aws_sqs_queue.analysis.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "api" {
-  name   = "cloud-api"
-  role   = aws_iam_role.api.id
-  policy = data.aws_iam_policy_document.api.json
-}
-
 resource "aws_iam_role" "worker" {
   name               = "${local.name_prefix}-worker-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_trust.json

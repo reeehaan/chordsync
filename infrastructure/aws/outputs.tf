@@ -18,11 +18,6 @@ output "chordsync_sqs_analysis_queue_url" {
   value       = aws_sqs_queue.analysis.url
 }
 
-output "api_role_arn" {
-  description = "Application task role for a future API runtime."
-  value       = aws_iam_role.api.arn
-}
-
 output "worker_task_definition_arn" {
   description = "Worker task-definition skeleton; no service or capacity is created."
   value       = aws_ecs_task_definition.worker.arn
