@@ -5,5 +5,5 @@ environment  = "student-demo"
 # Leave at zero until the Linux/AWS benchmark selects GPU capacity.
 worker_gpu_count = 0
 
-# Optional. Setting an address creates a USD 20 AWS Budget with alert emails.
-budget_alert_email = ""
+# Optional. Budget alerts and operational alarms are delivered here once set.
+alert_email = ""

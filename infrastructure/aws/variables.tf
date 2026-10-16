@@ -92,8 +92,8 @@ variable "analysis_visibility_timeout_seconds" {
   }
 }
 
-variable "budget_alert_email" {
-  description = "Optional email address for AWS Budget alerts. Empty disables the budget resource."
+variable "alert_email" {
+  description = "Optional email address for budget alerts and operational alarms. Empty creates the budget and alert topic without any subscriber, so nothing is delivered until it is set (the SNS subscription must also be confirmed from that inbox)."
   type        = string
   default     = ""
   sensitive   = true

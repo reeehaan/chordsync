@@ -9,6 +9,7 @@ resource "aws_cloudwatch_metric_alarm" "analysis_queue_depth" {
   threshold           = 1
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     QueueName = aws_sqs_queue.analysis.name
@@ -26,29 +27,9 @@ resource "aws_cloudwatch_metric_alarm" "analysis_dlq_nonempty" {
   threshold           = 1
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     QueueName = aws_sqs_queue.analysis_dlq.name
-  }
-}
-
-resource "aws_budgets_budget" "monthly" {
-  count = var.budget_alert_email == "" ? 0 : 1
-
-  name         = "${local.name_prefix}-monthly"
-  budget_type  = "COST"
-  limit_amount = "20"
-  limit_unit   = "USD"
-  time_unit    = "MONTHLY"
-
-  dynamic "notification" {
-    for_each = toset([50, 80, 100])
-    content {
-      comparison_operator        = "GREATER_THAN"
-      threshold                  = notification.value
-      threshold_type             = "PERCENTAGE"
-      notification_type          = "FORECASTED"
-      subscriber_email_addresses = [var.budget_alert_email]
-    }
   }
 }

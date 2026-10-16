@@ -135,8 +135,8 @@ and DLQ-nonempty alarms; Container Insights and custom metrics are disabled.
 The alarm definitions have no notification topic yet—connect an SNS destination
 during controlled provisioning.
 
-Set `budget_alert_email` to create a USD 20 monthly AWS Budget with forecasted
-50%, 80%, and 100% email alerts. AWS Budgets alerts; it does **not** hard-stop
+Set `alert_email` to deliver the USD 20 monthly AWS Budget alerts (the budget itself always exists; see `docs/cloud/s7-t10-account-hardening.md`): actual-spend
+emails at 25%, 50%, 80%, and 100%, plus a forecasted-100% email. AWS Budgets alerts; it does **not** hard-stop
 services or guarantee a spending ceiling.
 
 Cost classification:
