@@ -1,16 +1,30 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, Request, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from analysis.fusion.models import SharedTimeline
+from backend.api.app.auth import (
+    AuthenticatedPrincipal,
+    AuthUnavailableError,
+    CachedVerifierProvider,
+    DemoTokenVerifier,
+    SsmDocumentLoader,
+    StaticVerifierProvider,
+    VerifierProvider,
+    authenticate,
+)
 from backend.api.app.models.analysis_job import (
     AnalysisJobCreateRequest,
     AnalysisJobError,
     AnalysisJobErrorResponse,
     AnalysisJobResponse,
+    UploadInitiationRequest,
+    UploadInitiationResponse,
 )
+from backend.api.app.hosting import ApiHostingConfig
 from backend.api.app.services.analysis_jobs import (
     AnalysisJobService,
     InMemoryAnalysisJobRepository,
@@ -19,6 +33,8 @@ from backend.api.app.services.analysis_application import (
     AnalysisApplication,
     AnalysisFailedError,
     CloudAnalysisApplication,
+    InvalidJobStateError,
+    InvalidUploadRequestError,
     JobNotFoundError,
     LocalAnalysisApplication,
     ResultArtifactCorruptError,
@@ -26,6 +42,11 @@ from backend.api.app.services.analysis_application import (
     ResultArtifactUnavailableError,
     ResultNotReadyError,
     SourceArtifactStorageError,
+    SourceStorageUnavailableError,
+    UploadExpiredError,
+    UploadNotConfiguredError,
+    UploadNotReceivedError,
+    ValidationInProgressError,
 )
 from backend.api.app.services.cloud_runtime import (
     CloudRuntimeConfig,
@@ -37,9 +58,9 @@ from backend.api.app.services.analysis_job_executor import (
     AnalysisJobExecutor,
     InProcessAnalysisJobExecutor,
 )
-from backend.api.app.services.real_analysis_processor import RealAnalysisProcessor
 from backend.api.app.services.analysis_input_storage import (
     AnalysisInputStorageError,
+    AnalysisInputValidationError,
     AudioTooLongError,
     AudioTooLargeError,
     EmptyAudioError,
@@ -47,9 +68,6 @@ from backend.api.app.services.analysis_input_storage import (
     LocalAnalysisInputStorage,
     UnsupportedAudioFormatError,
 )
-
-
-router = APIRouter(prefix="/analysis/jobs", tags=["Analysis jobs"])
 
 
 # Components are composed on first use and then reused for the process
@@ -77,6 +95,9 @@ def _local_job_service() -> AnalysisJobService:
 
 @lru_cache(maxsize=1)
 def _local_job_executor() -> AnalysisJobExecutor:
+    # Imported here so a hosted API never loads the analysis pipeline's modules.
+    from backend.api.app.services.real_analysis_processor import RealAnalysisProcessor
+
     return InProcessAnalysisJobExecutor(
         _local_job_service(),
         _local_input_storage(),
@@ -85,13 +106,68 @@ def _local_job_executor() -> AnalysisJobExecutor:
 
 
 @lru_cache(maxsize=1)
-def _cloud_application(config: CloudRuntimeConfig) -> AnalysisApplication:
+def _hosting_config() -> ApiHostingConfig:
+    return ApiHostingConfig.from_env()
+
+
+@lru_cache(maxsize=4)
+def _auth_provider(hosting: ApiHostingConfig) -> VerifierProvider | None:
+    """The token-verifier source, or None when authentication is not configured.
+
+    Hosted mode always has one (``ApiHostingConfig`` refuses to start without
+    the SSM parameter name). The SSM client is created on first use, and its
+    result is cached per warm environment by ``CachedVerifierProvider``.
+    """
+    if hosting.demo_token_parameter:
+        try:
+            import boto3
+        except ImportError as error:
+            raise AuthUnavailableError("boto3 is unavailable") from error
+        client = boto3.session.Session().client("ssm")
+        return CachedVerifierProvider(SsmDocumentLoader(client, hosting.demo_token_parameter))
+    if hosting.demo_token_verifier_document and not hosting.is_hosted:
+        return StaticVerifierProvider(
+            DemoTokenVerifier.from_document(hosting.demo_token_verifier_document)
+        )
+    return None
+
+
+def get_principal(
+    request: Request,
+    authorization: Annotated[str | None, Header()] = None,
+) -> AuthenticatedPrincipal | None:
+    """Authenticate the caller, or raise (401 for the caller, 503 for the verifier).
+
+    The hosting configuration is the one the app was built with
+    (``create_app``), so a hosted app can never run with authentication off.
+    """
+    hosting = getattr(request.app.state, "hosting", None) or _hosting_config()
+    provider = _auth_provider(hosting)
+    if provider is None:
+        if hosting.is_hosted:
+            raise AuthUnavailableError("authentication is not configured")
+        return None  # local development, authentication not enabled
+    return authenticate(authorization, provider)
+
+
+def _owner(principal: AuthenticatedPrincipal | None) -> str | None:
+    return principal.principal_id if principal else None
+
+
+@lru_cache(maxsize=1)
+def _cloud_application(
+    config: CloudRuntimeConfig,
+    staging_root: Path,
+) -> CloudAnalysisApplication:
     runtime = compose_cloud_runtime(config)
     return CloudAnalysisApplication(
         runtime.repository,
         runtime.artifact_storage,
         compose_analysis_dispatcher(config, runtime),
-        LocalAnalysisInputStorage(config.storage_root / "cloud_api_staging"),
+        LocalAnalysisInputStorage(staging_root),
+        source_uploads=runtime.source_uploads,
+        upload_url_ttl_seconds=_hosting_config().upload_url_ttl_seconds,
+        enforce_ownership=_hosting_config().is_hosted,
     )
 
 
@@ -110,14 +186,46 @@ def get_analysis_application_service(
     config = _runtime_config()
     if config.mode is RuntimeMode.LOCAL:
         return LocalAnalysisApplication(service, executor)
-    return _cloud_application(config)
+    return _cloud_application(config, config.storage_root / "cloud_api_staging")
 
 
-def error_response(status_code: int, code: str, message: str) -> JSONResponse:
+def get_hosted_analysis_application() -> CloudAnalysisApplication:
+    """Lambda-hosted provider: cloud runtime only, staging under /tmp.
+
+    It has no local service/executor dependencies, so the in-process
+    analysis pipeline is never constructed in a hosted API.
+    """
+    config = _runtime_config()
+    if config.mode is not RuntimeMode.AWS:
+        raise RuntimeError("Hosted API requires the AWS runtime mode")
+    return _cloud_application(config, _hosting_config().staging_root / "cloud_api_staging")
+
+
+# Local development: multipart create. Hosted (Lambda): create-upload + confirm.
+# Both share the same status and result routes.
+# Every route on both routers requires a principal (a no-op only in local mode
+# with authentication not configured), so a route added later is protected too.
+router = APIRouter(
+    prefix="/analysis/jobs", tags=["Analysis jobs"], dependencies=[Depends(get_principal)]
+)
+hosted_router = APIRouter(
+    prefix="/analysis/jobs", tags=["Analysis jobs"], dependencies=[Depends(get_principal)]
+)
+_read_routes = APIRouter()
+
+
+def error_response(
+    status_code: int,
+    code: str,
+    message: str,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
     payload = AnalysisJobErrorResponse(
         error=AnalysisJobError(code=code, message=message)
     )
-    return JSONResponse(status_code=status_code, content=payload.model_dump())
+    return JSONResponse(
+        status_code=status_code, content=payload.model_dump(), headers=headers
+    )
 
 
 @router.post(
@@ -138,6 +246,7 @@ def create_analysis_job(
     ],
     audio: Annotated[UploadFile, File()],
     application: AnalysisApplication = Depends(get_analysis_application_service),
+    principal: AuthenticatedPrincipal | None = Depends(get_principal),
 ) -> AnalysisJobResponse | Response:
     request = AnalysisJobCreateRequest(title=title)
     try:
@@ -146,6 +255,7 @@ def create_analysis_job(
             original_filename=audio.filename or "",
             content_type=audio.content_type,
             source=audio.file,
+            owner_id=_owner(principal),
         )
     except UnsupportedAudioFormatError:
         return error_response(
@@ -179,7 +289,7 @@ def create_analysis_job(
         )
 
 
-@router.get(
+@_read_routes.get(
     "/{job_id}",
     response_model=AnalysisJobResponse,
     responses={404: {"model": AnalysisJobErrorResponse}},
@@ -187,14 +297,15 @@ def create_analysis_job(
 def get_analysis_job(
     job_id: str,
     application: AnalysisApplication = Depends(get_analysis_application_service),
+    principal: AuthenticatedPrincipal | None = Depends(get_principal),
 ) -> AnalysisJobResponse | Response:
-    response = application.status(job_id)
+    response = application.status(job_id, _owner(principal))
     if response is None:
         return error_response(404, "job_not_found", "Analysis job was not found.")
     return response
 
 
-@router.get(
+@_read_routes.get(
     "/{job_id}/result",
     response_model=SharedTimeline,
     responses={
@@ -207,9 +318,10 @@ def get_analysis_job(
 def get_analysis_job_result(
     job_id: str,
     application: AnalysisApplication = Depends(get_analysis_application_service),
+    principal: AuthenticatedPrincipal | None = Depends(get_principal),
 ) -> SharedTimeline | Response:
     try:
-        return application.result(job_id)
+        return application.result(job_id, _owner(principal))
     except JobNotFoundError:
         return error_response(404, "job_not_found", "Analysis job was not found.")
     except ResultNotReadyError:
@@ -234,3 +346,119 @@ def get_analysis_job_result(
             "result_temporarily_unavailable",
             "Analysis result is temporarily unavailable.",
         )
+
+
+router.include_router(_read_routes)
+hosted_router.include_router(_read_routes)
+
+
+# --- hosted presigned-upload lifecycle -----------------------------------------
+
+_UPLOAD_ERRORS = {
+    503: {"model": AnalysisJobErrorResponse},
+    409: {"model": AnalysisJobErrorResponse},
+    404: {"model": AnalysisJobErrorResponse},
+}
+
+
+@hosted_router.post(
+    "",
+    response_model=UploadInitiationResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": AnalysisJobErrorResponse},
+        413: {"model": AnalysisJobErrorResponse},
+        503: {"model": AnalysisJobErrorResponse},
+    },
+)
+def create_upload(
+    request: UploadInitiationRequest,
+    application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
+    principal: AuthenticatedPrincipal | None = Depends(get_principal),
+) -> UploadInitiationResponse | Response:
+    """Phase 1: JSON metadata in, one signed S3 PUT out. No audio is accepted."""
+    try:
+        return application.initiate_upload(request, _owner(principal))
+    except UnsupportedAudioFormatError:
+        return error_response(
+            400, "unsupported_audio_format", "Supported audio formats are WAV, MP3, and M4A."
+        )
+    except AudioTooLargeError:
+        return error_response(413, "audio_too_large", "Audio exceeds the 25 MB limit.")
+    except InvalidUploadRequestError as error:
+        return error_response(400, error.code, "Upload request is invalid.")
+    except UploadNotConfiguredError:
+        return error_response(500, "upload_unavailable", "Uploads are not available.")
+
+
+@hosted_router.post(
+    "/{job_id}/confirm-upload",
+    response_model=AnalysisJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        404: {"model": AnalysisJobErrorResponse},
+        409: {"model": AnalysisJobErrorResponse},
+        413: {"model": AnalysisJobErrorResponse},
+        422: {"model": AnalysisJobErrorResponse},
+        503: {"model": AnalysisJobErrorResponse},
+    },
+)
+def confirm_upload(
+    job_id: str,
+    http_response: Response,
+    application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
+    principal: AuthenticatedPrincipal | None = Depends(get_principal),
+) -> AnalysisJobResponse | Response:
+    """Phase 2: validate the stored object and queue the job exactly once.
+
+    202 when this request queued the job; 200 with the current state when it
+    had already been confirmed (safe to retry, never a second message).
+    """
+    try:
+        outcome = application.confirm_upload(job_id, _owner(principal))
+    except JobNotFoundError:
+        return error_response(404, "job_not_found", "Analysis job was not found.")
+    except UploadNotReceivedError:
+        return error_response(
+            409, "upload_not_received", "The audio has not been uploaded yet."
+        )
+    except UploadExpiredError:
+        return error_response(
+            409, "upload_expired", "The upload link expired. Create a new job."
+        )
+    except ValidationInProgressError:
+        return error_response(
+            409, "validation_in_progress", "The upload is already being validated."
+        )
+    except InvalidJobStateError:
+        return error_response(
+            409, "invalid_job_state", "This job cannot accept an upload confirmation."
+        )
+    except AudioTooLargeError:
+        return error_response(413, "audio_too_large", "Audio exceeds the 25 MB limit.")
+    except AudioTooLongError:
+        return error_response(422, "audio_too_long", "Audio exceeds the 6-minute limit.")
+    except EmptyAudioError:
+        return error_response(422, "empty_audio", "Audio file must not be empty.")
+    except AnalysisInputValidationError as error:
+        code = error.code if error.code in _UNPROCESSABLE_CODES else "invalid_audio"
+        return error_response(422, code, _UNPROCESSABLE_CODES.get(code, "Audio could not be decoded."))
+    except SourceArtifactStorageError:
+        return error_response(500, "source_storage_failed", "Audio could not be read.")
+    except SourceStorageUnavailableError:
+        # Same body as any dependency outage; the cause is in the server log.
+        return error_response(
+            503, "service_unavailable", "Analysis service is temporarily unavailable."
+        )
+    except UploadNotConfiguredError:
+        return error_response(500, "upload_unavailable", "Uploads are not available.")
+    if not outcome.newly_confirmed:
+        http_response.status_code = status.HTTP_200_OK
+    return outcome.response
+
+
+_UNPROCESSABLE_CODES = {
+    "invalid_audio": "Audio could not be decoded.",
+    "unsupported_audio_format": "Supported audio formats are WAV, MP3, and M4A.",
+    "invalid_upload": "The uploaded file does not match the upload request.",
+}

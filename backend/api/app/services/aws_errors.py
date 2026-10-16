@@ -3,6 +3,25 @@ from __future__ import annotations
 from enum import Enum
 
 
+try:
+    from botocore.exceptions import (
+        ConnectionClosedError,
+        ConnectTimeoutError,
+        EndpointConnectionError,
+        ReadTimeoutError,
+    )
+
+    # Network-level failures reach no AWS service, so they carry no error code.
+    _TRANSIENT_NETWORK_ERRORS: tuple[type[BaseException], ...] = (
+        ConnectionClosedError,
+        ConnectTimeoutError,
+        EndpointConnectionError,
+        ReadTimeoutError,
+    )
+except ImportError:  # botocore is optional outside AWS runtime mode
+    _TRANSIENT_NETWORK_ERRORS = ()
+
+
 class CloudProviderErrorKind(str, Enum):
     TEMPORARY_UNAVAILABLE = "temporary_unavailable"
     NOT_FOUND = "not_found"
@@ -43,6 +62,11 @@ def provider_error_code(error: BaseException) -> str | None:
 
 
 def translate_provider_error(error: BaseException) -> CloudProviderError:
+    if isinstance(error, _TRANSIENT_NETWORK_ERRORS):
+        return CloudProviderError(
+            CloudProviderErrorKind.TEMPORARY_UNAVAILABLE,
+            "Cloud service is temporarily unreachable",
+        )
     code = provider_error_code(error)
     if code in _TEMPORARY_CODES:
         return CloudProviderError(

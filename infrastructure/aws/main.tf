@@ -100,6 +100,32 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
       days_after_initiation = 1
     }
   }
+
+  # Presigned uploads that never became a valid job (never confirmed, or
+  # confirmed and rejected after a failed delete). Only objects carrying the
+  # signed upload tag match, so playback, results, debug, and model objects are
+  # never touched. Created with the hosted API. See docs/cloud/s7-t05-api-infrastructure.md.
+  dynamic "rule" {
+    for_each = var.hosted_api_enabled ? [1] : []
+
+    content {
+      id     = "expire-abandoned-source-uploads"
+      status = "Enabled"
+
+      filter {
+        and {
+          prefix = "jobs/"
+          tags = {
+            "chordsync-upload" = "presigned"
+          }
+        }
+      }
+
+      expiration {
+        days = var.abandoned_upload_expiry_days
+      }
+    }
+  }
 }
 
 data "aws_iam_policy_document" "artifacts_https_only" {

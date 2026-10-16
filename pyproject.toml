@@ -16,7 +16,7 @@ select = ["E4", "E7", "E9", "F"]
 
 [tool.mypy]
 python_version = "3.11"
-files = ["backend/api/app"]
+files = ["backend/api/app", "backend/dispatcher"]
 ignore_missing_imports = true
 follow_imports = "silent"
 warn_unused_ignores = true

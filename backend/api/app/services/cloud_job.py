@@ -10,6 +10,8 @@ from typing import Any
 class CloudJobStatus(str, Enum):
     CREATED = "created"
     AWAITING_UPLOAD = "awaiting_upload"
+    # A confirm-upload request holds the job while it checks the uploaded object.
+    VALIDATING = "validating"
     QUEUED = "queued"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -25,7 +27,15 @@ _ALLOWED_TRANSITIONS = {
         CloudJobStatus.EXPIRED,
     },
     CloudJobStatus.AWAITING_UPLOAD: {
+        CloudJobStatus.VALIDATING,
         CloudJobStatus.QUEUED,
+        CloudJobStatus.CANCELLED,
+        CloudJobStatus.EXPIRED,
+    },
+    CloudJobStatus.VALIDATING: {
+        CloudJobStatus.AWAITING_UPLOAD,
+        CloudJobStatus.QUEUED,
+        CloudJobStatus.FAILED,
         CloudJobStatus.CANCELLED,
         CloudJobStatus.EXPIRED,
     },
@@ -67,6 +77,9 @@ class CloudJobRecord:
     last_attempt_at: datetime | None = None
     dispatch_pending: bool = False
     version: int = 0
+    # Presigned-upload lifecycle (hosted API); unset for multipart uploads.
+    declared_size_bytes: int | None = None
+    upload_expires_at: datetime | None = None
 
     def validate(self) -> None:
         if (
@@ -129,6 +142,10 @@ class CloudJobRecord:
             ),
             "dispatch_pending": self.dispatch_pending,
             "version": self.version,
+            "declared_size_bytes": self.declared_size_bytes,
+            "upload_expires_at": (
+                self.upload_expires_at.isoformat() if self.upload_expires_at else None
+            ),
         }
 
     @classmethod
@@ -161,6 +178,16 @@ class CloudJobRecord:
             ),
             dispatch_pending=bool(value.get("dispatch_pending", False)),
             version=int(value.get("version", 0)),
+            declared_size_bytes=(
+                int(value["declared_size_bytes"])
+                if value.get("declared_size_bytes") is not None
+                else None
+            ),
+            upload_expires_at=(
+                datetime.fromisoformat(str(value["upload_expires_at"]))
+                if value.get("upload_expires_at")
+                else None
+            ),
         )
         record.validate()
         return record

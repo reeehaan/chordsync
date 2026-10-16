@@ -231,6 +231,8 @@ def test_openapi_exposes_only_public_typed_contract(client):
     assert "/analysis/jobs/{job_id}/result" in schema["paths"]
     schemas = schema["components"]["schemas"]
     assert schemas["AnalysisJobStatus"]["enum"] == [
+        "awaiting_upload",
+        "validating",
         "queued",
         "processing",
         "completed",

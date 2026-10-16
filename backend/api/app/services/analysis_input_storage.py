@@ -2,12 +2,17 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
-from typing import BinaryIO, Callable, Protocol, cast
+from typing import BinaryIO, Callable, Protocol
 
-from analysis.preprocessing.audio_preprocessor import get_audio_metadata
+from backend.api.app.services.media_inspection import (
+    EXTENSION_FORMATS,
+    AudioFormat,
+    MediaInfo,
+    inspect_audio,
+)
 
 
-SUPPORTED_AUDIO_EXTENSIONS = frozenset({".wav", ".mp3", ".m4a"})
+SUPPORTED_AUDIO_EXTENSIONS = frozenset(EXTENSION_FORMATS)
 MAX_AUDIO_SIZE_BYTES = 25 * 1024 * 1024
 MAX_AUDIO_DURATION_SECONDS = 360.0
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -51,6 +56,9 @@ class AnalysisInputMetadata:
     content_type: str | None
     size_bytes: int
     duration_seconds: float
+    # The format found by inspecting the file's contents; it always agrees with
+    # ``extension`` for stored uploads.
+    detected_format: AudioFormat | None = None
 
 
 class AnalysisInputStorage(Protocol):
@@ -74,11 +82,19 @@ class LocalAnalysisInputStorage:
         max_size_bytes: int = MAX_AUDIO_SIZE_BYTES,
         max_duration_seconds: float = MAX_AUDIO_DURATION_SECONDS,
         duration_probe: Callable[[Path], float] | None = None,
+        media_inspector: Callable[[Path], MediaInfo] | None = None,
     ) -> None:
+        if duration_probe is not None and media_inspector is not None:
+            raise ValueError("Pass either duration_probe or media_inspector, not both")
         self.root = root
         self.max_size_bytes = max_size_bytes
         self.max_duration_seconds = max_duration_seconds
-        self._duration_probe = duration_probe or _probe_duration_seconds
+        if media_inspector is not None:
+            self._inspect = media_inspector
+        elif duration_probe is not None:
+            self._inspect = _inspector_from_duration_probe(duration_probe)
+        else:
+            self._inspect = inspect_audio
 
     def store(
         self,
@@ -109,9 +125,13 @@ class LocalAnalysisInputStorage:
                 raise EmptyAudioError
             temporary_path.replace(final_path)
             try:
-                duration_seconds = self._duration_probe(final_path)
+                media = self._inspect(final_path)
             except Exception as error:
+                # Parser details never reach the client.
                 raise InvalidAudioError from error
+            if media.format is not EXTENSION_FORMATS[extension]:
+                raise InvalidAudioError
+            duration_seconds = media.duration_seconds
             if not math.isfinite(duration_seconds) or duration_seconds <= 0:
                 raise InvalidAudioError
             if duration_seconds > self.max_duration_seconds:
@@ -130,6 +150,7 @@ class LocalAnalysisInputStorage:
             content_type=content_type,
             size_bytes=size_bytes,
             duration_seconds=duration_seconds,
+            detected_format=media.format,
         )
 
     def get_path(self, job_id: str) -> Path | None:
@@ -147,7 +168,13 @@ class LocalAnalysisInputStorage:
             raise AnalysisInputStorageError from error
 
     def _job_directory(self, job_id: str) -> Path:
-        if not job_id or Path(job_id).name != job_id or "/" in job_id or "\\" in job_id:
+        if (
+            not job_id
+            or job_id in {".", ".."}
+            or Path(job_id).name != job_id
+            or "/" in job_id
+            or "\\" in job_id
+        ):
             raise AnalysisInputStorageError("Invalid storage key")
         return self.root / job_id
 
@@ -161,7 +188,19 @@ class LocalAnalysisInputStorage:
             rmtree(job_directory)
 
 
-def _probe_duration_seconds(audio_path: Path) -> float:
-    # ffprobe reports duration as a number or numeric string.
-    duration = cast("float | str", get_audio_metadata(audio_path)["duration"])
-    return float(duration)
+def _inspector_from_duration_probe(
+    probe: Callable[[Path], float],
+) -> Callable[[Path], MediaInfo]:
+    """Adapt a duration-only probe (a test seam) to the inspector interface.
+
+    The format is taken from the extension, so the mismatch check passes.
+    """
+
+    def inspect(path: Path) -> MediaInfo:
+        return MediaInfo(
+            EXTENSION_FORMATS[path.suffix.lower()],
+            probe(path),
+            path.stat().st_size,
+        )
+
+    return inspect

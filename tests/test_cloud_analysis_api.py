@@ -75,7 +75,9 @@ class FailingArtifactStorage(LocalArtifactStorage):
         )
 
 
-def _cloud_application(tmp_path, *, repository=None, queue=None, storage=None):
+def _cloud_application(
+    tmp_path, *, repository=None, queue=None, storage=None, uploads=None
+):
     repository = repository or InMemoryCloudJobRepository()
     queue = queue or InMemoryAnalysisJobQueue()
     storage = storage or LocalArtifactStorage(tmp_path / "objects")
@@ -88,6 +90,7 @@ def _cloud_application(tmp_path, *, repository=None, queue=None, storage=None):
         storage,
         QueueBackedDispatcher(repository, storage, queue),
         staging,
+        source_uploads=uploads,
     )
     return application, repository, storage, queue, staging
 

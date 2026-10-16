@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Protocol
 
 from backend.api.app.services.analysis_job_executor import AnalysisJobExecutor
@@ -17,6 +18,22 @@ from backend.api.app.services.cloud_job_repository import (
     CloudJobRepository,
     JobWriteConflictError,
 )
+from backend.api.app.services.worker_dispatch_trigger import (
+    REASON_JOB_DISPATCHED,
+    WorkerDispatchTrigger,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _notify(trigger: WorkerDispatchTrigger | None) -> None:
+    """Best effort: the message is already queued, so nothing here may raise."""
+    if trigger is None:
+        return
+    try:
+        trigger.notify(REASON_JOB_DISPATCHED)
+    except Exception:
+        logger.warning("worker dispatch trigger failed; reconcile will recover")
 
 
 class AnalysisJobDispatcher(Protocol):
@@ -37,16 +54,21 @@ class QueueBackedDispatcher:
         repository: CloudJobRepository,
         storage: ArtifactStorage,
         queue: AnalysisJobQueue,
+        worker_trigger: WorkerDispatchTrigger | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._queue = queue
+        self._worker_trigger = worker_trigger
 
     def dispatch(self, job_id: str) -> None:
         job = self._repository.get(job_id)
         if job is None:
             raise KeyError(job_id)
-        if job.status is not CloudJobStatus.AWAITING_UPLOAD:
+        # AWAITING_UPLOAD: multipart create. VALIDATING: confirm-upload, whose
+        # claim already excluded every other confirm request.
+        previous = job.status
+        if previous not in {CloudJobStatus.AWAITING_UPLOAD, CloudJobStatus.VALIDATING}:
             raise ValueError("Job must be awaiting upload before dispatch")
         if not job.source_object_key:
             raise ValueError("Job source artifact is unavailable")
@@ -59,10 +81,7 @@ class QueueBackedDispatcher:
 
         job.transition_to(CloudJobStatus.QUEUED, stage="queued")
         job.dispatch_pending = True
-        self._repository.save(
-            job,
-            expected_status=CloudJobStatus.AWAITING_UPLOAD,
-        )
+        self._repository.save(job, expected_status=previous)
         self._queue.enqueue(
             AnalysisJobDescriptor(
                 job_id=job.job_id,
@@ -71,16 +90,25 @@ class QueueBackedDispatcher:
             )
         )
         _mark_dispatched(self._repository, job.job_id)
+        _notify(self._worker_trigger)
 
 
 class DispatchReconciler:
+    """Re-sends SQS messages for jobs stuck in ``dispatch_pending``.
+
+    Deliberately limited to the message: starting compute is the worker
+    dispatcher's job (``backend/dispatcher``), driven by queue depth.
+    """
+
     def __init__(
         self,
         repository: CloudJobRepository,
         queue: AnalysisJobQueue,
+        worker_trigger: WorkerDispatchTrigger | None = None,
     ) -> None:
         self._repository = repository
         self._queue = queue
+        self._worker_trigger = worker_trigger
 
     def reconcile(self, *, limit: int = 100) -> int:
         dispatched = 0
@@ -96,6 +124,8 @@ class DispatchReconciler:
             )
             _mark_dispatched(self._repository, job.job_id)
             dispatched += 1
+        if dispatched:
+            _notify(self._worker_trigger)
         return dispatched
 
 

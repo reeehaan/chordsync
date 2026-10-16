@@ -70,6 +70,8 @@ def test_cloud_job_serialization_round_trip_contains_only_metadata():
         "last_attempt_at",
         "dispatch_pending",
         "version",
+        "declared_size_bytes",
+        "upload_expires_at",
     }
     assert "timeline" not in payload
     assert "audio" not in payload

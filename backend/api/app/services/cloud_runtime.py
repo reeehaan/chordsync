@@ -32,6 +32,14 @@ from backend.api.app.services.dynamodb_cloud_job_repository import (
     DynamoDbCloudJobRepository,
 )
 from backend.api.app.services.s3_artifact_storage import S3ArtifactStorage
+from backend.api.app.services.source_upload_store import (
+    S3SourceUploadStore,
+    SourceUploadStore,
+)
+from backend.api.app.services.worker_dispatch_trigger import (
+    LambdaWorkerDispatchTrigger,
+    WorkerDispatchTrigger,
+)
 from backend.api.app.services.sqs_analysis_job_queue import SqsAnalysisJobQueue
 
 
@@ -54,6 +62,8 @@ class CloudRuntimeConfig:
     dynamodb_job_table: str | None = None
     dispatch_mode: DispatchMode = DispatchMode.IN_PROCESS
     sqs_analysis_queue_url: str | None = None
+    # Optional: asynchronously nudge the worker dispatcher after a job is queued.
+    worker_dispatcher_function: str | None = None
 
     @classmethod
     def from_env(
@@ -93,6 +103,9 @@ class CloudRuntimeConfig:
             dispatch_mode=dispatch_mode,
             sqs_analysis_queue_url=_clean(
                 values.get("CHORDSYNC_SQS_ANALYSIS_QUEUE_URL")
+            ),
+            worker_dispatcher_function=_clean(
+                values.get("CHORDSYNC_WORKER_DISPATCHER_FUNCTION")
             ),
         )
         config.validate()
@@ -139,6 +152,9 @@ class CloudRuntime:
     repository: CloudJobRepository
     artifact_storage: ArtifactStorage
     queue: AnalysisJobQueue | None = None
+    # Presigned source uploads (AWS runtime only).
+    source_uploads: SourceUploadStore | None = None
+    worker_trigger: WorkerDispatchTrigger | None = None
 
 
 def compose_cloud_runtime(
@@ -147,6 +163,7 @@ def compose_cloud_runtime(
     s3_client: Any | None = None,
     dynamodb_resource: Any | None = None,
     sqs_client: Any | None = None,
+    lambda_client: Any | None = None,
 ) -> CloudRuntime:
     config.validate()
     if config.mode is RuntimeMode.LOCAL:
@@ -164,13 +181,19 @@ def compose_cloud_runtime(
     if s3_client is None or dynamodb_resource is None or sqs_client is None:
         try:
             import boto3
+            from botocore.config import Config
         except ImportError as error:
             raise CloudProviderError(
                 CloudProviderErrorKind.CONFIGURATION,
                 "boto3 is required for AWS runtime mode",
             ) from error
         session = boto3.session.Session(region_name=config.aws_region)
-        s3_client = s3_client or session.client("s3")
+        # Signature Version 4 with the regional endpoint: presigned URLs must be
+        # SigV4 so the Content-Length and encryption headers are signed.
+        s3_client = s3_client or session.client(
+            "s3",
+            config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
+        )
         dynamodb_resource = dynamodb_resource or session.resource("dynamodb")
         sqs_client = sqs_client or session.client("sqs")
 
@@ -184,12 +207,25 @@ def compose_cloud_runtime(
             CloudProviderErrorKind.CONFIGURATION,
             "AWS runtime configuration is incomplete",
         )
+    worker_trigger: WorkerDispatchTrigger | None = None
+    if config.worker_dispatcher_function:
+        if lambda_client is None:
+            import boto3
+
+            lambda_client = boto3.session.Session(region_name=config.aws_region).client(
+                "lambda"
+            )
+        worker_trigger = LambdaWorkerDispatchTrigger(
+            lambda_client, config.worker_dispatcher_function
+        )
     return CloudRuntime(
         repository=DynamoDbCloudJobRepository(
             dynamodb_resource.Table(config.dynamodb_job_table)
         ),
         artifact_storage=S3ArtifactStorage(s3_client, config.s3_bucket),
         queue=SqsAnalysisJobQueue(sqs_client, config.sqs_analysis_queue_url),
+        source_uploads=S3SourceUploadStore(s3_client, config.s3_bucket),
+        worker_trigger=worker_trigger,
     )
 
 
@@ -215,6 +251,7 @@ def compose_analysis_dispatcher(
         runtime.repository,
         runtime.artifact_storage,
         runtime.queue,
+        runtime.worker_trigger,
     )
 
 
