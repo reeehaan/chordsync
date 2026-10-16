@@ -1,212 +1,110 @@
 # ChordSync
 
-ChordSync is a final-year software engineering and Music Information
-Retrieval project designed to help novice guitarists practise songs
-using automatically recognised guitar chords and synchronised lyrics.
+**Upload a song, get its guitar chords and synchronised lyrics, and practise
+along on your phone.**
 
-## Core Research Problem
+ChordSync is a final-year software engineering project for beginner
+guitarists. It analyses an audio file you own: it finds the chords, beats,
+bars, and word-timed lyrics, then turns them into an interactive practice
+sheet that scrolls in time with the music.
 
-The project investigates whether automatic chord estimation,
-chord-boundary localisation, beat/downbeat information and word-level
-lyric alignment can be integrated into a sufficiently accurate and
-usable practice interface for novice guitarists.
+## Features
 
-## Core Pipeline
+- **Upload a song**: WAV, MP3, or M4A, up to 6 minutes (25 MB).
+- **Automatic chord recognition** with a neural model (BTC), with Chordino as
+  a fallback.
+- **Beat and bar tracking**, so chords line up with the rhythm.
+- **Synchronised lyrics** with word-level timing, including other languages
+  and romanised display for non-Latin scripts.
+- **Practice screen** with chord diagrams, a scrolling song sheet, A–B
+  looping, playback speed control, and bar-by-bar skipping.
+- **Capo and simplify** tools that transpose the song into easier chord
+  shapes.
+- **Song library** of everything you've analysed.
 
-Audio
-→ Pre-processing
-→ Source Separation
-→ Beat/Downbeat Tracking
-→ Chord Estimation
-→ Temporal Decoding
-→ Lyric Processing
-→ Timeline Fusion
-→ Flutter Practice Interface
+## How it works
+
+1. **Prepare the audio**: convert the upload to a standard format (FFmpeg).
+2. **Find the chords**: a transformer model (BTC) labels the chords over time.
+3. **Find the beat**: madmom detects beats and downbeats and groups them into
+   bars.
+4. **Isolate the vocals**: Demucs separates the singing from the
+   instruments.
+5. **Transcribe the lyrics**: WhisperX transcribes the vocals and times every
+   word.
+6. **Combine everything** into one shared timeline (JSON) that the app plays
+   back in sync with the original audio.
+
+## Tech stack
+
+| Area | Technologies |
+| --- | --- |
+| Mobile app | Flutter, Dart |
+| Backend API | Python 3.11, FastAPI |
+| Audio and ML | FFmpeg, PyTorch, BTC-ISMIR19, Chordino, madmom, Demucs, WhisperX |
+| Cloud (in progress) | AWS ECS Fargate (ARM64), S3, DynamoDB, SQS, ECR, Terraform |
+| Quality | pytest, ruff, mypy, flutter test, Docker image scanning |
 
 ## Architecture
 
-ChordSync uses a four-tier architecture:
+```text
+Flutter app  →  FastAPI API  →  job queue  →  analysis worker  →  practice timeline
+```
 
-1. Flutter mobile client
-2. FastAPI application/API tier
-3. Python asynchronous analysis workers
-4. PostgreSQL/object-storage/Redis persistence tier
+The app uploads a song to the API, which queues an analysis job. A worker runs
+the pipeline and publishes the result, and the app downloads it when the job
+is done. Locally, everything runs on one machine. The cloud version stores
+files in S3, tracks jobs in DynamoDB, queues work in SQS, and runs the worker
+as a container on AWS Fargate. All of it is defined in Terraform.
 
-## Development Methodology
+## Project status
 
-The project follows an adapted Agile/Scrum methodology consisting of
-four risk-driven sprints:
+- ✅ Full pipeline and mobile app working end to end on a local machine
+- ✅ Cloud infrastructure defined in Terraform, with a security-scanned worker
+  container
+- 🔄 First controlled cloud run of the analysis worker
+- 🔜 Formal accuracy evaluation of chord recognition on real songs
 
-- Sprint 1 — Harmonic Spine
-- Sprint 2 — Temporal Grid
-- Sprint 3 — Lyric Layer
-- Sprint 4 — Interactive Client
+## Getting started
 
-## Current Status
-
-ChordSync is currently in Sprint 5 — backend and client integration. The Python
-pipeline supports chord analysis, beat/downbeat tracking, WhisperX word
-alignment, and fusion into a shared practice timeline. Chordino remains the
-default classical chord-estimation baseline, while BTC-ISMIR19 is now an
-independently executable neural candidate using an isolated environment and
-external local checkpoint. Formal multi-track comparison is still pending.
-
-A duration-aware evaluation harness can run both estimators on one normalized
-input and score them against a trusted `.lab` reference using root,
-major/minor, triad, and no-chord metrics. Its synthetic result validates the
-workflow only; real-song evaluation requires authorized audio, trusted
-annotations, and recorded provenance. See `analysis/evaluation/README.md`.
-
-The Flutter client can upload audio, poll analysis jobs, deserialize completed
-timelines, and provide synchronized practice playback with chord, lyric,
-rhythm, seeking, looping, speed, and bar-navigation controls.
-
-## Repository Structure
-
-- `mobile/` — Flutter practice client
-- `backend/` — FastAPI application and analysis-worker foundations
-- `analysis/` — chord, beat/downbeat, lyric, evaluation, and timeline fusion code
-- `tests/` — Python pipeline tests
-- `schemas/` — shared data schemas
-- `datasets/` — reviewed evaluation metadata and permitted fixtures
-- `storage/` — ignored local uploads and generated analysis output
-- `docs/` — architecture, sprint, experiment, and research notes
-
-## Hardware Strategy
-
-Development:
-
-- MacBook M2
-- 8 GB unified memory
-
-Local:
-
-- Flutter
-- FastAPI
-- PostgreSQL
-- Redis
-- FFmpeg
-- Chordino
-- BTC inference on CPU through its isolated environment
-- evaluation tooling
-
-Remote CUDA worker (future/heavier runs):
-
-- Demucs
-- BTC full evaluation
-- WhisperX
-- heavier MIR workloads
-
-## Mobile Target
-
-Primary development target:
-
-- iOS / physical iPhone
-
-Secondary compatibility target:
-
-- Android
-
-## Development Setup
-
-The Flutter client uses the SDK constraints and dependencies declared in
-`mobile/pubspec.yaml`. From `mobile/`, resolve them with:
+You need Python 3.11, Flutter, and FFmpeg. The analysis models use separate
+Python environments, so see the
+[full development setup](https://github.com/reeehaan/chordsync/blob/main/docs/development-setup.md)
+for details. Once set up:
 
 ```sh
+# Start the API
+backend/api/.venv-api/bin/python -m uvicorn backend.api.app.main:app --port 8000
+
+# Run the app (from mobile/)
 flutter pub get
+flutter run
 ```
 
-Python 3.11 is the currently verified baseline. The backend, beat tracking,
-evaluation, Whisper, and WhisperX dependencies intentionally use separate
-virtual environments because their native and ML requirements differ.
+Run the tests with `pytest` (Python) and `flutter test` (app).
 
-Create and install the lightweight shared/test environment from the repository
-root:
+## Project structure
 
-```sh
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+```text
+mobile/          Flutter practice app
+backend/         FastAPI API and analysis worker
+analysis/        Chord, beat, lyric, and timeline-fusion pipeline
+infrastructure/  AWS infrastructure (Terraform)
+tests/           Python tests
+docs/            Architecture, cloud, and research notes
 ```
 
-Create the subsystem environments in the same way:
+## Data and model notes
 
-```sh
-python3.11 -m venv backend/api/.venv-api
-backend/api/.venv-api/bin/python -m pip install -r backend/api/requirements.txt
+- No commercial audio is included; bring your own audio files.
+- Model weights are not stored in this repository.
+- The BTC source code is MIT licensed. Its pretrained checkpoint is used for
+  non-commercial research only
+  ([details](https://github.com/reeehaan/chordsync/blob/main/docs/licensing/btc-checkpoint.md)).
 
-python3.11 -m venv analysis/beats/.venv-beats
-analysis/beats/.venv-beats/bin/python -m pip install -r analysis/beats/requirements.txt
+## About
 
-python3.11 -m venv analysis/evaluation/.venv-eval
-analysis/evaluation/.venv-eval/bin/python -m pip install -r analysis/evaluation/requirements.txt
-
-python3.11 -m venv analysis/chords/btc/.venv-btc
-analysis/chords/btc/.venv-btc/bin/python -m pip install \
-  -r analysis/chords/btc/requirements.txt
-
-python3.11 -m venv analysis/lyrics/.venv-lyrics
-analysis/lyrics/.venv-lyrics/bin/python -m pip install -r analysis/lyrics/requirements-whisper.txt
-
-python3.11 -m venv analysis/lyrics/.venv-whisperx
-analysis/lyrics/.venv-whisperx/bin/python -m pip install -r analysis/lyrics/requirements-whisperx.txt
-
-python3.11 -m venv analysis/separation/.venv-separation
-analysis/separation/.venv-separation/bin/python -m pip install \
-  -r analysis/separation/requirements.txt
-```
-
-Do not casually combine the Whisper and WhisperX environments: their PyTorch
-and native dependency requirements can differ. The madmom environment uses the
-tested NumPy 1.26.4 and setuptools 80.10.2 combination. Because madmom 0.16.1
-is legacy software, ChordSync applies a small compatibility shim before
-importing it on Python 3.11. Use madmom through the ChordSync beat modules and
-scripts; no manual editing of packages inside a virtual environment is needed.
-
-FFmpeg and ffprobe are external system requirements for audio preprocessing.
-Chordino requires separately installed Vamp/Chordino tooling, including a
-compatible command-line host. ML model downloads are external runtime inputs
-and are not stored in Git. These instructions document the verified macOS
-development arrangement and do not claim support for untested platforms.
-
-BTC additionally requires a local checkout of the upstream BTC-ISMIR19 source
-and a locally supplied checkpoint. Neither is vendored into this repository;
-see `analysis/chords/btc/README.md` for configuration, provenance, vocabulary,
-and Apple Silicon notes.
-
-## Testing
-
-Run the Python tests from the repository root:
-
-```sh
-pytest
-```
-
-Run static analysis from the repository root (tools are listed in
-`requirements-dev.txt` and configured in `pyproject.toml`):
-
-```sh
-python3.11 -m venv .venv-dev
-.venv-dev/bin/python -m pip install -r requirements-dev.txt
-.venv-dev/bin/ruff check .
-.venv-dev/bin/mypy
-```
-
-Run Flutter verification from `mobile/`:
-
-```sh
-flutter test
-flutter analyze
-```
-
-## Research Data
-
-Commercial or otherwise restricted audio is not distributed with the intended
-public repository. Researchers must supply their own permitted local evaluation
-audio. See `datasets/README.md` for repository data-handling guidance.
-
-## Academic Context
-
-ChordSync is a final-year academic project investigating the integration of
-Music Information Retrieval techniques into a practice experience for novice
-guitarists. Results and evaluation artifacts should be interpreted in that
-research context.
+ChordSync is my final-year academic project, exploring how Music Information
+Retrieval techniques can support a practical practice tool for beginner
+guitarists. It was built in Agile sprints covering chords, timing, lyrics, the
+mobile client, and cloud deployment.
