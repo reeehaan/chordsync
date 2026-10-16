@@ -1001,3 +1001,117 @@ def test_without_a_dispatcher_function_name_there_is_no_trigger():
         config, s3_client=object(), dynamodb_resource=Dynamo(), sqs_client=object()
     )
     assert runtime.worker_trigger is None
+
+
+# --- structured logging (S7-T09) ----------------------------------------------------
+
+
+def _lambda_like_logging():
+    """What the Lambda Python runtime sets up: one root handler, root level WARNING."""
+    import logging
+
+    records: list[logging.LogRecord] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    root = logging.getLogger()
+    previous = (root.level, list(root.handlers))
+    handler = Capture()
+    root.handlers = [handler]
+    root.setLevel(logging.WARNING)
+    return records, lambda: (setattr(root, "level", previous[0]), setattr(root, "handlers", previous[1]))
+
+
+def test_the_dispatcher_logger_permits_info_even_when_the_root_logger_is_at_warning():
+    import logging
+
+    records, restore = _lambda_like_logging()
+    try:
+        assert logging.getLogger().level == logging.WARNING  # the runtime's default
+        assert logging.getLogger("chordsync.dispatcher").getEffectiveLevel() == logging.INFO
+        World(visible=0).dispatcher().dispatch("scheduled_reconcile")
+    finally:
+        restore()
+    events = [json.loads(r.getMessage()) for r in records if r.name == "chordsync.dispatcher"]
+    assert [e["event"] for e in events] == ["no_work"]
+    assert events[0]["reason"] == "scheduled_reconcile"
+    assert records[0].levelname == "INFO"
+
+
+def test_worker_started_is_emitted_at_info_with_the_task_arn():
+    records, restore = _lambda_like_logging()
+    try:
+        result = World(visible=1).dispatcher().dispatch("job_dispatched")
+    finally:
+        restore()
+    events = [json.loads(r.getMessage()) for r in records if r.name == "chordsync.dispatcher"]
+    started = [e for e in events if e["event"] == "worker_started"]
+    assert len(started) == 1 and started[0]["task_arn"] == result.task_arn
+    assert started[0]["visible"] == 1 and all(r.levelname == "INFO" for r in records)
+
+
+@pytest.mark.parametrize(
+    "scenario,expected",
+    [("no_work", "no_work"), ("active", "worker_already_active"), ("lock", "lock_not_acquired")],
+)
+def test_the_other_info_events_are_emitted_too(scenario, expected):
+    records, restore = _lambda_like_logging()
+    try:
+        world = World(visible=0 if scenario == "no_work" else 1)
+        if scenario == "active":
+            world.ecs.add_task("RUNNING")
+        if scenario == "lock":
+            world.table.items[LOCK_KEY] = {
+                "PK": LOCK_KEY, "owner": "other", "expires_at": int(world.clock.now) + 30,
+            }
+        world.dispatcher().dispatch("scheduled_reconcile")
+    finally:
+        restore()
+    assert [json.loads(r.getMessage())["event"] for r in records] == [expected]
+
+
+def test_failures_still_log_at_error_not_info():
+    records, restore = _lambda_like_logging()
+    try:
+        world = World(visible=1)
+        world.ecs.run_error = AwsError("ThrottlingException")
+        world.dispatcher().dispatch("job_dispatched")
+    finally:
+        restore()
+    assert [r.levelname for r in records] == ["ERROR"]
+    assert json.loads(records[0].getMessage())["event"] == "run_task_failed"
+
+
+def test_logged_events_carry_only_the_allowed_fields_and_no_secrets():
+    records, restore = _lambda_like_logging()
+    try:
+        world = World(visible=1)
+        hostile = {"reason": "job_dispatched", "receipt_handle": "SECRET-RECEIPT",
+                   "body": "SECRET-BODY", "Authorization": "Bearer SECRET-TOKEN"}
+        handler.handle(hostile, world.dispatcher())
+        world.sqs.error = AwsError("AccessDenied")
+        world.dispatcher().dispatch("scheduled_reconcile")
+    finally:
+        restore()
+    allowed = {"event", "reason", "task_arn", "detail", "visible", "in_flight", "delayed"}
+    text = "".join(r.getMessage() for r in records)
+    for r in records:
+        assert set(json.loads(r.getMessage())) <= allowed
+    for leaked in ("SECRET", "receipt", "ReceiptHandle", "Bearer", "private provider text", "AKIA"):
+        assert leaked not in text
+
+
+def test_only_the_dispatcher_logger_changed_not_boto_or_the_root_logger():
+    import logging
+
+    import backend.dispatcher.dispatcher  # noqa: F401 - imported for its side effect
+
+    assert logging.getLogger("chordsync.dispatcher").level == logging.INFO
+    assert logging.getLogger("boto3").level != logging.DEBUG
+    assert logging.getLogger("botocore").level != logging.DEBUG
+    assert logging.getLogger("urllib3").level != logging.DEBUG
+    source = (ROOT / "backend/dispatcher/dispatcher.py").read_text()
+    assert "basicConfig" not in source and "DEBUG" not in source
+    assert "getLogger()" not in source  # never touches the root logger

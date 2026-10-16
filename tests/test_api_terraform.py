@@ -122,7 +122,13 @@ def test_the_api_policy_is_exactly_the_intended_set():
     assert 'resources = ["*"]' not in policy
     # source prefix: the object statement and the ListBucket prefix condition
     assert policy.count("jobs/*/source/*") == 2 and policy.count("jobs/*/results/*") == 1
-    assert "aws_lambda_function.dispatcher[0].arn" in policy  # only the dispatcher
+    assert "resources = [local.dispatcher_arn]" in policy  # only the dispatcher
+    assert re.search(
+        r'dispatcher_arn = "arn:aws:lambda:\$\{var.aws_region\}:\$\{data.aws_caller_identity.current.account_id\}:function:\$\{local.dispatcher_name\}"',
+        API,
+    )
+    # not read from the function resource: its changes must not defer the policy
+    assert "aws_lambda_function.dispatcher" not in policy
 
 
 def test_api_gateway_is_a_plain_https_http_api():

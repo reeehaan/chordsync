@@ -102,6 +102,10 @@ locals {
   api_on   = var.hosted_api_enabled
   api_name = "${local.name_prefix}-api"
 
+  # Built from the function name (not read from the function resource), so a
+  # change to the dispatcher's code never makes this IAM policy "known after apply".
+  dispatcher_arn = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${local.dispatcher_name}"
+
   demo_token_parameter_path = startswith(var.demo_token_parameter_name, "/") ? var.demo_token_parameter_name : "/${var.demo_token_parameter_name}"
   demo_token_parameter_arn  = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.demo_token_parameter_path}"
 
@@ -245,7 +249,7 @@ data "aws_iam_policy_document" "api_lambda" {
   statement {
     sid       = "NudgeWorkerDispatcher"
     actions   = ["lambda:InvokeFunction"]
-    resources = local.api_on ? [aws_lambda_function.dispatcher[0].arn] : ["arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${local.dispatcher_name}"]
+    resources = [local.dispatcher_arn]
   }
 
   statement {

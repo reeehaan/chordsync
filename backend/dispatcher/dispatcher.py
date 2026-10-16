@@ -28,6 +28,11 @@ from enum import Enum
 from typing import Callable, Protocol
 
 logger = logging.getLogger("chordsync.dispatcher")
+# The Lambda Python runtime leaves the root logger at WARNING, which silently
+# dropped every INFO event below. Setting the level on this logger alone lets its
+# records through to the runtime's handler without touching boto3/botocore or the
+# root logger.
+logger.setLevel(logging.INFO)
 
 REASON_JOB_DISPATCHED = "job_dispatched"
 REASON_SCHEDULED = "scheduled_reconcile"
