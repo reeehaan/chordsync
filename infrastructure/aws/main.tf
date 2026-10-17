@@ -318,6 +318,10 @@ resource "aws_ecs_task_definition" "worker" {
       # Analysis subprocesses get no usable network: proxies point at a closed
       # loopback port, so library download fallbacks fail immediately.
       { name = "CHORDSYNC_STAGE_NETWORK", value = "disabled" },
+      # The worker's own process (not the subprocesses above) looks up reference
+      # lyrics at LRCLIB from the song's embedded tags. Kept in memory only.
+      { name = "CHORDSYNC_LRCLIB_REFERENCE_ENABLED", value = "true" },
+      { name = "CHORDSYNC_LRCLIB_USER_AGENT", value = "ChordSync/0.1 (https://github.com/reeehaan/chordsync)" },
       # Bootstrap installs and verifies this release before polling the queue.
       { name = "CHORDSYNC_MODEL_RELEASE", value = var.model_release_id },
       { name = "CHORDSYNC_MODEL_MANIFEST_KEY", value = "models/releases/${var.model_release_id}/manifest.json" },
