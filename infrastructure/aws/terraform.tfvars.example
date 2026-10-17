@@ -1,6 +1,6 @@
 aws_region   = "ap-southeast-1"
 project_name = "chordsync"
-environment  = "student-demo"
+environment  = "demo"
 
 # Leave at zero until the Linux/AWS benchmark selects GPU capacity.
 worker_gpu_count = 0

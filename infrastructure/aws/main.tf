@@ -185,7 +185,7 @@ resource "aws_sqs_queue" "analysis_dlq" {
 }
 
 resource "aws_sqs_queue" "analysis" {
-  name                       = "${local.name_prefix}-analysis"
+  name                       = "${local.name_prefix}-analysis-queue"
   message_retention_seconds  = 86400
   visibility_timeout_seconds = var.analysis_visibility_timeout_seconds
   receive_wait_time_seconds  = 20
@@ -250,7 +250,7 @@ locals {
 }
 
 resource "aws_ecs_cluster" "analysis" {
-  name = "${local.name_prefix}-analysis"
+  name = "${local.name_prefix}-ecs-cluster"
 
   setting {
     name  = "containerInsights"

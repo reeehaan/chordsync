@@ -27,15 +27,15 @@ from backend.dispatcher.dispatcher import (
 ROOT = Path(__file__).resolve().parents[1]
 ENV = {
     "AWS_REGION": "ap-southeast-1",
-    "CHORDSYNC_ECS_CLUSTER": "chordsync-student-demo-analysis",
-    "CHORDSYNC_WORKER_TASK_DEFINITION": "chordsync-student-demo-worker",
+    "CHORDSYNC_ECS_CLUSTER": "chordsync-demo-ecs-cluster",
+    "CHORDSYNC_WORKER_TASK_DEFINITION": "chordsync-demo-worker",
     "CHORDSYNC_WORKER_SUBNET_IDS": "subnet-0a1b2c3d4e5f60718,subnet-1a1b2c3d4e5f60718",
     "CHORDSYNC_WORKER_SECURITY_GROUP_ID": "sg-0a1b2c3d4e5f60718",
-    "CHORDSYNC_SQS_ANALYSIS_QUEUE_URL": "https://sqs.ap-southeast-1.amazonaws.com/123456789012/chordsync-student-demo-analysis",
-    "CHORDSYNC_DYNAMODB_JOB_TABLE": "chordsync-student-demo-jobs",
+    "CHORDSYNC_SQS_ANALYSIS_QUEUE_URL": "https://sqs.ap-southeast-1.amazonaws.com/123456789012/chordsync-demo-analysis-queue",
+    "CHORDSYNC_DYNAMODB_JOB_TABLE": "chordsync-demo-jobs",
 }
 CONFIG = DispatcherConfig.from_env(ENV)
-FAMILY = "chordsync-student-demo-worker"
+FAMILY = "chordsync-demo-worker"
 TASK_DEF_ARN = f"arn:aws:ecs:ap-southeast-1:123456789012:task-definition/{FAMILY}:7"
 
 
@@ -275,8 +275,8 @@ def test_run_task_uses_only_configured_values():
 
     (call,) = world.ecs.run_calls
     assert call == {
-        "cluster": "chordsync-student-demo-analysis",
-        "taskDefinition": "chordsync-student-demo-worker",
+        "cluster": "chordsync-demo-ecs-cluster",
+        "taskDefinition": "chordsync-demo-worker",
         "launchType": "FARGATE",
         "count": 1,
         "startedBy": "chordsync-dispatcher",
@@ -588,7 +588,7 @@ def test_the_ecs_requests_match_the_service_model():
 
 
 def test_configuration_reads_the_expected_values():
-    assert CONFIG.cluster == "chordsync-student-demo-analysis"
+    assert CONFIG.cluster == "chordsync-demo-ecs-cluster"
     assert CONFIG.task_family == FAMILY
     assert CONFIG.max_worker_tasks == 1 and CONFIG.lease_seconds == 60
     assert DispatcherConfig.from_env(
@@ -959,7 +959,7 @@ def test_the_dispatcher_function_name_reaches_the_api_dispatcher():
         "CHORDSYNC_S3_BUCKET": "bucket",
         "CHORDSYNC_DYNAMODB_JOB_TABLE": "jobs",
         "CHORDSYNC_SQS_ANALYSIS_QUEUE_URL": "https://sqs.example/q",
-        "CHORDSYNC_WORKER_DISPATCHER_FUNCTION": "chordsync-student-demo-worker-dispatcher",
+        "CHORDSYNC_WORKER_DISPATCHER_FUNCTION": "chordsync-demo-worker-dispatcher",
     }
     config = CloudRuntimeConfig.from_env(environment)
     lambda_client = Lambda()
@@ -973,7 +973,7 @@ def test_the_dispatcher_function_name_reaches_the_api_dispatcher():
     )
     dispatcher = compose_analysis_dispatcher(config, runtime)
 
-    assert config.worker_dispatcher_function == "chordsync-student-demo-worker-dispatcher"
+    assert config.worker_dispatcher_function == "chordsync-demo-worker-dispatcher"
     assert dispatcher._worker_trigger is runtime.worker_trigger
     runtime.worker_trigger.notify()
     assert lambda_client.calls[0]["FunctionName"] == config.worker_dispatcher_function

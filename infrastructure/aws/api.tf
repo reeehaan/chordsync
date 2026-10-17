@@ -24,7 +24,7 @@ variable "demo_token_parameter_name" {
 
   validation {
     condition     = var.demo_token_parameter_name == "" || can(regex("^/?[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$", var.demo_token_parameter_name))
-    error_message = "demo_token_parameter_name must be a valid SSM parameter name such as /chordsync/student-demo/demo-tokens."
+    error_message = "demo_token_parameter_name must be a valid SSM parameter name such as /chordsync/demo/auth/token-verifiers."
   }
 }
 

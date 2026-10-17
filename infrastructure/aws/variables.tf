@@ -18,7 +18,7 @@ variable "project_name" {
 variable "environment" {
   description = "Short deployment environment name."
   type        = string
-  default     = "student-demo"
+  default     = "demo"
 
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.environment))
