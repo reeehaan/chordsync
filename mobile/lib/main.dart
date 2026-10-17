@@ -4,7 +4,10 @@ import 'design_system/chordsync_design_system.dart';
 import 'features/analysis/application/analysis_job_poller.dart';
 import 'features/analysis/application/analysis_practice_coordinator.dart';
 import 'features/analysis/data/analysis_api_client.dart';
+import 'features/analysis/application/hosted_analysis_client.dart';
 import 'features/analysis/data/analysis_api_config.dart';
+import 'features/analysis/data/hosted_analysis_api.dart';
+import 'features/analysis/data/presigned_uploader.dart';
 import 'features/analysis/data/analyzed_session_library.dart';
 import 'features/analysis/presentation/audio_file_selector.dart';
 import 'features/analysis/presentation/audio_import_controller.dart';
@@ -54,15 +57,35 @@ class _MyAppState extends State<MyApp> {
   }
 
   AudioImportController _createImportController() {
-    final client = DioAnalysisApiClient(
-      baseUrl: AnalysisApiConfig.development.baseUrl,
-    );
+    final config = AnalysisApiConfig.development;
+    final client = _createAnalysisClient(config);
     return AudioImportController(
       preparation: AnalysisPracticeCoordinator(
         client: client,
-        polling: AnalysisJobPoller(client: client),
+        polling: AnalysisJobPoller(
+          client: client,
+          // The hosted API is rate limited and a job takes minutes.
+          pollingInterval: Duration(seconds: config.isHosted ? 3 : 1),
+        ),
       ),
       sessionLibrary: _sessionLibrary,
+    );
+  }
+
+  /// Local development keeps the one-request multipart upload. The hosted API
+  /// uses a presigned upload: create the job, send the audio straight to
+  /// storage, then confirm.
+  AnalysisApiClient _createAnalysisClient(AnalysisApiConfig config) {
+    if (!config.isHosted) {
+      return DioAnalysisApiClient(baseUrl: config.baseUrl);
+    }
+    return HostedAnalysisClient(
+      api: DioHostedAnalysisApi(
+        baseUrl: config.baseUrl,
+        tokenProvider: () => config.authToken,
+      ),
+      // A separate plain client: the bearer token must never reach storage.
+      uploader: DioPresignedUploader(),
     );
   }
 

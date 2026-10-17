@@ -1,18 +1,13 @@
 import '../../practice_timeline/data/shared_timeline.dart';
 import '../data/analysis_api_client.dart';
+import '../data/analysis_cancellation.dart';
 import '../data/analysis_client_errors.dart';
 import '../data/analysis_job.dart';
 
+export '../data/analysis_cancellation.dart';
+
 typedef AnalysisPollingDelay = Future<void> Function(Duration duration);
 typedef AnalysisJobUpdate = void Function(AnalysisJob job);
-
-class AnalysisPollingCancellationToken {
-  bool _isCancelled = false;
-
-  bool get isCancelled => _isCancelled;
-
-  void cancel() => _isCancelled = true;
-}
 
 class AnalysisCompletedResult {
   const AnalysisCompletedResult({required this.job, required this.timeline});
@@ -91,6 +86,8 @@ class AnalysisJobPoller implements AnalysisJobPolling {
             code: error?.code ?? 'analysis_failed',
             message: error?.message ?? 'Analysis could not be completed.',
           );
+        case AnalysisJobStatus.awaitingUpload:
+        case AnalysisJobStatus.validating:
         case AnalysisJobStatus.queued:
         case AnalysisJobStatus.processing:
           final remaining = _timeout - elapsedPollingDelay;

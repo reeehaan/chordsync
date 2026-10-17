@@ -191,6 +191,7 @@ class _FakeClient implements AnalysisApiClient {
     required String title,
     required File audioFile,
     AnalysisUploadProgress? onSendProgress,
+    AnalysisPollingCancellationToken? cancellation,
   }) async {
     uploadedFiles.add(audioFile);
     return createByPath[audioFile.path] ?? createResult!;

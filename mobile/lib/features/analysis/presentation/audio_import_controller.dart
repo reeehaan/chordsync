@@ -137,6 +137,8 @@ class AudioImportController extends ChangeNotifier {
         onJobUpdated: (job) {
           if (!_isCurrent(attempt)) return;
           _phase = switch (job.status) {
+            AnalysisJobStatus.awaitingUpload => AudioImportPhase.uploading,
+            AnalysisJobStatus.validating ||
             AnalysisJobStatus.queued => AudioImportPhase.queued,
             AnalysisJobStatus.processing => AudioImportPhase.processing,
             AnalysisJobStatus.completed => AudioImportPhase.preparing,
@@ -217,10 +219,29 @@ class AudioImportController extends ChangeNotifier {
           'The practice session could not be prepared.',
       };
     }
+    if (error is AnalysisUploadException) {
+      return switch (error.failure) {
+        AnalysisUploadFailure.urlExpired =>
+          'The upload took too long to start. Please try again.',
+        AnalysisUploadFailure.timeout => 'The upload timed out. Try again.',
+        AnalysisUploadFailure.connection =>
+          "ChordSync can't reach the upload service.",
+        AnalysisUploadFailure.rejected => 'The upload was not accepted.',
+      };
+    }
     if (error is AnalysisApiException) {
+      if (error.isUnauthorized) {
+        return 'ChordSync needs a valid access token to analyze songs.';
+      }
       return switch (error.code) {
         'unsupported_audio_format' => 'Choose a WAV, MP3, or M4A audio file.',
         'audio_too_large' => 'The selected audio file is too large.',
+        'audio_too_long' => 'Songs can be up to 6 minutes long.',
+        'invalid_audio' || 'empty_audio' => 'The audio file could not be read.',
+        'upload_not_received' => 'The upload did not finish. Please try again.',
+        'upload_expired' => 'The upload expired. Please try again.',
+        'service_unavailable' =>
+          'The analysis service is temporarily unavailable.',
         _ => 'The song could not be analyzed.',
       };
     }

@@ -199,6 +199,122 @@ void main() {
 
     expect(preparation.cancellations.single.isCancelled, isTrue);
   });
+
+  test(
+    'hosted-only job states map onto the existing progress phases',
+    () async {
+      controller
+        ..selectFile(audio)
+        ..setTitle('Song');
+      unawaited(controller.analyze());
+      await Future<void>.delayed(Duration.zero);
+
+      preparation.emitJob(AnalysisJobStatus.awaitingUpload);
+      expect(controller.phase, AudioImportPhase.uploading);
+      preparation.emitJob(AnalysisJobStatus.validating);
+      expect(controller.phase, AudioImportPhase.queued);
+      preparation.emitJob(AnalysisJobStatus.queued);
+      expect(controller.phase, AudioImportPhase.queued);
+      preparation.emitJob(AnalysisJobStatus.processing);
+      expect(controller.phase, AudioImportPhase.processing);
+
+      preparation.fail(const AnalysisPollingCancelledException());
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
+
+  group('hosted errors become safe messages', () {
+    Future<String?> messageFor(Object error) async {
+      controller
+        ..selectFile(audio)
+        ..setTitle('Song');
+      final run = controller.analyze();
+      await Future<void>.delayed(Duration.zero);
+      preparation.fail(error);
+      await run;
+      expect(controller.phase, AudioImportPhase.failed);
+      final message = controller.errorMessage;
+      controller.reset();
+      return message;
+    }
+
+    test('authentication', () async {
+      for (final error in [
+        const AnalysisApiException(
+          statusCode: 401,
+          code: 'unauthorized',
+          message: 'x',
+        ),
+        const AnalysisApiException(
+          statusCode: 401,
+          code: 'authentication_required',
+          message: 'x',
+        ),
+      ]) {
+        expect(await messageFor(error), contains('access token'));
+      }
+    });
+
+    test('upload failures', () async {
+      expect(
+        await messageFor(
+          const AnalysisUploadException(AnalysisUploadFailure.urlExpired, 'm'),
+        ),
+        contains('try again'),
+      );
+      expect(
+        await messageFor(
+          const AnalysisUploadException(AnalysisUploadFailure.timeout, 'm'),
+        ),
+        contains('timed out'),
+      );
+      expect(
+        await messageFor(
+          const AnalysisUploadException(AnalysisUploadFailure.connection, 'm'),
+        ),
+        contains("can't reach"),
+      );
+      expect(
+        await messageFor(
+          const AnalysisUploadException(AnalysisUploadFailure.rejected, 'm'),
+        ),
+        contains('not accepted'),
+      );
+    });
+
+    test('backend validation and availability codes', () async {
+      for (final (code, fragment) in [
+        ('audio_too_long', '6 minutes'),
+        ('invalid_audio', 'could not be read'),
+        ('empty_audio', 'could not be read'),
+        ('upload_not_received', 'did not finish'),
+        ('upload_expired', 'expired'),
+        ('service_unavailable', 'temporarily unavailable'),
+      ]) {
+        final message = await messageFor(
+          AnalysisApiException(
+            statusCode: 422,
+            code: code,
+            message: 'internal detail',
+          ),
+        );
+        expect(message, contains(fragment), reason: code);
+        expect(message, isNot(contains('internal detail')));
+      }
+    });
+
+    test('messages never contain a URL or the file path', () async {
+      final message = await messageFor(
+        const AnalysisUploadException(
+          AnalysisUploadFailure.rejected,
+          'https://bucket.s3.amazonaws.com/x?X-Amz-Signature=secret',
+        ),
+      );
+      expect(message, isNot(contains('amazonaws')));
+      expect(message, isNot(contains('Signature')));
+      expect(message, isNot(contains(directory.path)));
+    });
+  });
 }
 
 class _FakeSessionLibrary implements AnalyzedSessionLibrary {

@@ -1,6 +1,10 @@
 import 'analysis_client_errors.dart';
 
+/// Job states reported by the backend. `awaitingUpload` and `validating` only
+/// occur with the hosted presigned-upload flow.
 enum AnalysisJobStatus {
+  awaitingUpload,
+  validating,
   queued,
   processing,
   completed,
@@ -8,6 +12,8 @@ enum AnalysisJobStatus {
 
   static AnalysisJobStatus fromJson(String value) {
     return switch (value) {
+      'awaiting_upload' => awaitingUpload,
+      'validating' => validating,
       'queued' => queued,
       'processing' => processing,
       'completed' => completed,

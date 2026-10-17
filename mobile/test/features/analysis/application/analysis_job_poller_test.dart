@@ -52,6 +52,7 @@ class FakeAnalysisApiClient implements AnalysisApiClient {
     required String title,
     required File audioFile,
     AnalysisUploadProgress? onSendProgress,
+    AnalysisPollingCancellationToken? cancellation,
   }) => throw UnimplementedError();
 
   @override

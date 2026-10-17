@@ -43,6 +43,7 @@ class AnalysisPracticeCoordinator implements AnalysisPracticePreparation {
       title: title,
       audioFile: audioFile,
       onSendProgress: onUploadProgress,
+      cancellation: cancellation,
     );
     onJobUpdated?.call(createdJob);
     final completed = await _polling.pollUntilComplete(
