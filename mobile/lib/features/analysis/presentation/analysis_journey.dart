@@ -42,7 +42,7 @@ class _AnalysisJourneyState extends State<AnalysisJourney>
   Widget build(BuildContext context) {
     final phase = widget.controller.phase;
     final activeStep = switch (phase) {
-      AudioImportPhase.uploading => 0,
+      AudioImportPhase.uploading || AudioImportPhase.finishingUpload => 0,
       AudioImportPhase.queued => 1,
       AudioImportPhase.processing => 2,
       AudioImportPhase.preparing => 3,
@@ -53,6 +53,7 @@ class _AnalysisJourneyState extends State<AnalysisJourney>
       AudioImportPhase.uploading when uploadProgress != null =>
         'Uploading your song… ${(uploadProgress * 100).round()}%',
       AudioImportPhase.uploading => 'Uploading your song…',
+      AudioImportPhase.finishingUpload => 'Finishing upload…',
       AudioImportPhase.queued => 'Waiting to analyze…',
       AudioImportPhase.processing => 'Analyzing your song…',
       AudioImportPhase.preparing => 'Preparing your practice sheet…',

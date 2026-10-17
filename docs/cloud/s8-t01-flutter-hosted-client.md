@@ -89,8 +89,9 @@ existing test fakes gained the new optional `cancellation` argument.
 ## Not done
 
 - The hosted backend is off, so nothing was run against real AWS or S3.
-- Android: the main manifest lacks `android.permission.INTERNET` (debug and profile have it),
-  so a release build cannot reach any network until it is added.
-- Token entry/storage UI and a real sign-in, a result "not ready yet" retry inside the
-  poller, backoff on 429/503 while polling, and a visible "uploading to cloud" stage label.
+- Token entry/storage UI and a real sign-in.
+- Added afterwards (S8-T01b): the poller retries 429/503 (capped exponential backoff, 5
+  consecutive tries) and `result_not_ready`, all within the overall timeout; a "Finishing
+  upload…" stage shows between the last byte sent and the job being queued. Retries only
+  touch status/result requests, so no second job or upload is made.
 - A Dio-level progress callback measures bytes sent to the OS, not bytes accepted by storage.

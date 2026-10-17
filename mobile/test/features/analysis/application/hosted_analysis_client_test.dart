@@ -27,6 +27,9 @@ class _FakeApi implements HostedAnalysisApi {
       <Object>[]; // an exception is thrown, a job is returned
   int confirmCalls = 0;
   Object? createError;
+  final getJobErrors = <Exception>[];
+  final getResultErrors = <Exception>[];
+  int getJobCalls = 0;
 
   @override
   Future<UploadTarget> createUpload(CreateUploadRequest request) async {
@@ -48,11 +51,17 @@ class _FakeApi implements HostedAnalysisApi {
   }
 
   @override
-  Future<AnalysisJob> getJob(String jobId) async => _job('completed');
+  Future<AnalysisJob> getJob(String jobId) async {
+    getJobCalls++;
+    if (getJobErrors.isNotEmpty) throw getJobErrors.removeAt(0);
+    return _job('completed');
+  }
 
   @override
-  Future<SharedTimeline> getResult(String jobId) async =>
-      SharedTimeline.fromJson(hostedTimelineJson);
+  Future<SharedTimeline> getResult(String jobId) async {
+    if (getResultErrors.isNotEmpty) throw getResultErrors.removeAt(0);
+    return SharedTimeline.fromJson(hostedTimelineJson);
+  }
 }
 
 class _FakeUploader implements PresignedUploader {
@@ -408,6 +417,30 @@ void main() {
       expect(session.timeline.bpm, 90.0);
       expect(session.audioFile, same(file));
       expect(updates, [AnalysisJobStatus.queued, AnalysisJobStatus.completed]);
+    });
+
+    test('polling retries never create a second job or re-upload', () async {
+      api.getJobErrors.addAll([
+        _apiError(429, 'rate_limited'),
+        _apiError(503, 'service_unavailable'),
+      ]);
+      api.getResultErrors.add(_apiError(409, 'result_not_ready'));
+      final polling = AnalysisJobPoller(
+        client: client,
+        pollingInterval: const Duration(milliseconds: 1),
+        delay: (_) async {},
+      );
+      final coordinator = AnalysisPracticeCoordinator(
+        client: client,
+        polling: polling,
+      );
+      final file = await audio('song.wav', [1, 2, 3, 4, 5, 6, 7]);
+
+      final session = await coordinator.prepare(title: 'Song', audioFile: file);
+
+      expect(session.timeline.bpm, 90.0);
+      expect(events, ['create', 'upload', 'confirm']);
+      expect(api.getJobCalls, greaterThan(2));
     });
 
     test(

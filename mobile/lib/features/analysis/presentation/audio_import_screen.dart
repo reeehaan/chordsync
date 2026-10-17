@@ -375,6 +375,7 @@ class _AnalysisStatus extends StatelessWidget {
     final label = switch (controller.phase) {
       AudioImportPhase.idle || AudioImportPhase.fileSelected => null,
       AudioImportPhase.uploading => 'Uploading your song…',
+      AudioImportPhase.finishingUpload => 'Finishing upload…',
       AudioImportPhase.queued => 'Waiting to analyze…',
       AudioImportPhase.processing => 'Analyzing your song…',
       AudioImportPhase.preparing => 'Preparing your practice sheet…',

@@ -91,6 +91,9 @@ void main() {
 
     preparation.emitProgress(42, 100);
     expect(controller.uploadProgress, 0.42);
+    expect(controller.phase, AudioImportPhase.uploading);
+    preparation.emitProgress(100, 100);
+    expect(controller.phase, AudioImportPhase.finishingUpload);
     preparation.emitJob(AnalysisJobStatus.queued);
     expect(controller.phase, AudioImportPhase.queued);
     preparation.emitJob(AnalysisJobStatus.processing);

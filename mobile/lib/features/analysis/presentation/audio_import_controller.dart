@@ -12,6 +12,7 @@ enum AudioImportPhase {
   idle,
   fileSelected,
   uploading,
+  finishingUpload,
   queued,
   processing,
   preparing,
@@ -132,6 +133,10 @@ class AudioImportController extends ChangeNotifier {
         onUploadProgress: (sent, total) {
           if (!_isCurrent(attempt) || total <= 0) return;
           _uploadProgress = (sent / total).clamp(0, 1);
+          // All bytes are sent; the server is now checking the upload.
+          if (sent >= total && _phase == AudioImportPhase.uploading) {
+            _phase = AudioImportPhase.finishingUpload;
+          }
           _notify();
         },
         onJobUpdated: (job) {
