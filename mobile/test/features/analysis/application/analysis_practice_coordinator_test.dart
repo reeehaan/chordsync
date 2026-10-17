@@ -136,6 +136,61 @@ void main() {
     },
   );
 
+  group('cancelling a hosted analysis', () {
+    Future<(_FakeClient, AnalysisPracticeCoordinator)> build(
+      Object pollingError, {
+      Object? cancelError,
+    }) async {
+      final client = _FakeClient(
+        createResult: _job('job-9', AnalysisJobStatus.queued),
+      )..cancelError = cancelError;
+      return (
+        client,
+        AnalysisPracticeCoordinator(
+          client: client,
+          polling: _FakePolling.failure(pollingError),
+        ),
+      );
+    }
+
+    test('asks the server to stop the job, once', () async {
+      final (client, coordinator) = await build(
+        const AnalysisPollingCancelledException(),
+      );
+
+      await expectLater(
+        coordinator.prepare(title: 'T', audioFile: await _audioFile('a.wav')),
+        throwsA(isA<AnalysisPollingCancelledException>()),
+      );
+      expect(client.cancelled, ['job-9']);
+    });
+
+    test('a failing cancel request does not hide the cancellation', () async {
+      final (client, coordinator) = await build(
+        const AnalysisPollingCancelledException(),
+        cancelError: const AnalysisTransportException('offline'),
+      );
+
+      await expectLater(
+        coordinator.prepare(title: 'T', audioFile: await _audioFile('a.wav')),
+        throwsA(isA<AnalysisPollingCancelledException>()),
+      );
+      expect(client.cancelled, ['job-9']);
+    });
+
+    test('other failures do not cancel the job', () async {
+      final (client, coordinator) = await build(
+        const AnalysisPollingTimeoutException(),
+      );
+
+      await expectLater(
+        coordinator.prepare(title: 'T', audioFile: await _audioFile('a.wav')),
+        throwsA(isA<AnalysisPollingTimeoutException>()),
+      );
+      expect(client.cancelled, isEmpty);
+    });
+  });
+
   test(
     'concurrent preparations do not cross audio or timeline pairs',
     () async {
@@ -185,6 +240,8 @@ class _FakeClient implements AnalysisApiClient {
   final AnalysisJob? createResult;
   final Map<String, AnalysisJob> createByPath;
   final uploadedFiles = <File>[];
+  final cancelled = <String>[];
+  Object? cancelError;
 
   @override
   Future<AnalysisJob> createJob({
@@ -202,6 +259,12 @@ class _FakeClient implements AnalysisApiClient {
 
   @override
   Future<SharedTimeline> getResult(String jobId) => throw UnimplementedError();
+
+  @override
+  Future<void> cancelJob(String jobId) async {
+    cancelled.add(jobId);
+    if (cancelError case final Object error) throw error;
+  }
 }
 
 class _FakePolling implements AnalysisJobPolling {

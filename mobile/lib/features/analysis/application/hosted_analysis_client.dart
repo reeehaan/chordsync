@@ -55,13 +55,30 @@ class HostedAnalysisClient implements AnalysisApiClient {
     _throwIfCancelled(cancellation);
 
     final target = await api.createUpload(request);
-    _throwIfCancelled(cancellation);
+    try {
+      _throwIfCancelled(cancellation);
+      await _upload(target, audioFile, onSendProgress, cancellation);
+      _throwIfCancelled(cancellation);
+      final outcome = await _confirm(target.jobId, cancellation);
+      return outcome.job;
+    } on AnalysisPollingCancelledException {
+      // The job exists on the server already; tell it to stop waiting.
+      await _cancelQuietly(target.jobId);
+      rethrow;
+    }
+  }
 
-    await _upload(target, audioFile, onSendProgress, cancellation);
-    _throwIfCancelled(cancellation);
+  @override
+  Future<void> cancelJob(String jobId) async {
+    await api.cancelJob(jobId);
+  }
 
-    final outcome = await _confirm(target.jobId, cancellation);
-    return outcome.job;
+  Future<void> _cancelQuietly(String jobId) async {
+    try {
+      await api.cancelJob(jobId);
+    } on Object {
+      // Best effort: an unreachable server must not hide the cancellation.
+    }
   }
 
   @override

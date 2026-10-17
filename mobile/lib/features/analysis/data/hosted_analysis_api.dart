@@ -20,6 +20,9 @@ abstract interface class HostedAnalysisApi {
   Future<AnalysisJob> getJob(String jobId);
 
   Future<SharedTimeline> getResult(String jobId);
+
+  /// Stops the job on the server; repeating the call returns the same state.
+  Future<AnalysisJob> cancelJob(String jobId);
 }
 
 class DioHostedAnalysisApi implements HostedAnalysisApi {
@@ -104,6 +107,21 @@ class DioHostedAnalysisApi implements HostedAnalysisApi {
     return _parse(
       () => SharedTimeline.fromJson(analysisJsonMap(response.data)),
       'Malformed SharedTimeline response.',
+    );
+  }
+
+  @override
+  Future<AnalysisJob> cancelJob(String jobId) async {
+    final response = await _send(
+      () async => _dio.post<Object?>(
+        '/analysis/jobs/${Uri.encodeComponent(jobId)}/cancel',
+        options: await _authorized(),
+      ),
+      malformed: 'Malformed cancel response.',
+    );
+    return _parse(
+      () => AnalysisJob.fromJson(analysisJsonMap(response.data)),
+      'Malformed cancel response.',
     );
   }
 

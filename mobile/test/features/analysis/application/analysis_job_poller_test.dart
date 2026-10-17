@@ -67,6 +67,11 @@ class FakeAnalysisApiClient implements AnalysisApiClient {
     return queue.length == 1 ? queue.single : queue.removeAt(0);
   }
 
+  final cancelRequests = <String>[];
+
+  @override
+  Future<void> cancelJob(String jobId) async => cancelRequests.add(jobId);
+
   @override
   Future<SharedTimeline> getResult(String jobId) async {
     resultRequests.add(jobId);
@@ -223,6 +228,25 @@ void main() {
     expect(completions[1].job.jobId, 'job-b');
     expect(completions[1].timeline.bars.single.beats.single.chord, 'G');
     expect(client.resultRequests, containsAll(['job-a', 'job-b']));
+  });
+
+  test('a job cancelled on the server stops polling as cancelled', () async {
+    final client = FakeAnalysisApiClient(
+      statuses: {
+        'job-1': [
+          job('job-1', AnalysisJobStatus.processing),
+          job('job-1', AnalysisJobStatus.cancelled),
+        ],
+      },
+      results: {},
+    );
+    final poller = AnalysisJobPoller(client: client, delay: (_) async {});
+
+    await expectLater(
+      poller.pollUntilComplete('job-1'),
+      throwsA(isA<AnalysisPollingCancelledException>()),
+    );
+    expect(client.resultRequests, isEmpty);
   });
 
   group('resilience', () {

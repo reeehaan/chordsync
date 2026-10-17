@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../practice_timeline/application/practice_timeline_validator.dart';
 import '../data/analysis_api_client.dart';
+import '../data/analysis_client_errors.dart';
 import 'analysis_job_poller.dart';
 import 'analyzed_practice_session.dart';
 import 'practice_preparation_error.dart';
@@ -46,11 +47,17 @@ class AnalysisPracticeCoordinator implements AnalysisPracticePreparation {
       cancellation: cancellation,
     );
     onJobUpdated?.call(createdJob);
-    final completed = await _polling.pollUntilComplete(
-      createdJob.jobId,
-      cancellation: cancellation,
-      onJobUpdated: onJobUpdated,
-    );
+    final AnalysisCompletedResult completed;
+    try {
+      completed = await _polling.pollUntilComplete(
+        createdJob.jobId,
+        cancellation: cancellation,
+        onJobUpdated: onJobUpdated,
+      );
+    } on AnalysisPollingCancelledException {
+      await _cancelQuietly(createdJob.jobId);
+      rethrow;
+    }
     await _ensureReadable(audioFile);
     try {
       PracticeTimelineValidator.validate(completed.timeline);
@@ -66,6 +73,16 @@ class AnalysisPracticeCoordinator implements AnalysisPracticePreparation {
       audioFile: audioFile,
       timeline: completed.timeline,
     );
+  }
+
+  /// Tells the server to stop, without letting a slow or failing request
+  /// delay or replace the cancellation the caller is about to see.
+  Future<void> _cancelQuietly(String jobId) async {
+    try {
+      await _client.cancelJob(jobId).timeout(const Duration(seconds: 5));
+    } on Object {
+      // Best effort.
+    }
   }
 
   Future<void> _ensureReadable(File audioFile) async {

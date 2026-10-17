@@ -21,6 +21,10 @@ abstract interface class AnalysisApiClient {
   Future<AnalysisJob> getJob(String jobId);
 
   Future<SharedTimeline> getResult(String jobId);
+
+  /// Asks the server to stop [jobId]. Safe to repeat. Local development jobs
+  /// cannot be cancelled on the server, so that client does nothing.
+  Future<void> cancelJob(String jobId);
 }
 
 class DioAnalysisApiClient implements AnalysisApiClient {
@@ -102,4 +106,8 @@ class DioAnalysisApiClient implements AnalysisApiClient {
       throw const AnalysisDataException('Malformed SharedTimeline response.');
     }
   }
+
+  // The local development API has no cancel route; the app just stops waiting.
+  @override
+  Future<void> cancelJob(String jobId) async {}
 }

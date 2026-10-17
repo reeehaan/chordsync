@@ -27,6 +27,8 @@ class _FakeApi implements HostedAnalysisApi {
       <Object>[]; // an exception is thrown, a job is returned
   int confirmCalls = 0;
   Object? createError;
+  final cancelCalls = <String>[];
+  Object? cancelError;
   final getJobErrors = <Exception>[];
   final getResultErrors = <Exception>[];
   int getJobCalls = 0;
@@ -48,6 +50,14 @@ class _FakeApi implements HostedAnalysisApi {
         : confirmResults.removeAt(0);
     if (next is Exception) throw next;
     return ConfirmOutcome(job: next as AnalysisJob, newlyQueued: true);
+  }
+
+  @override
+  Future<AnalysisJob> cancelJob(String jobId) async {
+    events.add('cancel');
+    cancelCalls.add(jobId);
+    if (cancelError case final Object error) throw error;
+    return _job('cancelled', id: jobId);
   }
 
   @override
@@ -358,6 +368,45 @@ void main() {
         throwsA(isA<AnalysisPollingCancelledException>()),
       );
       expect(events, isEmpty);
+      expect(api.cancelCalls, isEmpty);
+    });
+
+    test('cancelling during the upload also cancels the job', () async {
+      uploader.hold = Completer<void>();
+      final token = AnalysisPollingCancellationToken();
+      final result = client.createJob(
+        title: 't',
+        audioFile: await audio('a.wav', [1]),
+        cancellation: token,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      token.cancel();
+      await expectLater(
+        result,
+        throwsA(isA<AnalysisPollingCancelledException>()),
+      );
+      expect(events, ['create', 'upload', 'cancel']);
+      expect(api.cancelCalls, ['job-1']);
+    });
+
+    test('an unreachable server still reports the cancellation', () async {
+      final token = AnalysisPollingCancellationToken();
+      uploader.afterUpload = token.cancel;
+      api.cancelError = const AnalysisTransportException('offline');
+      await expectLater(
+        client.createJob(
+          title: 't',
+          audioFile: await audio('a.wav', [1]),
+          cancellation: token,
+        ),
+        throwsA(isA<AnalysisPollingCancelledException>()),
+      );
+      expect(api.cancelCalls, ['job-1']);
+    });
+
+    test('cancelJob forwards to the API', () async {
+      await client.cancelJob('job-7');
+      expect(api.cancelCalls, ['job-7']);
     });
 
     test('cancelling during the upload stops it and skips confirm', () async {
@@ -374,7 +423,7 @@ void main() {
         result,
         throwsA(isA<AnalysisPollingCancelledException>()),
       );
-      expect(events, ['create', 'upload']);
+      expect(events, ['create', 'upload', 'cancel']);
     });
 
     test('cancelled between upload and confirm: not confirmed', () async {
@@ -388,7 +437,7 @@ void main() {
         ),
         throwsA(isA<AnalysisPollingCancelledException>()),
       );
-      expect(events, ['create', 'upload']);
+      expect(events, ['create', 'upload', 'cancel']);
     });
   });
 
@@ -572,4 +621,7 @@ class _SequenceApi implements HostedAnalysisApi {
   @override
   Future<ConfirmOutcome> confirmUpload(String jobId) =>
       throw UnimplementedError();
+
+  @override
+  Future<AnalysisJob> cancelJob(String jobId) => throw UnimplementedError();
 }

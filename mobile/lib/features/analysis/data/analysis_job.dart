@@ -1,14 +1,15 @@
 import 'analysis_client_errors.dart';
 
-/// Job states reported by the backend. `awaitingUpload` and `validating` only
-/// occur with the hosted presigned-upload flow.
+/// Job states reported by the backend. `awaitingUpload`, `validating` and
+/// `cancelled` only occur with the hosted presigned-upload flow.
 enum AnalysisJobStatus {
   awaitingUpload,
   validating,
   queued,
   processing,
   completed,
-  failed;
+  failed,
+  cancelled;
 
   static AnalysisJobStatus fromJson(String value) {
     return switch (value) {
@@ -18,6 +19,7 @@ enum AnalysisJobStatus {
       'processing' => processing,
       'completed' => completed,
       'failed' => failed,
+      'cancelled' => cancelled,
       _ => throw AnalysisDataException('Unknown analysis job status: $value'),
     };
   }

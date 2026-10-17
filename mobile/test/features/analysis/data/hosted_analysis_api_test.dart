@@ -173,6 +173,75 @@ void main() {
     });
   });
 
+  group('cancelJob', () {
+    test(
+      'posts to the cancel route with the token and parses the job',
+      () async {
+        final adapter = RecordingHttpAdapter(
+          (_) => jsonBody(hostedJobJson('cancelled', id: 'job-1'), 200),
+        );
+
+        final job = await apiWith(adapter).cancelJob('job-1');
+
+        final sent = adapter.requests.single;
+        expect(sent.method, 'POST');
+        expect(
+          sent.uri.toString(),
+          'https://api.test.invalid/analysis/jobs/job-1/cancel',
+        );
+        expect(sent.headers['Authorization'], 'Bearer $_token');
+        expect(job.status, AnalysisJobStatus.cancelled);
+      },
+    );
+
+    test('a finished job answers 409 invalid_job_state', () async {
+      final adapter = RecordingHttpAdapter(
+        (_) => jsonBody({
+          'error': {
+            'code': 'invalid_job_state',
+            'message': 'This job can no longer be cancelled.',
+          },
+        }, 409),
+      );
+
+      await expectLater(
+        apiWith(adapter).cancelJob('job-1'),
+        throwsA(
+          isA<AnalysisApiException>()
+              .having((e) => e.statusCode, 'status', 409)
+              .having((e) => e.code, 'code', 'invalid_job_state'),
+        ),
+      );
+    });
+
+    test('someone else\'s job is a hidden 404', () async {
+      final adapter = RecordingHttpAdapter((_) => jsonBody(_notFound, 404));
+
+      await expectLater(
+        apiWith(adapter).cancelJob('job-1'),
+        throwsA(
+          isA<AnalysisApiException>().having((e) => e.isNotFound, 'nf', true),
+        ),
+      );
+    });
+
+    test('without a token it fails locally and sends nothing', () async {
+      final adapter = RecordingHttpAdapter((_) => jsonBody({}, 200));
+
+      await expectLater(
+        apiWith(adapter, token: null).cancelJob('job-1'),
+        throwsA(
+          isA<AnalysisApiException>().having(
+            (e) => e.isUnauthorized,
+            'u',
+            true,
+          ),
+        ),
+      );
+      expect(adapter.requests, isEmpty);
+    });
+  });
+
   group('confirmUpload', () {
     test('202 means this call queued the job', () async {
       final adapter = RecordingHttpAdapter(

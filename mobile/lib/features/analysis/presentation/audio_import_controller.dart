@@ -148,6 +148,7 @@ class AudioImportController extends ChangeNotifier {
             AnalysisJobStatus.processing => AudioImportPhase.processing,
             AnalysisJobStatus.completed => AudioImportPhase.preparing,
             AnalysisJobStatus.failed => AudioImportPhase.failed,
+            AnalysisJobStatus.cancelled => AudioImportPhase.cancelled,
           };
           _notify();
         },

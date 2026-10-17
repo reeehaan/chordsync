@@ -136,6 +136,8 @@ class AnalysisJobPoller implements AnalysisJobPolling {
                   : backoff(transientFailures),
             );
           }
+        case AnalysisJobStatus.cancelled:
+          throw const AnalysisPollingCancelledException();
         case AnalysisJobStatus.failed:
           final error = job.error;
           throw AnalysisApiException(
