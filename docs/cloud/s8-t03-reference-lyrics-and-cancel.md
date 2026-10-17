@@ -57,3 +57,42 @@ Mobile: `AnalysisApiClient.cancelJob` (no-op for the local API). The hosted clie
 cancels the job if the user cancels after it was created (during upload or confirm), and
 the coordinator cancels it when polling is cancelled. Both are best effort (5 s cap) and
 never hide the cancellation. A job cancelled elsewhere stops polling as cancelled.
+
+## Repetition guard
+
+`analysis/lyrics/repetition_guard.py` cuts WhisperX loops right after the lyrics stage,
+before verification or fusion. Only uninterrupted runs count (10+ repeats of one word,
+6+ of a phrase of up to 8 words); the first three repeats are kept. On the real
+transcripts it cut the looping line from 192 to 36 words and left the good local result
+untouched.
+
+## Deployment and device results (2026-10-18)
+
+Images built from `69b5021`, pushed to `chordsync-demo/*`. API `api-69b5021`
+(`sha256:96fbeffb…a355a`, clean `git archive` build, linux/arm64). Worker
+`worker-69b5021` (`sha256:4e65d4e9…41f85`) is the reviewed worker image
+`worker-d9ef4a3-runtime2` with only `/opt/chordsync/app/analysis` and `.../backend`
+replaced by the committed source, because a full rebuild would have re-downloaded every
+dependency (the Docker build cache had been cleared). Plan applied: 2 added, 2 changed,
+1 destroyed (cancel route, API stage, API Lambda image, worker task definition).
+
+| Check | Result |
+| --- | --- |
+| Cancel route | 401 without a token, 404 for an unknown job, 200 for the owner |
+| Cancel from the app, mid-analysis | job `cancelled` on AWS; the started worker acknowledged and skipped it (41 s, exit 0, no analysis) |
+| Homewrecker again | worker exit 0 in 4m29s; "removed 65 words from 1 repeated lyric loops" |
+| Raw WER vs reference | 0.3373 (was 0.6698; local 0.3135); inserted words 7 (was 151) |
+| Lyrics follow playback | works on the iPhone with and without a capo |
+
+Mobile fix: with a capo set the practice screen passed a new timeline object on every
+build, and `SongSheetLyrics` refreshed its remembered focus while regrouping, so it never
+saw a line change and never scrolled. It now compares against the previous focus first
+(test: "keeps following when the timeline is rebuilt on every frame").
+
+## Still open
+
+- A processing job cancelled by the user still runs to the end (up to about 4 minutes);
+  stopping it early needs a stage-boundary check in the worker.
+- LRCLIB correction changes little (one candidate accepted, WER 0.3373 to 0.3349); the
+  verifier does not insert words ASR missed (79 deletions here).
+- Untagged files skip the lookup; the app could ask for title and artist.
