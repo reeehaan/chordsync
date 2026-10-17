@@ -237,6 +237,7 @@ def test_openapi_exposes_only_public_typed_contract(client):
         "processing",
         "completed",
         "failed",
+        "cancelled",
     ]
     assert "AnalysisJobResponse" in schemas
     assert "AnalysisJobErrorResponse" in schemas

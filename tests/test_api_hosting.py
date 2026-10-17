@@ -27,7 +27,10 @@ CLOUD_ROUTES = {
     "/analysis/jobs/{job_id}",
     "/analysis/jobs/{job_id}/result",
 }
-HOSTED_ROUTES = CLOUD_ROUTES | {"/analysis/jobs/{job_id}/confirm-upload"}
+HOSTED_ROUTES = CLOUD_ROUTES | {
+    "/analysis/jobs/{job_id}/confirm-upload",
+    "/analysis/jobs/{job_id}/cancel",
+}
 AUDIO = b"RIFF cloud audio"
 
 

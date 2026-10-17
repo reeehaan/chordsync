@@ -64,13 +64,13 @@ variable "api_throttle_burst_limit" {
 }
 
 variable "api_write_throttle_rate_limit" {
-  description = "Steady requests per second for create-job and confirm-upload."
+  description = "Steady requests per second for create-job, confirm-upload and cancel."
   type        = number
   default     = 1
 }
 
 variable "api_write_throttle_burst_limit" {
-  description = "Burst requests for create-job and confirm-upload."
+  description = "Burst requests for create-job, confirm-upload and cancel."
   type        = number
   default     = 2
 }
@@ -116,12 +116,14 @@ locals {
     "GET /health",
     "POST /analysis/jobs",
     "POST /analysis/jobs/{job_id}/confirm-upload",
+    "POST /analysis/jobs/{job_id}/cancel",
     "GET /analysis/jobs/{job_id}",
     "GET /analysis/jobs/{job_id}/result",
   ]
   api_write_routes = [
     "POST /analysis/jobs",
     "POST /analysis/jobs/{job_id}/confirm-upload",
+    "POST /analysis/jobs/{job_id}/cancel",
   ]
 }
 

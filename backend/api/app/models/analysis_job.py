@@ -12,6 +12,8 @@ class AnalysisJobStatus(str, Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+    # Hosted only: the owner stopped the job before it finished.
+    CANCELLED = "cancelled"
 
 
 class AnalysisJobCreateRequest(BaseModel):

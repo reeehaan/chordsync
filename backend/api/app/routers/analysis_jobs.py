@@ -34,6 +34,7 @@ from backend.api.app.services.analysis_application import (
     AnalysisFailedError,
     CloudAnalysisApplication,
     InvalidJobStateError,
+    JobCancelledError,
     InvalidUploadRequestError,
     JobNotFoundError,
     LocalAnalysisApplication,
@@ -317,6 +318,8 @@ def get_analysis_job_result(
         return error_response(404, "job_not_found", "Analysis job was not found.")
     except ResultNotReadyError:
         return error_response(409, "result_not_ready", "Analysis result is not ready.")
+    except JobCancelledError:
+        return error_response(409, "job_cancelled", "This analysis was cancelled.")
     except AnalysisFailedError as error:
         return error_response(409, error.code, error.message)
     except ResultArtifactMissingError:
@@ -446,6 +449,31 @@ def confirm_upload(
     if not outcome.newly_confirmed:
         http_response.status_code = status.HTTP_200_OK
     return outcome.response
+
+
+@hosted_router.post(
+    "/{job_id}/cancel",
+    response_model=AnalysisJobResponse,
+    responses={
+        404: {"model": AnalysisJobErrorResponse},
+        409: {"model": AnalysisJobErrorResponse},
+        503: {"model": AnalysisJobErrorResponse},
+    },
+)
+def cancel_job(
+    job_id: str,
+    application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
+    principal: AuthenticatedPrincipal | None = Depends(get_principal),
+) -> AnalysisJobResponse | Response:
+    """Stop a job. Cancelling an already-cancelled job returns 200 again."""
+    try:
+        return application.cancel(job_id, _owner(principal))
+    except JobNotFoundError:
+        return error_response(404, "job_not_found", "Analysis job was not found.")
+    except InvalidJobStateError:
+        return error_response(
+            409, "invalid_job_state", "This job can no longer be cancelled."
+        )
 
 
 _UNPROCESSABLE_CODES = {

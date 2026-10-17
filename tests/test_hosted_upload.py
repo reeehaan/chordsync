@@ -821,3 +821,108 @@ def test_the_signed_request_includes_the_tag_header():
         content_type="audio/mpeg", content_length=5, expires_in=600,
     )
     assert client.calls[0]["Params"]["Tagging"] == "chordsync-upload=presigned"
+
+
+# --- cancel ---------------------------------------------------------------------
+
+
+def _move(env, job_id, status, expected):
+    job = env.job(job_id)
+    job.transition_to(status)
+    env.repository.save(job, expected_status=expected)
+
+
+def test_cancel_before_upload_stops_the_job_and_blocks_confirm(env):
+    created = env.create().json()
+    job_id = created["job_id"]
+
+    response = env.client.post(f"/analysis/jobs/{job_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+    assert env.job(job_id).status is CloudJobStatus.CANCELLED
+    confirm = env.confirm(job_id)
+    assert confirm.status_code == 409
+    assert confirm.json()["error"]["code"] == "invalid_job_state"
+    assert env.queue.sent == []
+
+
+def test_cancel_a_queued_job_reports_cancelled_and_has_no_result(env):
+    job_id = env.create_and_upload(WAV)
+    env.confirm(job_id)
+
+    response = env.client.post(f"/analysis/jobs/{job_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+    assert response.json()["result_available"] is False
+    assert env.client.get(f"/analysis/jobs/{job_id}").json()["status"] == "cancelled"
+    result = env.client.get(f"/analysis/jobs/{job_id}/result")
+    assert result.status_code == 409
+    assert result.json()["error"]["code"] == "job_cancelled"
+
+
+def test_cancel_a_processing_job(env):
+    job_id = env.create_and_upload(WAV)
+    env.confirm(job_id)
+    _move(env, job_id, CloudJobStatus.PROCESSING, CloudJobStatus.QUEUED)
+
+    response = env.client.post(f"/analysis/jobs/{job_id}/cancel")
+
+    assert response.status_code == 200
+    assert env.job(job_id).status is CloudJobStatus.CANCELLED
+
+
+def test_cancel_while_validating(env):
+    job_id = env.create().json()["job_id"]
+    _move(env, job_id, CloudJobStatus.VALIDATING, CloudJobStatus.AWAITING_UPLOAD)
+
+    assert env.client.post(f"/analysis/jobs/{job_id}/cancel").status_code == 200
+    assert env.job(job_id).status is CloudJobStatus.CANCELLED
+
+
+def test_cancelling_twice_is_harmless(env):
+    job_id = env.create().json()["job_id"]
+
+    first = env.client.post(f"/analysis/jobs/{job_id}/cancel")
+    second = env.client.post(f"/analysis/jobs/{job_id}/cancel")
+
+    assert first.status_code == second.status_code == 200
+    assert second.json()["status"] == "cancelled"
+
+
+@pytest.mark.parametrize("final", [CloudJobStatus.COMPLETED, CloudJobStatus.FAILED])
+def test_a_finished_job_cannot_be_cancelled(env, final):
+    job_id = env.create_and_upload(WAV)
+    env.confirm(job_id)
+    _move(env, job_id, CloudJobStatus.PROCESSING, CloudJobStatus.QUEUED)
+    _move(env, job_id, final, CloudJobStatus.PROCESSING)
+
+    response = env.client.post(f"/analysis/jobs/{job_id}/cancel")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "invalid_job_state"
+    assert env.job(job_id).status is final
+
+
+def test_cancel_is_owner_only_and_hides_other_jobs(env):
+    job_id = env.create().json()["job_id"]
+    unknown = "00000000-0000-4000-8000-000000000000"
+
+    other = env.client_b.post(f"/analysis/jobs/{job_id}/cancel")
+    missing = env.client.post(f"/analysis/jobs/{unknown}/cancel")
+    anonymous = env.anonymous.post(f"/analysis/jobs/{job_id}/cancel")
+
+    assert other.status_code == missing.status_code == 404
+    assert other.json() == missing.json()
+    assert anonymous.status_code == 401
+    assert env.job(job_id).status is CloudJobStatus.AWAITING_UPLOAD
+
+
+def test_local_mode_has_no_cancel_route():
+    app = api_main.create_app(
+        ApiHostingConfig(HostingMode.LOCAL, Path("/tmp/chordsync-api"))
+    )
+    client = TestClient(app, raise_server_exceptions=False)
+
+    assert client.post("/analysis/jobs/anything/cancel").status_code in {404, 405}

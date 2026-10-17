@@ -71,6 +71,10 @@ class ResultNotReadyError(RuntimeError):
     pass
 
 
+class JobCancelledError(RuntimeError):
+    pass
+
+
 class AnalysisFailedError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -294,6 +298,33 @@ class CloudAnalysisApplication:
         if not self._enforce_ownership:
             return True
         return owner_id is not None and job.owner_id == owner_id
+
+    def cancel(
+        self, job_id: str, owner_id: str | None = None
+    ) -> AnalysisJobResponse:
+        """Stop a job the caller owns; repeating the call is harmless.
+
+        A job already past the point of no return (completed, failed, expired)
+        cannot be cancelled. A job being processed is marked cancelled and the
+        worker discards its result instead of publishing it.
+        """
+        for _ in range(3):
+            job = self._repository.get(job_id)
+            if job is None or not self._visible_to(job, owner_id):
+                raise JobNotFoundError(job_id)
+            if job.status is CloudJobStatus.CANCELLED:
+                return _cloud_response(job)
+            if job.status not in _CANCELLABLE:
+                raise InvalidJobStateError(job.status.value)
+            previous = job.status
+            job.dispatch_pending = False
+            job.transition_to(CloudJobStatus.CANCELLED, stage="cancelled")
+            try:
+                self._repository.save(job, expected_status=previous)
+            except JobWriteConflictError:
+                continue
+            return _cloud_response(job)
+        raise InvalidJobStateError("changed")
 
     # --- hosted presigned upload ---
 
@@ -560,6 +591,8 @@ class CloudAnalysisApplication:
                 job.error_code or "analysis_failed",
                 job.error_message or "Analysis could not be completed.",
             )
+        if job.status is CloudJobStatus.CANCELLED:
+            raise JobCancelledError
         if job.status is not CloudJobStatus.COMPLETED:
             raise ResultNotReadyError
         if not job.timeline_object_key:
@@ -579,6 +612,15 @@ class CloudAnalysisApplication:
             raise ResultArtifactCorruptError from error
 
 
+_CANCELLABLE = frozenset(
+    {
+        CloudJobStatus.CREATED,
+        CloudJobStatus.AWAITING_UPLOAD,
+        CloudJobStatus.VALIDATING,
+        CloudJobStatus.QUEUED,
+        CloudJobStatus.PROCESSING,
+    }
+)
 _ALREADY_CONFIRMED = frozenset(
     {CloudJobStatus.QUEUED, CloudJobStatus.PROCESSING, CloudJobStatus.COMPLETED}
 )
@@ -631,6 +673,8 @@ def _cloud_response(job: CloudJobRecord) -> AnalysisJobResponse:
         status = AnalysisJobStatus.PROCESSING
     elif job.status is CloudJobStatus.COMPLETED:
         status = AnalysisJobStatus.COMPLETED
+    elif job.status is CloudJobStatus.CANCELLED:
+        status = AnalysisJobStatus.CANCELLED
     else:
         status = AnalysisJobStatus.FAILED
     error = None

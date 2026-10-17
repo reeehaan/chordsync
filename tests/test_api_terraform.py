@@ -148,6 +148,7 @@ def test_only_the_hosted_routes_are_exposed():
         "GET /health",
         "POST /analysis/jobs",
         "POST /analysis/jobs/{job_id}/confirm-upload",
+        "POST /analysis/jobs/{job_id}/cancel",
         "GET /analysis/jobs/{job_id}",
         "GET /analysis/jobs/{job_id}/result",
     }
