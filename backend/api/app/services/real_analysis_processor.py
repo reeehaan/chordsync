@@ -31,6 +31,7 @@ from analysis.lyrics.production_verification import (
     verify_and_correct_whisperx,
 )
 from analysis.lyrics.production_reference import obtain_lrclib_reference
+from analysis.lyrics.repetition_guard import remove_repetition_loops
 from analysis.lyrics.romanization import (
     romanize_whisperx_result,
     whisperx_needs_romanization,
@@ -329,6 +330,7 @@ class RealAnalysisProcessor:
         practice_regions = self._run_practice_regions(workspace, job_id)
         self._run_separation(workspace)
         self._run_lyrics(workspace, job_id)
+        self._remove_lyric_repetition_loops(workspace.whisperx, job_id)
         with tempfile.TemporaryDirectory(
             prefix="chordsync-verified-lyrics-"
         ) as temporary_directory:
@@ -541,6 +543,26 @@ class RealAnalysisProcessor:
                 lyrics_command,
                 workspace.whisperx,
                 job_id,
+            )
+
+    def _remove_lyric_repetition_loops(self, whisperx_path: Path, job_id: str) -> None:
+        """Drop Whisper repetition loops before anything reads the transcript."""
+        try:
+            transcript = json.loads(whisperx_path.read_text(encoding="utf-8"))
+            report = remove_repetition_loops(transcript)
+            if report.removed_words:
+                whisperx_path.write_text(
+                    json.dumps(transcript, ensure_ascii=False), encoding="utf-8"
+                )
+        except (OSError, ValueError, TypeError, AttributeError):
+            logger.warning("[job %s] lyric repetition check skipped", job_id)
+            return
+        if report.removed_words:
+            logger.info(
+                "[job %s] removed %d words from %d repeated lyric loops",
+                job_id,
+                report.removed_words,
+                report.loops,
             )
 
     def _prepare_fusion_lyrics(
