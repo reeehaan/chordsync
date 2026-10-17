@@ -1,3 +1,4 @@
+import 'package:chordsync/features/practice_timeline/data/chord_transposition.dart';
 import 'package:chordsync/features/practice_timeline/data/shared_timeline.dart';
 import 'package:chordsync/features/practice_timeline/presentation/lyric_chord_marker_mapper.dart';
 import 'package:chordsync/features/practice_timeline/presentation/lyric_display_block.dart';
@@ -115,6 +116,36 @@ void main() {
     );
     expect(active.style.color, PracticeStageColors.amberBright);
     expect(active.duration, const Duration(milliseconds: 180));
+  });
+
+  testWidgets('keeps following when the timeline is rebuilt on every frame', (
+    tester,
+  ) async {
+    // With a capo set the practice screen hands over a new timeline object on
+    // every build; following must not depend on the object staying the same.
+    final source = _multiBlockTimeline();
+    await _pumpLyrics(
+      tester,
+      ChordTransposition.timelineForCapo(source, 2),
+      0.6,
+    );
+    final list = tester.widget<ListView>(
+      find.byKey(const ValueKey('lyricScrollView')),
+    );
+    expect(list.controller!.offset, 0);
+
+    for (final time in [8.6, 14.6, 20.6, 26.6]) {
+      await _pumpLyrics(
+        tester,
+        ChordTransposition.timelineForCapo(source, 2),
+        time,
+        settle: false,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    expect(list.controller!.offset, greaterThan(0));
+    expect(find.byKey(const ValueKey('currentLyricBlock')), findsOneWidget);
   });
 
   testWidgets('manual scrolling suspends follow until Follow is tapped', (

@@ -52,6 +52,10 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
   @override
   void didUpdateWidget(covariant SongSheetLyrics oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Compare against the line the sheet last followed *before* regrouping:
+    // with a capo set the timeline object changes on every build, and
+    // regrouping refreshes the focus, which would hide every change.
+    final previousFocus = _focusedBlockIndex;
     if (!identical(oldWidget.timeline, widget.timeline)) {
       _resolveBlocks();
     }
@@ -59,8 +63,8 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
       _blocks,
       widget.playbackTime,
     );
-    if (nextFocus == _focusedBlockIndex) return;
     _focusedBlockIndex = nextFocus;
+    if (nextFocus == previousFocus) return;
     if (_autoFollow) _scheduleFollow();
   }
 
