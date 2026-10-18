@@ -96,3 +96,30 @@ saw a line change and never scrolled. It now compares against the previous focus
 - LRCLIB correction changes little (one candidate accepted, WER 0.3373 to 0.3349); the
   verifier does not insert words ASR missed (79 deletions here).
 - Untagged files skip the lookup; the app could ask for title and artist.
+
+## Language misdetection: "Her" (2026-10-18)
+
+An English song ("Her") crashed the lyrics stage: WhisperX guessed Nynorsk from the
+vocals' opening and tried to download `NbAiLab/nb-wav2vec2-1b-nynorsk`, which the
+offline worker cannot do. The existing fallback only matched "No default align-model for
+language:", so the job failed and was re-queued (the app showed "Waiting to analyze").
+Only the English alignment model is staged, so any non-English detection would have done
+the same.
+
+Fixes (commit `df1ef53`, worker image `worker-df1ef53`, `sha256:23d273a7…8888b0d`, task
+definition revision 4, plan 1 added / 1 destroyed):
+
+- `analysis/lyrics/language_hint.py`: reference lyrics with at least 30 Latin words and a
+  25% share of common English words pin the run to `--language en`. Checked on real
+  LRCLIB lyrics: English songs detected as English; Hindi, Japanese and Sinhala lyrics are
+  in their own scripts, so they keep automatic detection.
+- The `--no_align` fallback now also matches "The chosen align_model" and "could not be
+  found in huggingface", so an unavailable alignment model degrades to sentence timing
+  instead of failing the job.
+
+Device result for "Her": `reference lyrics are English; using language=en`, lyrics stage
+38 s, worker exit 0 in 4m07s, raw and corrected WER 0.2733, 0 inserted words.
+
+Remaining: non-English songs without reference lyrics still use automatic detection (a
+wrong guess now completes but may be mistranscribed); Hindi and Sinhala get sentence-level
+timing until their alignment models are staged in the model release.
