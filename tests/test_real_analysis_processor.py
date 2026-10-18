@@ -262,13 +262,15 @@ class FakePipelineRunner:
 
 
 class MissingAlignmentModelRunner(FakePipelineRunner):
+    message = "ValueError: No default align-model for language: sa"
+
     def run(self, argv: list[str], cwd: Path, timeout: float) -> SubprocessResult:
         if self._stage(argv) == "lyrics" and "--no_align" not in argv:
             self.calls.append(RecordedCall(argv=list(argv), cwd=cwd, timeout=timeout))
             return SubprocessResult(
                 returncode=1,
                 stdout="",
-                stderr="ValueError: No default align-model for language: sa",
+                stderr=self.message,
             )
         result = super().run(argv, cwd, timeout)
         if self._stage(argv) == "lyrics" and "--no_align" in argv:
@@ -1086,3 +1088,97 @@ def test_real_adapter_failure_is_sanitized_by_executor(processor_context, tmp_pa
     assert str(config.api_python) not in public_response
     assert str(config.beat_python) not in public_response
     assert str(config.whisperx_executable) not in public_response
+
+
+NYNORSK_ERROR = (
+    'ValueError: The chosen align_model "NbAiLab/nb-wav2vec2-1b-nynorsk" could '
+    "not be found in huggingface (https://huggingface.co/models) or torchaudio"
+)
+ENGLISH_LYRICS = (
+    "I know that you are all that I need and I love the way you hold me in the "
+    "night when the world is quiet and we are alone with the stars and the sky "
+    "oh you are the one that I want and I will never let you go"
+)
+
+
+def _multilingual(config):
+    return AnalysisPipelineConfig(
+        **{**config.__dict__, "multilingual_lyrics_enabled": True}
+    )
+
+
+def test_an_alignment_model_missing_offline_falls_back_instead_of_failing(
+    processor_context,
+):
+    config, input_path = processor_context
+
+    class NynorskRunner(MissingAlignmentModelRunner):
+        message = NYNORSK_ERROR
+
+    runner = NynorskRunner(whisperx_words=["hello", "there"], whisperx_language="nn")
+
+    timeline = RealAnalysisProcessor(_multilingual(config), runner).process(input_path)
+
+    lyrics_calls = [c for c in runner.calls if runner._stage(c.argv) == "lyrics"]
+    assert len(lyrics_calls) == 2
+    assert "--no_align" not in lyrics_calls[0].argv
+    assert "--no_align" in lyrics_calls[1].argv
+    assert timeline.lyrics
+
+
+def test_english_reference_lyrics_pin_the_language_to_english(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{**_multilingual(config).__dict__, "lrclib_reference_enabled": True}
+    )
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor.obtain_lrclib_reference",
+        lambda *args, **kwargs: SimpleNamespace(plain_lyrics=ENGLISH_LYRICS),
+    )
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(config, runner).process(input_path)
+
+    lyrics_call = next(c for c in runner.calls if runner._stage(c.argv) == "lyrics")
+    assert lyrics_call.argv[lyrics_call.argv.index("--language") + 1] == "en"
+
+
+@pytest.mark.parametrize(
+    "plain_lyrics",
+    [
+        "tum mere ho tum mere ho kya kahun main tujhse dil mein basa hai tu hi "
+        "mera sab kuch hai tu hi meri duniya hai bas tu hi tu hi hai mere liye "
+        "tera naam hai mere dil par likha hua hai tu hi mera khuda hai",
+        "මන්දාරම් හැන්දෑවේ " * 20,
+        "too short",
+    ],
+)
+def test_other_or_unknown_languages_keep_automatic_detection(
+    processor_context, monkeypatch, plain_lyrics
+):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{**_multilingual(config).__dict__, "lrclib_reference_enabled": True}
+    )
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor.obtain_lrclib_reference",
+        lambda *args, **kwargs: SimpleNamespace(plain_lyrics=plain_lyrics),
+    )
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(config, runner).process(input_path)
+
+    lyrics_call = next(c for c in runner.calls if runner._stage(c.argv) == "lyrics")
+    assert "--language" not in lyrics_call.argv
+
+
+def test_without_a_reference_detection_stays_automatic(processor_context):
+    config, input_path = processor_context
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(_multilingual(config), runner).process(input_path)
+
+    lyrics_call = next(c for c in runner.calls if runner._stage(c.argv) == "lyrics")
+    assert "--language" not in lyrics_call.argv

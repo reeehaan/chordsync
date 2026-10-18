@@ -31,6 +31,7 @@ from analysis.lyrics.production_verification import (
     verify_and_correct_whisperx,
 )
 from analysis.lyrics.production_reference import obtain_lrclib_reference
+from analysis.lyrics.language_hint import looks_english
 from analysis.lyrics.repetition_guard import remove_repetition_loops
 from analysis.lyrics.romanization import (
     romanize_whisperx_result,
@@ -329,7 +330,7 @@ class RealAnalysisProcessor:
         self._run_beats(workspace)
         practice_regions = self._run_practice_regions(workspace, job_id)
         self._run_separation(workspace)
-        self._run_lyrics(workspace, job_id)
+        self._run_lyrics(workspace, job_id, reference)
         self._remove_lyric_repetition_loops(workspace.whisperx, job_id)
         with tempfile.TemporaryDirectory(
             prefix="chordsync-verified-lyrics-"
@@ -508,7 +509,12 @@ class RealAnalysisProcessor:
             json_output=False,
         )
 
-    def _run_lyrics(self, workspace: JobWorkspace, job_id: str) -> None:
+    def _run_lyrics(
+        self,
+        workspace: JobWorkspace,
+        job_id: str,
+        reference: LyricsReferenceResult | None = None,
+    ) -> None:
         lyrics_command = [
             str(self._config.whisperx_executable),
             str(workspace.vocals),
@@ -516,6 +522,11 @@ class RealAnalysisProcessor:
             self._config.whisperx_model,
         ]
         if not self._config.multilingual_lyrics_enabled:
+            lyrics_command.extend(["--language", "en"])
+        elif reference is not None and looks_english(reference.plain_lyrics):
+            # Language detection can misjudge a quiet intro; the reference
+            # lyrics are a better guide than the first 30 seconds of audio.
+            logger.info("[job %s] reference lyrics are English; using language=en", job_id)
             lyrics_command.extend(["--language", "en"])
         lyrics_command.extend(
             [
@@ -886,7 +897,7 @@ class RealAnalysisProcessor:
         if (
             result.returncode != 0
             and retry_without_alignment
-            and "No default align-model for language:" in result.stderr
+            and _is_missing_alignment_model(result.stderr)
             and "--no_align" not in argv
         ):
             logger.info(
@@ -937,6 +948,20 @@ def _optional_path(name: str) -> Path | None:
 def _environment_path(name: str, default: Path) -> Path:
     value = os.getenv(name)
     return Path(value).expanduser() if value else default
+
+
+_MISSING_ALIGNMENT_MESSAGES = (
+    # WhisperX has no default aligner for the language.
+    "No default align-model for language:",
+    # It has one, but it is not in the offline model release (the worker cannot
+    # download it), e.g. a wrong language guess such as Nynorsk.
+    "The chosen align_model",
+    "could not be found in huggingface",
+)
+
+
+def _is_missing_alignment_model(stderr: str) -> bool:
+    return any(message in stderr for message in _MISSING_ALIGNMENT_MESSAGES)
 
 
 def _enabled_by_default(name: str) -> bool:
