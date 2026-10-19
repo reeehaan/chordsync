@@ -1,3 +1,4 @@
+import 'package:chordsync/design_system/chordsync_design_system.dart';
 import 'package:chordsync/features/practice_timeline/data/chord_transposition.dart';
 import 'package:chordsync/features/practice_timeline/data/shared_timeline.dart';
 import 'package:chordsync/features/practice_timeline/presentation/lyric_chord_marker_mapper.dart';
@@ -146,6 +147,58 @@ void main() {
 
     expect(list.controller!.offset, greaterThan(0));
     expect(find.byKey(const ValueKey('currentLyricBlock')), findsOneWidget);
+  });
+
+  testWidgets('a chord chip lights up when its chord starts, not its word', (
+    tester,
+  ) async {
+    // "long" is sung from 1 s to 3 s, but G only starts at 2 s, mid-word.
+    final timeline = SharedTimeline(
+      schemaVersion: 1,
+      bpm: 120,
+      beatsPerBar: 4,
+      beatSource: 'test',
+      lyricSource: 'test',
+      bars: const [
+        TimelineBar(
+          barNumber: 1,
+          startTime: 0,
+          endTime: 4,
+          beats: [
+            TimelineEvent(time: 0, beatNumber: 1, isDownbeat: true, chord: 'C'),
+            TimelineEvent(
+              time: 2,
+              beatNumber: 2,
+              isDownbeat: false,
+              chord: 'G',
+            ),
+          ],
+        ),
+      ],
+      lyrics: const [
+        LyricSegment(
+          start: 1,
+          end: 3,
+          text: 'long',
+          words: [LyricWord(start: 1, end: 3, text: 'long')],
+        ),
+      ],
+    );
+    Color chipColor() {
+      final chip = tester.widget<Container>(
+        find
+            .ancestor(of: find.text('G'), matching: find.byType(Container))
+            .first,
+      );
+      return (chip.decoration! as BoxDecoration).color!;
+    }
+
+    await _pumpLyrics(tester, timeline, 1.5); // the word is sounding...
+    expect(chipColor(), ChordSyncColors.inactiveChord); // ...the chord is not
+
+    await _pumpLyrics(tester, timeline, 2.5); // now the chord has started
+    expect(chipColor(), ChordSyncColors.currentChord);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
   });
 
   testWidgets('manual scrolling suspends follow until Follow is tapped', (

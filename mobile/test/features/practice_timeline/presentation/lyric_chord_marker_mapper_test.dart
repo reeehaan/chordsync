@@ -3,6 +3,47 @@ import 'package:chordsync/features/practice_timeline/presentation/lyric_chord_ma
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'each marker knows when its chord starts and when the next one does',
+    () {
+      final mapped = LyricChordMarkerMapper.map(
+        _timeline(
+          chords: const [(0.0, 'C'), (1.7, 'G'), (2.4, 'Am')],
+          words: const [
+            (1.0, 1.4, 'one'),
+            (1.6, 2.0, 'two'),
+            (2.1, 2.5, 'three'),
+          ],
+        ),
+      );
+
+      final spans = [for (final word in mapped) word.chordSpans];
+      expect(spans[0].single.start, 0.0);
+      expect(spans[0].single.end, 1.7);
+      expect(spans[1].single.start, 1.7);
+      expect(spans[1].single.end, 2.4);
+      expect(spans[2].single.start, 2.4);
+      expect(spans[2].single.end, double.infinity);
+      expect(
+        mapped.every(
+          (word) => word.chordSpans.length == word.chordMarkers.length,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test('a span says whether its chord is upcoming, playing or played', () {
+    const span = ChordSpan(start: 2.0, end: 3.0);
+
+    expect(span.isUpcoming(1.9), isTrue);
+    expect(span.isPlaying(1.9), isFalse);
+    expect(span.isPlaying(2.0), isTrue);
+    expect(span.isPlaying(2.99), isTrue);
+    expect(span.isPlaying(3.0), isFalse);
+    expect(span.isUpcoming(3.5), isFalse);
+  });
+
   test('one chord through several words creates one marker', () {
     final mapped = LyricChordMarkerMapper.map(
       _timeline(
@@ -112,22 +153,19 @@ void main() {
     },
   );
 
-  test(
-    'a mid-word chord change never attaches to a later word than the one '
-    'sounding at that instant',
-    () {
-      // Regression for a bug where every chord that changed mid-word was
-      // shown one lyric word later than where the strum actually happens.
-      final mapped = LyricChordMarkerMapper.map(
-        _timeline(
-          chords: const [(0.0, 'Em'), (3.2, 'D')],
-          words: const [(2.0, 4.0, 'looooong'), (4.5, 5.0, 'word')],
-        ),
-      );
+  test('a mid-word chord change never attaches to a later word than the one '
+      'sounding at that instant', () {
+    // Regression for a bug where every chord that changed mid-word was
+    // shown one lyric word later than where the strum actually happens.
+    final mapped = LyricChordMarkerMapper.map(
+      _timeline(
+        chords: const [(0.0, 'Em'), (3.2, 'D')],
+        words: const [(2.0, 4.0, 'looooong'), (4.5, 5.0, 'word')],
+      ),
+    );
 
-      expect(mapped.map((word) => word.chordMarker).toList(), ['D', null]);
-    },
-  );
+    expect(mapped.map((word) => word.chordMarker).toList(), ['D', null]);
+  });
 
   test('a chord after the final lyric creates no marker', () {
     final mapped = LyricChordMarkerMapper.map(

@@ -1,17 +1,33 @@
 import '../data/shared_timeline.dart';
 
+/// When a chord is played: from the beat it changes to the next change.
+class ChordSpan {
+  const ChordSpan({required this.start, required this.end});
+
+  final double start;
+  final double end;
+
+  bool isUpcoming(double time) => time < start;
+  bool isPlaying(double time) => start <= time && time < end;
+}
+
 class LyricChordWord {
   const LyricChordWord({
     required this.segmentIndex,
     required this.wordIndex,
     required this.word,
     required this.chordMarkers,
+    this.chordSpans = const [],
   });
 
   final int segmentIndex;
   final int wordIndex;
   final LyricWord word;
   final List<String> chordMarkers;
+
+  /// One span per marker, so a chip can follow the chord itself rather than
+  /// the word it happens to sit above.
+  final List<ChordSpan> chordSpans;
 
   String? get chordMarker => chordMarkers.isEmpty ? null : chordMarkers.first;
 }
@@ -58,7 +74,12 @@ abstract final class LyricChordMarkerMapper {
     }
 
     final markers = <int, String>{};
-    for (final change in changes) {
+    final spans = <int, ChordSpan>{};
+    for (var changeIndex = 0; changeIndex < changes.length; changeIndex++) {
+      final change = changes[changeIndex];
+      final end = changeIndex + 1 < changes.length
+          ? changes[changeIndex + 1].time
+          : double.infinity;
       // The word this change belongs to is whichever one hasn't finished
       // yet: the word already sounding when the chord changes mid-word, or
       // the next upcoming word when the change falls in a lyric gap.
@@ -66,13 +87,13 @@ abstract final class LyricChordMarkerMapper {
       // currently being sung whenever a chord change lands inside it (the
       // common case, since chords follow the beat grid, not lyric timing),
       // shifting every marker one word later than where the strum happens.
-      final target = words.indexWhere(
-        (entry) => entry.word.end > change.time,
-      );
+      final target = words.indexWhere((entry) => entry.word.end > change.time);
       if (target == -1) continue;
       if (change.chord == 'N') {
         markers.remove(target);
+        spans.remove(target);
       } else {
+        spans[target] = ChordSpan(start: change.time, end: end);
         // Several changes can occur before lyrics resume. Only the chord that
         // is active when the next real word begins is useful as its cue.
         markers[target] = change.chord;
@@ -86,6 +107,7 @@ abstract final class LyricChordMarkerMapper {
           wordIndex: words[index].wordIndex,
           word: words[index].word,
           chordMarkers: markers[index] == null ? const [] : [markers[index]!],
+          chordSpans: spans[index] == null ? const [] : [spans[index]!],
         ),
     ];
   }

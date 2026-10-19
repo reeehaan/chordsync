@@ -33,6 +33,7 @@ from analysis.lyrics.production_verification import (
 )
 from analysis.lyrics.production_reference import obtain_lrclib_reference
 from analysis.lyrics.language_hint import looks_english
+from analysis.lyrics.lyric_quality import unreliable_reason, without_lyrics
 from analysis.lyrics.repetition_guard import remove_repetition_loops
 from analysis.lyrics.synced_reference import (
     MINIMUM_TIMED_LINES,
@@ -366,6 +367,7 @@ class RealAnalysisProcessor:
         self._run_separation(workspace)
         self._run_lyrics(workspace, job_id, reference)
         self._remove_lyric_repetition_loops(workspace.whisperx, job_id)
+        self._drop_unreliable_lyrics(workspace.whisperx, job_id)
         with tempfile.TemporaryDirectory(
             prefix="chordsync-verified-lyrics-"
         ) as temporary_directory:
@@ -926,6 +928,32 @@ class RealAnalysisProcessor:
             timeline_path,
         )
 
+    def _drop_unreliable_lyrics(self, whisperx_path: Path, job_id: str) -> None:
+        """Publish chords only when a non-English transcript is unusable.
+
+        English transcripts, and lyrics built from a synced reference, are kept.
+        """
+        try:
+            transcript = json.loads(whisperx_path.read_text(encoding="utf-8"))
+            if transcript.get("language") == "synced" or not whisperx_needs_romanization(
+                transcript
+            ):
+                return
+            reason = unreliable_reason(transcript)
+            if reason is None:
+                return
+            whisperx_path.write_text(
+                json.dumps(without_lyrics(transcript), ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except (OSError, ValueError, TypeError, AttributeError):
+            return
+        logger.info(
+            "[job %s] lyrics dropped as unreliable (%s); publishing chords only",
+            job_id,
+            reason,
+        )
+
     def _lyric_source_label(self, whisperx_path: Path) -> str:
         """Say where the lyrics came from: transcription or synced reference."""
         try:
@@ -936,6 +964,8 @@ class RealAnalysisProcessor:
             language = None
         if language == "synced":
             return "lrclib-synced"
+        if language == "unreliable":
+            return "none"
         return f"whisperx-{self._config.whisperx_model}"
 
     def _module_command(

@@ -1479,3 +1479,44 @@ def test_songs_that_do_not_need_alignment_never_fetch_the_model(
     ).analyze(input_path)
 
     assert fetched == []
+
+
+BAD_SINHALA_WORDS = (
+    ["hello", "there", "friend", "again", "today"] * 4
+    + ["नमस्ते", "दोस्त", "फिर", "आज"] * 5
+)
+GOOD_HINDI_WORDS = [f"shabd{i}" for i in range(40)]
+
+
+def test_an_unusable_non_english_transcript_is_published_as_chords_only(
+    processor_context, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    runner = FakePipelineRunner(whisperx_words=BAD_SINHALA_WORDS, whisperx_language="hi")
+
+    outcome = RealAnalysisProcessor(_reference_config(config, lrclib_reference_enabled=False), runner).analyze(input_path)
+
+    assert runner.fusion_whisperx_payload["segments"] == []
+    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
+    assert fuse.argv[fuse.argv.index("--lyric-source") + 1] == "none"
+    assert "lyrics dropped as unreliable (mixed scripts" in caplog.text
+    assert outcome.timeline is not None  # the chords are still published
+
+
+def test_a_usable_non_english_transcript_is_kept(processor_context):
+    config, input_path = processor_context
+    runner = FakePipelineRunner(whisperx_words=GOOD_HINDI_WORDS, whisperx_language="hi")
+
+    RealAnalysisProcessor(_reference_config(config, lrclib_reference_enabled=False), runner).analyze(input_path)
+
+    assert len(runner.fusion_whisperx_payload["segments"]) == 1
+
+
+def test_english_transcripts_are_never_dropped(processor_context):
+    config, input_path = processor_context
+    runner = FakePipelineRunner(whisperx_words=["ahhh"] * 50, whisperx_language="en")
+
+    RealAnalysisProcessor(_reference_config(config, lrclib_reference_enabled=False), runner).analyze(input_path)
+
+    assert len(runner.fusion_whisperx_payload["segments"][0]["words"]) == 3  # loop cut to 3, kept

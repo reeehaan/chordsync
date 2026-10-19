@@ -266,11 +266,10 @@ class _LyricChordWord extends StatelessWidget {
                           '${entry.wordIndex}_$index',
                         ),
                         label: entry.chordMarkers[index],
-                        state: isActive
-                            ? ChordChipState.playing
-                            : isPast
-                            ? ChordChipState.played
-                            : ChordChipState.upcoming,
+                        state: _chipState(
+                          entry.chordSpans[index],
+                          playbackTime,
+                        ),
                       ),
                   ],
                 ),
@@ -312,16 +311,23 @@ class _LyricChordWord extends StatelessWidget {
 }
 
 /// Where a chord is relative to the song, per the Golden Hour chip rules: one
-/// pale-peach background, with state shown by border, text colour and an icon.
+/// pale-peach background, with state shown by border and text colour.
 enum ChordChipState { upcoming, played, playing }
+
+/// A chip follows its own chord's time span (so it lights up exactly when the
+/// chord strip changes), not the word it sits above.
+ChordChipState _chipState(ChordSpan span, double playbackTime) {
+  if (span.isPlaying(playbackTime)) return ChordChipState.playing;
+  return span.isUpcoming(playbackTime)
+      ? ChordChipState.upcoming
+      : ChordChipState.played;
+}
 
 class _ChordChip extends StatelessWidget {
   const _ChordChip({super.key, required this.label, required this.state});
 
   final String label;
   final ChordChipState state;
-
-  static const _iconWidth = 12.0;
 
   @override
   Widget build(BuildContext context) {
@@ -346,26 +352,13 @@ class _ChordChip extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // The icon's room is always reserved, so a chip never changes width
-          // (and the lyrics never shift) as it starts playing.
-          SizedBox(
-            width: _iconWidth,
-            child: playing
-                ? Icon(Icons.play_arrow_rounded, size: 12, color: textColor)
-                : null,
-          ),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: textColor,
-              fontWeight: FontWeight.w700,
-              height: 1.2,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: textColor,
+          fontWeight: FontWeight.w700,
+          height: 1.2,
+        ),
       ),
     );
   }
