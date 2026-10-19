@@ -16,7 +16,7 @@ import tempfile
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from backend.api.app.services.aws_errors import provider_error_code
 
@@ -55,6 +55,9 @@ class AssetRole(str, Enum):
 
 
 REQUIRED_ROLES = frozenset(AssetRole) - {AssetRole.ALIGNMENT_MMS}
+# Large and used by only some songs: not installed at startup, but fetched (and
+# verified the same way) when a song actually needs it.
+ON_DEMAND_ROLES = frozenset({AssetRole.ALIGNMENT_MMS})
 
 
 class LicenseStatus(str, Enum):
@@ -201,11 +204,24 @@ class ModelBootstrap:
         self._destinations = dict(destinations)
 
     def run(self) -> BootstrapReport:
+        """Install everything a worker needs at startup (not on-demand assets)."""
+        return self._install(lambda role: role not in ON_DEMAND_ROLES)
+
+    def install_role(self, role: AssetRole) -> BootstrapReport:
+        """Install one asset on demand. Does nothing if it is already in place."""
+        report = self._install(lambda candidate: candidate is role)
+        if report.files_installed + report.files_already_present == 0:
+            raise ModelBootstrapError(
+                f"Model release {self._release_id} has no {role.value} asset"
+            )
+        return report
+
+    def _install(self, wanted: Callable[[AssetRole], bool]) -> BootstrapReport:
         manifest = parse_manifest(
             self._read_manifest(),
             expected_release_id=self._release_id,
         )
-        plan = self._plan(manifest)
+        plan = self._plan(manifest, wanted)
         installed = present = verified_bytes = 0
         for manifest_file, destination in plan:
             if _matches(destination, manifest_file):
@@ -224,10 +240,16 @@ class ModelBootstrap:
         )
         return BootstrapReport(manifest.release_id, installed, present, verified_bytes)
 
-    def _plan(self, manifest: ModelManifest) -> list[tuple[ManifestFile, Path]]:
+    def _plan(
+        self,
+        manifest: ModelManifest,
+        wanted: Callable[[AssetRole], bool],
+    ) -> list[tuple[ManifestFile, Path]]:
         plan: list[tuple[ManifestFile, Path]] = []
         seen: set[Path] = set()
         for asset in manifest.assets:
+            if not wanted(asset.role):
+                continue
             if asset.license_status is LicenseStatus.UNRESOLVED:
                 raise ModelBootstrapError(
                     f"Model asset {asset.asset_name} has unresolved licensing"
@@ -298,6 +320,15 @@ def bootstrap_from_environment(
     bucket: str,
     s3_client: Any,
 ) -> BootstrapReport:
+    return build_bootstrap(environment, bucket=bucket, s3_client=s3_client).run()
+
+
+def build_bootstrap(
+    environment: Mapping[str, str],
+    *,
+    bucket: str,
+    s3_client: Any,
+) -> ModelBootstrap:
     release_id = environment.get("CHORDSYNC_MODEL_RELEASE", "").strip()
     manifest_key = environment.get("CHORDSYNC_MODEL_MANIFEST_KEY", "").strip()
     if not release_id or not manifest_key:
@@ -310,7 +341,7 @@ def bootstrap_from_environment(
         release_id=release_id,
         manifest_key=manifest_key,
         destinations=approved_destinations(environment),
-    ).run()
+    )
 
 
 def _parse_asset(item: object) -> ManifestAsset:

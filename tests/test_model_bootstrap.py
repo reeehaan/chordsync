@@ -197,7 +197,7 @@ def test_bootstrap_installs_and_verifies_synthetic_assets(tmp_path):
 
     report = _bootstrap(tmp_path, s3).run()
 
-    assert report.files_installed == 7
+    assert report.files_installed == 6  # the on-demand aligner is not fetched
     assert (tmp_path / "models/btc/btc_model.pt").read_bytes() == b"synthetic-btc-checkpoint"
     assert (tmp_path / "models/btc/source/btc_model.py").exists()
     hub = tmp_path / "cache/huggingface/hub/models--Systran--faster-whisper-small"
@@ -205,12 +205,12 @@ def test_bootstrap_installs_and_verifies_synthetic_assets(tmp_path):
     checkpoints = tmp_path / "cache/torch/hub/checkpoints"
     assert (checkpoints / ALIGNMENT_EN_CHECKPOINT).exists()
     assert (checkpoints / DEMUCS_HTDEMUCS_CHECKPOINT).exists()
-    assert (checkpoints / ALIGNMENT_MMS_CHECKPOINT).exists()
+    assert not (checkpoints / ALIGNMENT_MMS_CHECKPOINT).exists()
     assert not list(tmp_path.rglob("*.partial"))
 
     second = _bootstrap(tmp_path, s3).run()
     assert second.files_installed == 0
-    assert second.files_already_present == 7
+    assert second.files_already_present == 6
 
 
 def test_hash_mismatch_fails_and_leaves_no_file(tmp_path):
@@ -355,14 +355,53 @@ def test_a_release_without_the_multilingual_aligner_is_still_valid():
     assert AssetRole.ALIGNMENT_MMS not in {asset.role for asset in manifest.assets}
 
 
-def test_the_multilingual_aligner_installs_where_torchaudio_looks_for_it(tmp_path):
+def test_the_multilingual_aligner_is_fetched_only_on_demand(tmp_path):
     s3 = FakeS3()
     _manifest(s3)
+    installed = tmp_path / "cache/torch/hub/checkpoints" / ALIGNMENT_MMS_CHECKPOINT
+    mms_key = f"models/test/{AssetRole.ALIGNMENT_MMS.value}/{ALIGNMENT_MMS_CHECKPOINT}"
 
     _bootstrap(tmp_path, s3).run()
+    assert not installed.exists()
+    assert mms_key not in s3.reads  # never even read at startup
+
+    report = _bootstrap(tmp_path, s3).install_role(AssetRole.ALIGNMENT_MMS)
+
+    assert installed.read_bytes() == b"synthetic-mms"  # where torchaudio looks
+    assert (report.files_installed, report.files_already_present) == (1, 0)
+
+
+def test_an_on_demand_install_is_not_repeated(tmp_path):
+    s3 = FakeS3()
+    _manifest(s3)
+    bootstrap = _bootstrap(tmp_path, s3)
+    bootstrap.install_role(AssetRole.ALIGNMENT_MMS)
+    reads = len(s3.reads)
+
+    again = bootstrap.install_role(AssetRole.ALIGNMENT_MMS)
+
+    assert (again.files_installed, again.files_already_present) == (0, 1)
+    assert not any("synthetic" in key and key.endswith("model.pt") for key in s3.reads[reads:])
+
+
+def test_an_on_demand_install_is_verified_like_any_other(tmp_path):
+    s3 = FakeS3()
+    _manifest(s3)
+    s3.objects[f"models/test/{AssetRole.ALIGNMENT_MMS.value}/{ALIGNMENT_MMS_CHECKPOINT}"] = b"tampered"
+
+    with pytest.raises(ModelBootstrapError, match="mismatch"):
+        _bootstrap(tmp_path, s3).install_role(AssetRole.ALIGNMENT_MMS)
 
     installed = tmp_path / "cache/torch/hub/checkpoints" / ALIGNMENT_MMS_CHECKPOINT
-    assert installed.read_bytes() == b"synthetic-mms"
+    assert not installed.exists()
+
+
+def test_a_release_without_the_aligner_cannot_install_it(tmp_path):
+    s3 = FakeS3()
+    _manifest(s3, tamper=_without_mms)
+
+    with pytest.raises(ModelBootstrapError, match="no alignment_mms asset"):
+        _bootstrap(tmp_path, s3).install_role(AssetRole.ALIGNMENT_MMS)
 
 
 def test_other_required_assets_are_still_required():
@@ -378,3 +417,37 @@ def test_other_required_assets_are_still_required():
             json.dumps(_manifest(s3, tamper=drop_asr)).encode(),
             expected_release_id=RELEASE,
         )
+
+
+# --- the worker's on-demand installer ------------------------------------------------
+
+
+def test_the_on_demand_installer_fetches_the_aligner_from_the_private_bucket(
+    tmp_path, monkeypatch
+):
+    from backend.api.app.services.cloud_runtime import CloudRuntimeConfig, RuntimeMode
+
+    s3 = FakeS3()
+    _manifest(s3)
+    for name, value in _environment(tmp_path).items():
+        monkeypatch.setenv(name, value)
+    config = CloudRuntimeConfig(
+        mode=RuntimeMode.AWS,
+        storage_root=tmp_path,
+        aws_region="ap-southeast-1",
+        s3_bucket=BUCKET,
+    )
+
+    install = worker_cli.on_demand_model_installer(config, s3_client=s3)
+    install(AssetRole.ALIGNMENT_MMS)
+
+    installed = tmp_path / "cache/torch/hub/checkpoints" / ALIGNMENT_MMS_CHECKPOINT
+    assert installed.read_bytes() == b"synthetic-mms"
+
+
+def test_there_is_no_installer_outside_aws(tmp_path):
+    from backend.api.app.services.cloud_runtime import CloudRuntimeConfig, RuntimeMode
+
+    config = CloudRuntimeConfig(mode=RuntimeMode.LOCAL, storage_root=tmp_path)
+
+    assert worker_cli.on_demand_model_installer(config) is None

@@ -7,10 +7,11 @@ import tempfile
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Mapping, Protocol
+from typing import Callable, Mapping, Protocol
 
 from pydantic import ValidationError
 
+from backend.api.app.services.model_bootstrap import AssetRole, ModelBootstrapError
 from analysis.chords.estimator import ChordEstimator
 from analysis.fusion.models import SharedTimeline
 from analysis.lyrics.forced_alignment import WhisperXReferenceAligner
@@ -328,6 +329,7 @@ class RealAnalysisProcessor:
         config: AnalysisPipelineConfig | None = None,
         runner: SubprocessRunner | None = None,
         reference_aligner: ReferenceAligner | None = None,
+        model_installer: Callable[[AssetRole], None] | None = None,
     ) -> None:
         self._config = config or AnalysisPipelineConfig.local()
         self._runner = runner or LocalSubprocessRunner(
@@ -336,6 +338,9 @@ class RealAnalysisProcessor:
             else None
         )
         self._reference_aligner = reference_aligner
+        # Fetches an on-demand model asset (cloud worker). None means the
+        # libraries find their models themselves (local development).
+        self._model_installer = model_installer
 
     def process(self, input_path: Path) -> SharedTimeline:
         return self.analyze(input_path).timeline
@@ -637,6 +642,14 @@ class RealAnalysisProcessor:
             return
         aligned_path = workspace.whisperx.with_suffix(".aligned.json")
         try:
+            if self._model_installer is not None:
+                started_at = time.monotonic()
+                self._model_installer(AssetRole.ALIGNMENT_MMS)
+                logger.info(
+                    "[job %s] alignment model ready in %.1fs",
+                    job_id,
+                    time.monotonic() - started_at,
+                )
             self._run_stage(
                 "align",
                 [
@@ -654,7 +667,7 @@ class RealAnalysisProcessor:
                 aligned_path,
             )
             aligned_path.replace(workspace.whisperx)
-        except (AnalysisPipelineError, AnalysisStageTimeout, OSError):
+        except (AnalysisPipelineError, AnalysisStageTimeout, OSError, ModelBootstrapError):
             logger.warning(
                 "[job %s] word alignment unavailable; keeping the even word split",
                 job_id,

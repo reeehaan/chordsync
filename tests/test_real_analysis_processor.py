@@ -1421,3 +1421,61 @@ def test_english_songs_are_not_aligned_with_mms(processor_context, monkeypatch):
     RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
 
     assert not any(runner._stage(c.argv) == "align" for c in runner.calls)
+
+
+def test_the_alignment_model_is_fetched_just_before_it_is_needed(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=SYNCED_SINHALA)
+    runner = FakePipelineRunner()
+    fetched = []
+
+    def installer(role):
+        fetched.append((role, [c for c in runner.calls if runner._stage(c.argv) == "align"]))
+
+    RealAnalysisProcessor(
+        _reference_config(config), runner, model_installer=installer
+    ).analyze(input_path)
+
+    assert [role.value for role, _ in fetched] == ["alignment_mms"]
+    assert fetched[0][1] == []  # fetched before the alignment stage started
+    assert any(runner._stage(c.argv) == "align" for c in runner.calls)
+
+
+def test_a_failed_model_fetch_keeps_the_even_word_split(
+    processor_context, monkeypatch, caplog
+):
+    from backend.api.app.services.model_bootstrap import ModelBootstrapError
+
+    caplog.set_level(logging.WARNING)
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=SYNCED_SINHALA)
+    runner = FakePipelineRunner()
+
+    def installer(role):
+        raise ModelBootstrapError("Model object is missing")
+
+    RealAnalysisProcessor(
+        _reference_config(config), runner, model_installer=installer
+    ).analyze(input_path)
+
+    assert not any(runner._stage(c.argv) == "align" for c in runner.calls)
+    assert _first_word_start(runner) == pytest.approx(10.0)
+    assert "keeping the even word split" in caplog.text
+
+
+def test_songs_that_do_not_need_alignment_never_fetch_the_model(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=ENGLISH_LYRICS, synced=None)
+    fetched = []
+
+    RealAnalysisProcessor(
+        _reference_config(config),
+        FakePipelineRunner(),
+        model_installer=fetched.append,
+    ).analyze(input_path)
+
+    assert fetched == []

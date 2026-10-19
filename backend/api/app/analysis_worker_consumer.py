@@ -14,8 +14,10 @@ from backend.api.app.services.cloud_runtime import (
     compose_cloud_runtime,
 )
 from backend.api.app.services.model_bootstrap import (
+    AssetRole,
     ModelBootstrapError,
     bootstrap_from_environment,
+    build_bootstrap,
 )
 from backend.api.app.services.real_analysis_processor import RealAnalysisProcessor
 from backend.api.app.services.result_publication import AnalysisResultPublisher
@@ -51,10 +53,31 @@ def build_consumer(config: CloudRuntimeConfig) -> AnalysisWorkerConsumer:
         runtime.repository,
         runtime.artifact_storage,
         SourceMaterializer(runtime.artifact_storage, workspace_root),
-        RealAnalysisProcessor(),
+        RealAnalysisProcessor(model_installer=on_demand_model_installer(config)),
         AnalysisResultPublisher(runtime.repository, runtime.artifact_storage),
         ArtifactCleanup(workspace_root, runtime.artifact_storage),
     )
+
+
+def on_demand_model_installer(
+    config: CloudRuntimeConfig,
+    s3_client: Any | None = None,
+) -> Callable[[AssetRole], None] | None:
+    """Fetch an on-demand model asset (e.g. the aligner) the first time it is needed."""
+    if config.mode is not RuntimeMode.AWS:
+        return None
+
+    def install(role: AssetRole) -> None:
+        client = s3_client
+        if client is None:
+            import boto3
+
+            client = boto3.session.Session(region_name=config.aws_region).client("s3")
+        build_bootstrap(
+            os.environ, bucket=config.s3_bucket or "", s3_client=client
+        ).install_role(role)
+
+    return install
 
 
 def bootstrap_models(config: CloudRuntimeConfig, s3_client: Any | None = None) -> None:

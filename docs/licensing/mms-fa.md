@@ -7,8 +7,9 @@
   (torchaudio 2.8.0)
 - SHA-256: `20ef12963ab4924bef49ac4fc7f58ad5da2ee43b2c11bc8c853c9b90ecdbc680`
   (1,262,047,414 bytes)
-- Decision date: pending the project owner's approval
-- Status: **PROPOSED, NON-COMMERCIAL RESEARCH USE ONLY, PRIVATE AWS ACCOUNT**
+- Decision date: 2026-10-19
+- Decided by: ChordSync project owner
+- Status: **APPROVED, NON-COMMERCIAL RESEARCH USE ONLY, PRIVATE AWS ACCOUNT**
 
 ## What it is used for
 
@@ -29,7 +30,7 @@ Python) only to match the model's alphabet.
 
 ## Decision
 
-To be approved on the same terms as the BTC checkpoint
+Approved by the project owner ("I'm using it for non-commercial research") on the same terms as the BTC checkpoint
 (`docs/licensing/btc-checkpoint.md`) and the Demucs weights
 (`docs/licensing/demucs-htdemucs.md`): non-commercial research use only, within
 ChordSync's private AWS account. Revisit before any public or commercial release
