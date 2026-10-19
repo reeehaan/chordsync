@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../../design_system/chordsync_design_system.dart';
 import '../data/shared_timeline.dart';
+import 'chord_chart.dart';
 import 'lyric_chord_marker_mapper.dart';
 import 'lyric_display_block.dart';
 import 'practice_stage_colors.dart';
@@ -124,8 +125,33 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
   @override
   Widget build(BuildContext context) {
     if (_blocks.isEmpty) {
-      return const Center(
-        child: Text('No lyrics detected', key: ValueKey('noLyricsFallback')),
+      // No lyrics to put the chords over: show the chords bar by bar instead.
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Column(
+              children: [
+                const Text(
+                  'No lyrics detected',
+                  key: ValueKey('noLyricsFallback'),
+                ),
+                Text(
+                  'Showing the chords bar by bar.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: PracticeStageColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ChordChart(
+              timeline: widget.timeline,
+              playbackTime: widget.playbackTime,
+            ),
+          ),
+        ],
       );
     }
 
