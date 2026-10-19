@@ -1,4 +1,7 @@
-from analysis.lyrics.romanization import romanize_whisperx_result
+from analysis.lyrics.romanization import (
+    add_approximate_word_timings,
+    romanize_whisperx_result,
+)
 
 
 def _result(language: str, text: str) -> dict:
@@ -85,3 +88,21 @@ def test_mixed_ascii_words_and_punctuation_are_preserved():
     romanized = romanize_whisperx_result(result)
 
     assert romanized["segments"][0]["text"] == "Hello, mhasmumd!"
+
+
+def test_native_script_is_kept_while_word_timings_are_added():
+    result = {
+        "language": "si",
+        "segments": [{"start": 10.0, "end": 12.0, "text": " මන්දාරම් හැන්දෑවේ"}],
+    }
+
+    timed = add_approximate_word_timings(result)
+
+    assert timed["segments"][0]["text"] == " මන්දාරම් හැන්දෑවේ"
+    assert [w["word"] for w in timed["segments"][0]["words"]] == [
+        "මන්දාරම්",
+        "හැන්දෑවේ",
+    ]
+    assert timed["segments"][0]["words"][0]["start"] == 10.0
+    assert timed["segments"][0]["words"][1]["end"] == 12.0
+    assert "words" not in result["segments"][0]  # the input is not modified

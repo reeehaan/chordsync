@@ -31,6 +31,19 @@ def romanize_whisperx_result(result: Mapping[str, Any]) -> dict[str, Any]:
     return romanized
 
 
+def add_approximate_word_timings(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Give sentence-timed segments per-word timings, keeping the native script.
+
+    WhisperX `--no_align` output has segment times only; the rest of the pipeline
+    needs words, so each segment's words share its time evenly.
+    """
+    timed = copy.deepcopy(dict(result))
+    for segment in timed.get("segments", []):
+        if isinstance(segment, dict):
+            _add_segment_word_timings(segment)
+    return timed
+
+
 def _add_segment_word_timings(segment: dict[str, Any]) -> None:
     """Create approximate word timings for WhisperX --no_align output."""
     if segment.get("words"):

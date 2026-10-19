@@ -669,7 +669,11 @@ def test_multilingual_lyrics_uses_detection_while_english_output_stays_unchanged
 def test_multilingual_lyrics_romanizes_words_after_alignment(processor_context):
     config, input_path = processor_context
     config = AnalysisPipelineConfig(
-        **{**config.__dict__, "multilingual_lyrics_enabled": True}
+        **{
+            **config.__dict__,
+            "multilingual_lyrics_enabled": True,
+            "romanize_lyrics": True,
+        }
     )
     runner = FakePipelineRunner(
         whisperx_words=["महासमुंद"],
@@ -710,11 +714,40 @@ def test_multilingual_lyrics_falls_back_when_language_has_no_alignment_model(
         lyrics_calls[2].argv.index("--language") + 1
     ] == "si"
     assert [word.text for word in timeline.lyrics[0].words] == [
-        "mndarm",
-        "haendaeve",
+        "මන්දාරම්",
+        "හැන්දෑවේ",
     ]
     assert timeline.lyrics[0].words[0].start == pytest.approx(0.1)
     assert timeline.lyrics[0].words[-1].end == pytest.approx(1.0)
+
+
+def test_romanizing_lyrics_can_be_turned_on(processor_context):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{
+            **config.__dict__,
+            "multilingual_lyrics_enabled": True,
+            "romanize_lyrics": True,
+        }
+    )
+    runner = MissingAlignmentModelRunner(
+        whisperx_words=["මන්දාරම්", "හැන්දෑවේ"],
+        whisperx_language="sa",
+    )
+
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
+
+    assert [word.text for word in timeline.lyrics[0].words] == [
+        "mndarm",
+        "haendaeve",
+    ]
+
+
+def test_romanize_lyrics_is_off_unless_asked_for(monkeypatch):
+    monkeypatch.delenv("CHORDSYNC_ROMANIZE_LYRICS", raising=False)
+    assert AnalysisPipelineConfig.local().romanize_lyrics is False
+    monkeypatch.setenv("CHORDSYNC_ROMANIZE_LYRICS", "true")
+    assert AnalysisPipelineConfig.local().romanize_lyrics is True
 
 
 def test_non_english_multilingual_lyrics_skips_english_reference_alignment(
@@ -755,7 +788,7 @@ def test_non_english_multilingual_lyrics_skips_english_reference_alignment(
     outcome = processor.analyze(input_path)
     timeline = outcome.timeline
 
-    assert timeline.lyrics[0].words[0].text == "mhasmumd"
+    assert timeline.lyrics[0].words[0].text == "महासमुंद"
     assert alignment_calls == []
     assert outcome.lyrics_verification_diagnostics is None
 

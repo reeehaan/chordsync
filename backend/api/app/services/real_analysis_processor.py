@@ -34,6 +34,7 @@ from analysis.lyrics.production_reference import obtain_lrclib_reference
 from analysis.lyrics.language_hint import looks_english
 from analysis.lyrics.repetition_guard import remove_repetition_loops
 from analysis.lyrics.romanization import (
+    add_approximate_word_timings,
     romanize_whisperx_result,
     whisperx_needs_romanization,
 )
@@ -150,6 +151,9 @@ class AnalysisPipelineConfig:
     fusion_timeout: float = 120.0
     music_only_enabled: bool = False
     multilingual_lyrics_enabled: bool = False
+    # Show non-English lyrics converted to Latin letters instead of their own
+    # script. Off by default: songs are shown in the script they are sung in.
+    romanize_lyrics: bool = False
     lrclib_reference_enabled: bool = False
     lrclib_timeout: float = DEFAULT_TIMEOUT_SECONDS
     lrclib_user_agent: str = DEFAULT_USER_AGENT
@@ -201,6 +205,10 @@ class AnalysisPipelineConfig:
             ),
             multilingual_lyrics_enabled=(
                 _enabled_by_default("CHORDSYNC_MULTILINGUAL_LYRICS_ENABLED")
+            ),
+            romanize_lyrics=(
+                os.getenv("CHORDSYNC_ROMANIZE_LYRICS", "").casefold()
+                in {"1", "true", "yes"}
             ),
             lrclib_reference_enabled=(
                 os.getenv("CHORDSYNC_LRCLIB_REFERENCE_ENABLED", "").casefold()
@@ -723,14 +731,19 @@ class RealAnalysisProcessor:
     ) -> Path:
         try:
             whisperx_result = json.loads(whisperx_path.read_text(encoding="utf-8"))
-            romanized_result = romanize_whisperx_result(whisperx_result)
-            if romanized_result is whisperx_result:
+            if not whisperx_needs_romanization(whisperx_result):
                 return whisperx_path
+            if self._config.romanize_lyrics:
+                prepared = romanize_whisperx_result(whisperx_result)
+                outcome = "romanized"
+            else:
+                prepared = add_approximate_word_timings(whisperx_result)
+                outcome = "kept in native script"
             romanized_whisperx_path.write_text(
-                json.dumps(romanized_result, ensure_ascii=False, indent=2),
+                json.dumps(prepared, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
-            logger.info("[job %s] multilingual lyrics romanized", job_id)
+            logger.info("[job %s] multilingual lyrics %s", job_id, outcome)
             return romanized_whisperx_path
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             logger.warning(
