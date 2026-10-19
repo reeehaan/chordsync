@@ -13,7 +13,6 @@ class PracticeTransportBar extends StatelessWidget {
     required this.position,
     required this.maximumPosition,
     required this.speed,
-    required this.chordLabel,
     required this.canGoPrevious,
     required this.canGoNext,
     required this.onPrevious,
@@ -27,7 +26,6 @@ class PracticeTransportBar extends StatelessWidget {
   final double position;
   final double maximumPosition;
   final double speed;
-  final String chordLabel;
   final bool canGoPrevious;
   final bool canGoNext;
   final VoidCallback onPrevious;
@@ -38,7 +36,6 @@ class PracticeTransportBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final isPlaying = status == PracticePlaybackStatus.playing;
     final playLabel = status == PracticePlaybackStatus.completed
         ? 'Replay'
@@ -51,28 +48,6 @@ class PracticeTransportBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  chordLabel,
-                  key: const ValueKey('persistentChordValue'),
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: PracticeStageColors.textFaint,
-                  ),
-                ),
-              ),
-              Text(
-                '${position.toStringAsFixed(1)} s',
-                key: const ValueKey('positionValue'),
-                style: textTheme.labelSmall?.copyWith(
-                  color: PracticeStageColors.textFaint,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
           Row(
             children: [
               Expanded(

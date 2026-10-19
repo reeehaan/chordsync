@@ -58,7 +58,7 @@ void main() {
       expect(find.byKey(const ValueKey('chordProgressBar')), findsNothing);
       expect(find.byKey(const ValueKey('sheetWord0.5')), findsNothing);
       expect(find.byKey(const ValueKey('sheetWord4.0')), findsNothing);
-      expect(find.text('Music only'), findsOneWidget);
+      expect(find.text('Music only'), findsNothing); // the bar label is gone
       expect(find.byType(Slider), findsOneWidget);
       expect(find.byTooltip('Play'), findsOneWidget);
 

@@ -293,9 +293,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 Duration.microsecondsPerSecond,
             maximumPosition: _maximumPosition,
             speed: synchronizer.speed,
-            chordLabel: state.isMusicOnly
-                ? 'Music only'
-                : 'Current ${ChordTransposition.forCapo(state.currentChord, _capoFret)}',
             canGoPrevious: synchronizer.canSeekToPreviousBar,
             canGoNext: synchronizer.canSeekToNextBar,
             onPrevious: () => _runAudioAction(() async {

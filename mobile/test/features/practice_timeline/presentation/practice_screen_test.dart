@@ -45,7 +45,8 @@ void main() {
     expect(find.text('Downbeat'), findsNothing);
     expectValue('currentChordValue', chord);
     expectValue('nextChordValue', nextChord);
-    expectValue('positionValue', position);
+    expect(find.byKey(const ValueKey('positionValue')), findsNothing);
+    expect(find.byKey(const ValueKey('persistentChordValue')), findsNothing);
   }
 
   Future<void> setPosition(WidgetTester tester, double seconds) async {

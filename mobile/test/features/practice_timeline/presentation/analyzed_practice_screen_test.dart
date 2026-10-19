@@ -90,14 +90,13 @@ void main() {
       );
       expect(scrollPosition.pixels, greaterThan(0));
       expect(find.byTooltip('Play'), findsOneWidget);
-      expect(_text(tester, 'persistentChordValue'), 'Current C');
+      expect(find.byKey(const ValueKey('persistentChordValue')), findsNothing);
       expect(tester.takeException(), isNull);
 
       final bottomBeforeSeek = scrollPosition.pixels;
       player.emit(const Duration(seconds: 157));
       await tester.pumpAndSettle();
       expect(_text(tester, 'currentChordValue'), 'G');
-      expect(_text(tester, 'persistentChordValue'), 'Current G');
       expect(scrollPosition.pixels, bottomBeforeSeek);
       expect(tester.takeException(), isNull);
 
@@ -191,7 +190,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_text(tester, 'currentChordValue'), 'C');
-    expect(_text(tester, 'positionValue'), '2.0 s');
+    expect(find.byKey(const ValueKey('positionValue')), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 10));
