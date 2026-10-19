@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import socket
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.message import Message
@@ -23,10 +24,20 @@ LRCLIB_SEARCH_URL = "https://lrclib.net/api/search"
 # The exact lookup rejects a recording whose length differs by more than a couple
 # of seconds; the search fallback picks the closest one within this many seconds.
 SEARCH_DURATION_TOLERANCE_SECONDS = 10.0
+# A different release of the same recording (single, album, compilation) has
+# the same length; prefer such an entry when it has timed lyrics.
+SAME_RECORDING_TOLERANCE_SECONDS = 3.0
+# LRCLIB answers 5xx now and then, so a temporary failure is retried.
+MAX_ATTEMPTS = 3
+RETRY_DELAYS_SECONDS = (1.0, 2.0)
 DEFAULT_USER_AGENT = (
     "ChordSync/0.1 (academic development; contact: developer@localhost)"
 )
 DEFAULT_TIMEOUT_SECONDS = 10.0
+
+
+class _TemporaryFailure(LyricsApiUnavailableError):
+    """A failure worth trying again (server error, timeout, no connection)."""
 
 
 @dataclass(frozen=True)
@@ -46,6 +57,7 @@ class LrclibTransport:
         user_agent: str = DEFAULT_USER_AGENT,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         opener: Callable[..., object] = urlopen,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not user_agent.strip():
             raise ValueError("LRCLIB User-Agent must not be empty.")
@@ -54,6 +66,7 @@ class LrclibTransport:
         self._user_agent = user_agent
         self._timeout_seconds = timeout_seconds
         self._opener = opener
+        self._sleep = sleep
 
     def fetch(
         self,
@@ -72,35 +85,47 @@ class LrclibTransport:
         if duration_seconds is not None and duration_seconds > 0:
             parameters["duration"] = str(round(duration_seconds, 3))
         try:
-            return _map_response(self._request_json(LRCLIB_GET_URL, parameters))
+            exact = self._request_json(LRCLIB_GET_URL, parameters)
         except LyricsApiRateLimitedError:
             raise  # never send a second request while rate limited
         except LyricsApiUnavailableError as exact_failure:
-            candidate = self._closest_search_result(
-                song_identity, duration_seconds, parameters
-            )
+            candidate = self._search(song_identity, duration_seconds, parameters)
             if candidate is None:
                 raise exact_failure
             return _map_response(candidate)
+        if exact.get("syncedLyrics"):
+            return _map_response(exact)
+        # The exact match only has plain lyrics. Another release of the same
+        # recording may have timed lyrics, which are far more useful.
+        better = self._search(
+            song_identity, duration_seconds, parameters, require_synced=True
+        )
+        return _map_response(better if better is not None else exact)
 
-    def _closest_search_result(
+    def _search(
         self,
         song_identity: SongIdentity,
         duration_seconds: float | None,
         parameters: Mapping[str, str],
+        *,
+        require_synced: bool = False,
     ) -> Mapping[str, object] | None:
         search = {
             key: value
             for key, value in parameters.items()
-            if key in {"track_name", "artist_name", "album_name"}
+            if key in {"track_name", "artist_name"}
         }
         try:
-            results = self._request_json(LRCLIB_SEARCH_URL, search, expect_list=True)
+            # One attempt: this is a fallback, so a failure must not add a wait.
+            results = self._request_json(
+                LRCLIB_SEARCH_URL, search, expect_list=True, attempts=1
+            )
         except (LyricsApiUnavailableError, LyricsApiResponseRejectedError):
             return None
         wanted_title = _same_text(song_identity.title)
         wanted_artist = _same_text(song_identity.artist)
-        best: tuple[float, Mapping[str, object]] | None = None
+        wanted_album = _same_text(song_identity.album or "")
+        best: tuple[tuple[int, float], Mapping[str, object]] | None = None
         for item in results:
             if not isinstance(item, dict) or item.get("instrumental"):
                 continue
@@ -110,14 +135,45 @@ class LrclibTransport:
                 continue
             if not item.get("plainLyrics"):
                 continue
-            delta = _duration_gap(item.get("duration"), duration_seconds)
-            if delta is None or delta > SEARCH_DURATION_TOLERANCE_SECONDS:
+            synced = bool(item.get("syncedLyrics"))
+            if require_synced and not synced:
                 continue
-            if best is None or delta < best[0]:
-                best = (delta, item)
+            delta = _duration_gap(item.get("duration"), duration_seconds)
+            if delta is None:
+                continue
+            same_album = bool(wanted_album) and (
+                _same_text(str(item.get("albumName", ""))) == wanted_album
+            )
+            limit = (
+                SEARCH_DURATION_TOLERANCE_SECONDS
+                if same_album
+                else SAME_RECORDING_TOLERANCE_SECONDS
+            )
+            if delta > limit:
+                continue
+            rank = (0 if synced else 1, delta)  # timed lyrics first, then closest
+            if best is None or rank < best[0]:
+                best = (rank, item)
         return best[1] if best else None
 
     def _request_json(
+        self,
+        url: str,
+        parameters: Mapping[str, str],
+        *,
+        expect_list: bool = False,
+        attempts: int = MAX_ATTEMPTS,
+    ):
+        for attempt in range(attempts):
+            try:
+                return self._request_once(url, parameters, expect_list=expect_list)
+            except _TemporaryFailure:
+                if attempt == attempts - 1:
+                    raise
+                self._sleep(RETRY_DELAYS_SECONDS[min(attempt, len(RETRY_DELAYS_SECONDS) - 1)])
+        raise AssertionError("unreachable")
+
+    def _request_once(
         self,
         url: str,
         parameters: Mapping[str, str],
@@ -142,14 +198,14 @@ class LrclibTransport:
                     _retry_after_seconds(error.headers)
                 ) from error
             if 500 <= error.code < 600:
-                raise LyricsApiUnavailableError(
+                raise _TemporaryFailure(
                     "Lyrics provider is temporarily unavailable."
                 ) from error
             raise LyricsApiUnavailableError(
                 "Lyrics provider request failed."
             ) from error
         except (URLError, TimeoutError, socket.timeout) as error:
-            raise LyricsApiUnavailableError(
+            raise _TemporaryFailure(
                 "Lyrics provider lookup is unavailable."
             ) from error
         except (UnicodeDecodeError, json.JSONDecodeError) as error:

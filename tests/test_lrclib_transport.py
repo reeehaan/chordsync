@@ -63,6 +63,7 @@ def _source(opener):
             user_agent="ChordSync-tests/1.0 (contact: test@example.invalid)",
             timeout_seconds=3,
             opener=opener,
+            sleep=lambda seconds: None,
         ),
         provider="lrclib-development",
         identity_candidate=candidate,
@@ -94,9 +95,9 @@ def test_successful_lrclib_request_uses_identity_and_user_agent():
     observed = {}
 
     def opener(request, *, timeout):
-        observed["request"] = request
+        observed.setdefault("request", request)  # the exact lookup is first
         observed["timeout"] = timeout
-        return FakeResponse(_payload())
+        return FakeResponse(_payload(syncedLyrics="[00:01.00] timed"))
 
     result = _source(opener).get_reference(IDENTITY)
     query = parse_qs(urlparse(observed["request"].full_url).query)
@@ -284,6 +285,135 @@ def test_the_album_must_match_to_accept_a_duration_off_by_several_seconds():
 
 def test_a_duration_beyond_ten_seconds_is_rejected_even_with_the_album():
     far = _payload(duration=135.0)
+
+    with pytest.raises(LyricsApiResponseRejectedError):
+        _source(lambda r, *, timeout: FakeResponse(far)).get_reference(IDENTITY)
+
+
+# --- temporary failures and timed lyrics ------------------------------------------
+
+
+class _Flaky:
+    """Fails `failures` times with `error`, then answers with `payload`."""
+
+    def __init__(self, error, failures, payload):
+        self.error, self.failures, self.payload = error, failures, payload
+        self.calls = 0
+
+    def __call__(self, request, *, timeout):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise self.error
+        return FakeResponse(self.payload)
+
+
+def _timed(**updates):
+    return _payload(syncedLyrics="[00:01.00] a line", **updates)
+
+
+def _transport(opener, delays=None):
+    delays = [] if delays is None else delays
+    return LrclibTransport(
+        user_agent="ChordSync-tests/1.0 (contact: test@example.invalid)",
+        timeout_seconds=3,
+        opener=opener,
+        sleep=delays.append,
+    )
+
+
+def _fetch(transport):
+    return transport.fetch(IDENTITY, duration_seconds=120.0, credential=None)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [_http_error(503), _http_error(500), socket.timeout(), TimeoutError()],
+)
+def test_a_temporary_failure_is_retried_with_a_short_wait(error):
+    delays = []
+    flaky = _Flaky(error, 2, _timed())
+
+    result = _fetch(_transport(flaky, delays))
+
+    assert result["provider_track_id"] == 42
+    assert flaky.calls == 3
+    assert delays == [1.0, 2.0]
+
+
+def test_giving_up_after_three_attempts():
+    delays = []
+    flaky = _Flaky(_http_error(503), 99, _timed())
+
+    with pytest.raises(Exception, match="temporarily unavailable"):
+        _fetch(_transport(flaky, delays))
+
+    assert delays == [1.0, 2.0]
+
+
+def test_not_found_and_rate_limits_are_not_retried():
+    for error in (_http_error(404), _http_error(429, retry_after="1")):
+        delays = []
+        flaky = _Flaky(error, 99, _timed())
+
+        with pytest.raises(Exception):
+            _fetch(_transport(flaky, delays))
+
+        assert delays == []
+
+
+def test_timed_lyrics_from_another_release_are_preferred():
+    plain_only = _payload(albumName="Tagged Album", syncedLyrics=None)
+    single = _payload(
+        id=7, albumName="The Single", duration=121.0, syncedLyrics="[00:01.00] timed"
+    )
+    opener = _routing_opener(plain_only, [plain_only | {"id": 42}, single])
+
+    result = _source(opener).get_reference(IDENTITY)
+
+    assert result.provider_track_id == "7"
+    assert result.synced_lyrics == "[00:01.00] timed"
+    assert result.match_evidence.album_match is False  # a different release...
+    assert result.match_evidence.duration_delta_seconds == pytest.approx(1.0)
+
+
+def test_an_exact_match_that_already_has_timed_lyrics_is_used_as_is():
+    opener = _routing_opener(_timed(), [_payload(id=7)])
+
+    result = _source(opener).get_reference(IDENTITY)
+
+    assert result.provider_track_id == "42"
+    assert not any("/api/search" in url for url in opener.calls)
+
+
+def test_timed_lyrics_are_not_taken_from_a_different_recording():
+    plain_only = _payload(syncedLyrics=None)
+    wrong = [
+        _timed(id=1, artistName="Someone Else"),
+        _timed(id=2, trackName="Different Song"),
+        _timed(id=3, albumName="Other", duration=130.0),  # 10 s off, other album
+        _timed(id=4, albumName="Other", duration=124.5),  # 4.5 s off, other album
+    ]
+
+    result = _source(_routing_opener(plain_only, wrong)).get_reference(IDENTITY)
+
+    assert result.provider_track_id == "42"  # kept the plain exact match
+
+
+def test_the_closest_release_with_timed_lyrics_wins():
+    opener = _routing_opener(
+        _http_error(404),
+        [
+            _payload(id=1, duration=121.0),  # no timed lyrics
+            _timed(id=2, duration=122.5, albumName="Tagged Album"),
+            _timed(id=3, duration=120.5, albumName="Tagged Album"),
+        ],
+    )
+
+    assert _source(opener).get_reference(IDENTITY).provider_track_id == "3"
+
+
+def test_the_same_title_on_another_album_is_rejected_when_the_length_differs():
+    far = _payload(albumName="Other Album", duration=124.0)  # 4 s off
 
     with pytest.raises(LyricsApiResponseRejectedError):
         _source(lambda r, *, timeout: FakeResponse(far)).get_reference(IDENTITY)

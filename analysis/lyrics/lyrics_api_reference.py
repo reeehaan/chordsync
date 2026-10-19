@@ -201,7 +201,17 @@ class LyricsApiReferenceSource:
             raise LyricsApiResponseRejectedError(
                 "Provider title or artist does not match the requested song."
             )
-        if album_match is False or version_match is False:
+        if version_match is False:
+            raise LyricsApiResponseRejectedError(
+                "Provider album or version does not match the requested song."
+            )
+        if album_match is False and not (
+            duration_delta is not None
+            and duration_delta <= self._duration_tolerance_seconds
+        ):
+            # Another release (single, album, compilation) of the same recording
+            # has the same length; a different album AND a different length is
+            # more likely a different recording.
             raise LyricsApiResponseRejectedError(
                 "Provider album or version does not match the requested song."
             )
