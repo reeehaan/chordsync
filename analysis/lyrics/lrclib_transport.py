@@ -28,8 +28,8 @@ SEARCH_DURATION_TOLERANCE_SECONDS = 10.0
 # the same length; prefer such an entry when it has timed lyrics.
 SAME_RECORDING_TOLERANCE_SECONDS = 3.0
 # LRCLIB answers 5xx now and then, so a temporary failure is retried.
-MAX_ATTEMPTS = 3
-RETRY_DELAYS_SECONDS = (1.0, 2.0)
+MAX_ATTEMPTS = 4
+RETRY_DELAYS_SECONDS = (1.0, 2.0, 4.0)
 DEFAULT_USER_AGENT = (
     "ChordSync/0.1 (academic development; contact: developer@localhost)"
 )

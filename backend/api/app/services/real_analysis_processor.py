@@ -33,7 +33,11 @@ from analysis.lyrics.production_verification import (
 )
 from analysis.lyrics.production_reference import obtain_lrclib_reference
 from analysis.lyrics.language_hint import looks_english
-from analysis.lyrics.lyric_quality import unreliable_reason, without_lyrics
+from analysis.lyrics.lyric_quality import (
+    english_vocabulary_reason,
+    unreliable_reason,
+    without_lyrics,
+)
 from analysis.lyrics.repetition_guard import remove_repetition_loops
 from analysis.lyrics.synced_reference import (
     MINIMUM_TIMED_LINES,
@@ -365,6 +369,12 @@ class RealAnalysisProcessor:
         self._run_beats(workspace)
         practice_regions = self._run_practice_regions(workspace, job_id)
         self._run_separation(workspace)
+        if reference is None:
+            # LRCLIB errors come and go. Several minutes have passed, so try once
+            # more before falling back to speech recognition.
+            reference = self._obtain_optional_lyrics_reference(
+                input_path, job_id, second_attempt=True
+            )
         self._run_lyrics(workspace, job_id, reference)
         self._remove_lyric_repetition_loops(workspace.whisperx, job_id)
         self._drop_unreliable_lyrics(workspace.whisperx, job_id)
@@ -732,6 +742,8 @@ class RealAnalysisProcessor:
         self,
         input_path: Path,
         job_id: str,
+        *,
+        second_attempt: bool = False,
     ) -> LyricsReferenceResult | None:
         if not self._config.lrclib_reference_enabled:
             return None
@@ -750,6 +762,10 @@ class RealAnalysisProcessor:
                 type(error).__name__,
             )
             return None
+        if second_attempt:
+            if reference is not None:
+                logger.info("[job %s] lyrics reference matched on the second try", job_id)
+            return reference
         logger.info(
             "[job %s] optional lyrics reference %s; continuing with WhisperX",
             job_id,
@@ -929,17 +945,21 @@ class RealAnalysisProcessor:
         )
 
     def _drop_unreliable_lyrics(self, whisperx_path: Path, job_id: str) -> None:
-        """Publish chords only when a non-English transcript is unusable.
+        """Publish chords only when a transcript is unusable.
 
-        English transcripts, and lyrics built from a synced reference, are kept.
+        Lyrics built from a synced reference are always kept. A transcript labelled
+        English is judged by its vocabulary; any other language by its script and
+        repetition.
         """
         try:
             transcript = json.loads(whisperx_path.read_text(encoding="utf-8"))
-            if transcript.get("language") == "synced" or not whisperx_needs_romanization(
-                transcript
-            ):
+            if transcript.get("language") == "synced":
                 return
-            reason = unreliable_reason(transcript)
+            reason = (
+                unreliable_reason(transcript)
+                if whisperx_needs_romanization(transcript)
+                else english_vocabulary_reason(transcript)
+            )
             if reason is None:
                 return
             whisperx_path.write_text(

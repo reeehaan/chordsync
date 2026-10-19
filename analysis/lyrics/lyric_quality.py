@@ -63,6 +63,36 @@ def unreliable_reason(transcript: dict[str, Any]) -> str | None:
     return None
 
 
+_ENGLISH_MINIMUM_WORDS = 40
+_ENGLISH_MINIMUM_SHARE = 0.08
+
+
+def english_vocabulary_reason(transcript: dict[str, Any]) -> str | None:
+    """Why a transcript labelled English is not English, or None if it looks fine.
+
+    Speech recognition can label a song in another language "English" and spell
+    the sounds with English letters (Sinhala came out as "Ob my hadeh lehi"). Real
+    English lyrics are full of common words (about half of one song's words);
+    that transcript had 3%.
+    """
+    from analysis.lyrics.language_hint import _ENGLISH_WORDS, _WORD
+
+    words = [
+        found
+        for segment in transcript.get("segments", [])
+        if isinstance(segment, dict)
+        for word in segment.get("words", []) or []
+        if isinstance(word, dict)
+        for found in _WORD.findall(str(word.get("word", "")).casefold())
+    ]
+    if len(words) < _ENGLISH_MINIMUM_WORDS:
+        return None
+    share = sum(1 for word in words if word in _ENGLISH_WORDS) / len(words)
+    if share < _ENGLISH_MINIMUM_SHARE:
+        return f"labelled English but only {share:.0%} of the words are English"
+    return None
+
+
 def _script(character: str) -> str:
     name = unicodedata.name(character, "")
     return name.split(" ")[0] if name else "OTHER"

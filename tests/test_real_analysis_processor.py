@@ -1520,3 +1520,75 @@ def test_english_transcripts_are_never_dropped(processor_context):
     RealAnalysisProcessor(_reference_config(config, lrclib_reference_enabled=False), runner).analyze(input_path)
 
     assert len(runner.fusion_whisperx_payload["segments"][0]["words"]) == 3  # loop cut to 3, kept
+
+
+SINGLISH_WORDS = (
+    "Ob my hadeh lehi randindin Mal maavate sar nethu sihinen ahasa diyath manaram "
+    "kandulu galaya kiyaa yanna balan inna handa pena hithe ayal"
+).split() * 2
+
+
+def test_sinhala_spelled_in_english_letters_is_published_as_chords_only(
+    processor_context, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    runner = FakePipelineRunner(whisperx_words=SINGLISH_WORDS, whisperx_language="en")
+
+    RealAnalysisProcessor(
+        _reference_config(config, lrclib_reference_enabled=False), runner
+    ).analyze(input_path)
+
+    assert runner.fusion_whisperx_payload["segments"] == []
+    assert "labelled English but only" in caplog.text
+
+
+def test_real_english_lyrics_are_still_kept(processor_context):
+    config, input_path = processor_context
+    words = ENGLISH_LYRICS.split() * 2
+    runner = FakePipelineRunner(whisperx_words=words, whisperx_language="en")
+
+    RealAnalysisProcessor(
+        _reference_config(config, lrclib_reference_enabled=False), runner
+    ).analyze(input_path)
+
+    assert len(runner.fusion_whisperx_payload["segments"]) == 1
+
+
+def test_the_lookup_is_tried_again_before_the_lyrics_step(
+    processor_context, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    answers = [
+        None,  # LRCLIB was down at the start of the job
+        SimpleNamespace(plain_lyrics="\n".join(SINHALA_LINES), synced_lyrics=SYNCED_SINHALA),
+    ]
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor.obtain_lrclib_reference",
+        lambda *args, **kwargs: answers.pop(0),
+    )
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    assert answers == []  # asked twice
+    assert _lyrics_calls(runner) == []  # the second answer was used
+    assert "matched on the second try" in caplog.text
+
+
+def test_a_song_with_no_reference_is_only_looked_up_twice(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    calls = []
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor.obtain_lrclib_reference",
+        lambda *args, **kwargs: calls.append(1),
+    )
+
+    RealAnalysisProcessor(_reference_config(config), FakePipelineRunner()).analyze(
+        input_path
+    )
+
+    assert len(calls) == 2

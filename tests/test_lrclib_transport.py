@@ -340,14 +340,14 @@ def test_a_temporary_failure_is_retried_with_a_short_wait(error):
     assert delays == [1.0, 2.0]
 
 
-def test_giving_up_after_three_attempts():
+def test_giving_up_after_four_attempts():
     delays = []
     flaky = _Flaky(_http_error(503), 99, _timed())
 
     with pytest.raises(Exception, match="temporarily unavailable"):
         _fetch(_transport(flaky, delays))
 
-    assert delays == [1.0, 2.0]
+    assert delays == [1.0, 2.0, 4.0]
 
 
 def test_not_found_and_rate_limits_are_not_retried():
