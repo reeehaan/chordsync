@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:chordsync/design_system/chordsync_design_system.dart';
 import 'package:chordsync/features/analysis/application/analysis_job_poller.dart';
 import 'package:chordsync/features/analysis/application/analysis_practice_coordinator.dart';
 import 'package:chordsync/features/analysis/data/analysis_api_client.dart';
@@ -46,6 +47,7 @@ void main() {
   }) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: ChordSyncTheme.light(),
         home: AudioImportScreen(
           controller: controller,
           fileSelector: selector,
@@ -65,11 +67,9 @@ void main() {
     await pumpScreen(tester);
 
     expect(find.text('Upload'), findsOneWidget);
-    // Regression: nested Theme.of(context) calls must resolve the dark
-    // upload theme, not the outer light theme's near-black-on-near-black
-    // text colour (visually invisible against the dark background).
+    // Golden Hour: dark brown text on the parchment page, readable.
     final title = tester.widget<Text>(find.text('Upload'));
-    expect(title.style?.color, const Color(0xFFF6F2ED));
+    expect(title.style?.color, ChordSyncColors.textPrimary);
     expect(find.textContaining('WAV · MP3 · M4A'), findsOneWidget);
     expect(preparation.calls, 0);
 

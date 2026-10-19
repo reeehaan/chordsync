@@ -79,8 +79,7 @@ class PracticeTransportBar extends StatelessWidget {
                 child: Container(
                   height: 60,
                   decoration: BoxDecoration(
-                    color: PracticeStageColors.surface,
-                    border: Border.all(color: PracticeStageColors.border),
+                    color: PracticeStageColors.player,
                     borderRadius: BorderRadius.circular(30),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -92,7 +91,8 @@ class PracticeTransportBar extends StatelessWidget {
                         tooltip: 'Previous bar',
                         iconSize: 20,
                         visualDensity: VisualDensity.compact,
-                        color: PracticeStageColors.textSecondary,
+                        color: PracticeStageColors.onPlayerMuted,
+                        disabledColor: PracticeStageColors.playerTrack,
                         icon: const Icon(Icons.skip_previous_rounded),
                       ),
                       IconButton(
@@ -100,7 +100,7 @@ class PracticeTransportBar extends StatelessWidget {
                         tooltip: isPlaying ? 'Pause' : playLabel,
                         iconSize: 30,
                         visualDensity: VisualDensity.compact,
-                        color: PracticeStageColors.textPrimary,
+                        color: PracticeStageColors.onPlayer,
                         icon: Icon(
                           isPlaying
                               ? Icons.pause_rounded
@@ -113,7 +113,8 @@ class PracticeTransportBar extends StatelessWidget {
                         tooltip: 'Next bar',
                         iconSize: 20,
                         visualDensity: VisualDensity.compact,
-                        color: PracticeStageColors.textSecondary,
+                        color: PracticeStageColors.onPlayerMuted,
+                        disabledColor: PracticeStageColors.playerTrack,
                         icon: const Icon(Icons.skip_next_rounded),
                       ),
                       Expanded(
@@ -150,16 +151,15 @@ class _SpeedSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.titleSmall?.copyWith(
-      color: PracticeStageColors.textPrimary,
+      color: PracticeStageColors.onPlayer,
       fontWeight: FontWeight.w700,
     );
     return Container(
       width: 60,
       height: 60,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: PracticeStageColors.surface,
-        border: Border.all(color: PracticeStageColors.border),
+      decoration: const BoxDecoration(
+        color: PracticeStageColors.player,
         shape: BoxShape.circle,
       ),
       child: DropdownButtonHideUnderline(

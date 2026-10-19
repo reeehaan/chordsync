@@ -119,7 +119,7 @@ class _RecordMark extends StatelessWidget {
         border: Border.all(color: ChordSyncColors.brandAccent, width: 2),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x332B1B12),
+            color: Color(0x332B201B),
             blurRadius: 28,
             offset: Offset(0, 14),
           ),
@@ -134,7 +134,7 @@ class _RecordMark extends StatelessWidget {
               height: size,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0x337F695A)),
+                border: Border.all(color: const Color(0x33EAD9C3)),
               ),
             ),
           Container(
@@ -176,9 +176,9 @@ class _JourneySteps extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(9),
                 color: complete
-                    ? ChordSyncColors.success
-                    : active
                     ? ChordSyncColors.brand
+                    : active
+                    ? ChordSyncColors.brandAccent
                     : ChordSyncColors.border,
               ),
               child: complete
@@ -190,7 +190,7 @@ class _JourneySteps extends StatelessWidget {
                 width: 28,
                 height: 2,
                 color: complete
-                    ? ChordSyncColors.success
+                    ? ChordSyncColors.brand
                     : ChordSyncColors.border,
               ),
           ],

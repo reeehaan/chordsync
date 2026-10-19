@@ -52,7 +52,7 @@ class SongSourceGrid extends StatelessWidget {
         onTap: onCameraRoll,
         badgeBuilder: (size) => _SvgBadge(
           'assets/icons/source_providers/gallery.svg',
-          background: UploadPalette.primaryText,
+          background: ChordSyncColors.surfaceAlt,
           size: size,
         ),
       ),
@@ -63,7 +63,7 @@ class SongSourceGrid extends StatelessWidget {
         onTap: onFiles,
         badgeBuilder: (size) => _SvgBadge(
           'assets/icons/source_providers/folder.svg',
-          background: UploadPalette.primaryText,
+          background: ChordSyncColors.surfaceAlt,
           size: size,
         ),
       ),
@@ -78,7 +78,7 @@ class SongSourceGrid extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFFF6A3D), Color(0xFFE53935)],
+            colors: [ChordSyncColors.brandAccent, ChordSyncColors.brand],
           ),
           size: size,
         ),

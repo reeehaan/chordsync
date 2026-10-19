@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../../design_system/chordsync_design_system.dart';
 import '../data/shared_timeline.dart';
 import 'lyric_chord_marker_mapper.dart';
 import 'lyric_display_block.dart';
@@ -265,7 +266,11 @@ class _LyricChordWord extends StatelessWidget {
                           '${entry.wordIndex}_$index',
                         ),
                         label: entry.chordMarkers[index],
-                        isSounding: isActive,
+                        state: isActive
+                            ? ChordChipState.playing
+                            : isPast
+                            ? ChordChipState.played
+                            : ChordChipState.upcoming,
                       ),
                   ],
                 ),
@@ -306,36 +311,61 @@ class _LyricChordWord extends StatelessWidget {
   }
 }
 
+/// Where a chord is relative to the song, per the Golden Hour chip rules: one
+/// pale-peach background, with state shown by border, text colour and an icon.
+enum ChordChipState { upcoming, played, playing }
+
 class _ChordChip extends StatelessWidget {
-  const _ChordChip({super.key, required this.label, required this.isSounding});
+  const _ChordChip({super.key, required this.label, required this.state});
 
   final String label;
-  final bool isSounding;
+  final ChordChipState state;
+
+  static const _iconWidth = 12.0;
 
   @override
   Widget build(BuildContext context) {
+    final playing = state == ChordChipState.playing;
+    final textColor = switch (state) {
+      ChordChipState.upcoming => ChordSyncColors.chipTextUpcoming,
+      ChordChipState.played => ChordSyncColors.chipTextPlayed,
+      ChordChipState.playing => ChordSyncColors.surface,
+    };
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: isSounding
-            ? Colors.transparent
-            : PracticeStageColors.surfaceRaised,
+        color: playing
+            ? ChordSyncColors.currentChord
+            : ChordSyncColors.inactiveChord,
         border: Border.all(
-          color: isSounding
-              ? PracticeStageColors.textPrimary
-              : Colors.transparent,
+          color: state == ChordChipState.played
+              ? ChordSyncColors.chipBorderPlayed
+              : ChordSyncColors.chipBorderUpcoming,
           width: 1.2,
         ),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: PracticeStageColors.textPrimary,
-          fontWeight: FontWeight.w700,
-          height: 1.2,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The icon's room is always reserved, so a chip never changes width
+          // (and the lyrics never shift) as it starts playing.
+          SizedBox(
+            width: _iconWidth,
+            child: playing
+                ? Icon(Icons.play_arrow_rounded, size: 12, color: textColor)
+                : null,
+          ),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: textColor,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+            ),
+          ),
+        ],
       ),
     );
   }

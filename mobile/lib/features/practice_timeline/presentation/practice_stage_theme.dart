@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'practice_stage_colors.dart';
 
-/// Dark "stage" theme the practice sheet renders under.
+/// Golden Hour theme with the practice sheet's own slider (and accents).
 ThemeData practiceStageTheme(ThemeData baseTheme) {
   final stageScheme = baseTheme.colorScheme.copyWith(
-    brightness: Brightness.dark,
     primary: PracticeStageColors.amber,
-    onPrimary: PracticeStageColors.background,
+    onPrimary: PracticeStageColors.surface,
     secondary: PracticeStageColors.amberBright,
     surface: PracticeStageColors.surface,
     onSurface: PracticeStageColors.textPrimary,
@@ -31,10 +30,11 @@ ThemeData practiceStageTheme(ThemeData baseTheme) {
       surfaceTintColor: Colors.transparent,
     ),
     dividerColor: PracticeStageColors.border,
+    // The slider sits on the espresso player bar.
     sliderTheme: baseTheme.sliderTheme.copyWith(
-      activeTrackColor: PracticeStageColors.amberBright,
-      inactiveTrackColor: PracticeStageColors.border,
-      thumbColor: PracticeStageColors.amberBright,
+      activeTrackColor: PracticeStageColors.playerAccent,
+      inactiveTrackColor: PracticeStageColors.playerTrack,
+      thumbColor: PracticeStageColors.playerAccent,
       trackHeight: 3,
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),

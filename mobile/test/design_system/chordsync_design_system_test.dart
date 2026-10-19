@@ -23,7 +23,8 @@ void main() {
     expect(theme.scaffoldBackgroundColor, ChordSyncColors.background);
     expect(theme.colorScheme.primary, ChordSyncColors.brand);
     expect(theme.colorScheme.onSurface, ChordSyncColors.textPrimary);
-    expect(theme.textTheme.displayLarge?.fontFamily, 'Georgia');
+    expect(theme.textTheme.displayLarge?.fontFamily, 'Newsreader');
+    expect(theme.textTheme.bodyMedium?.fontFamily, 'DM Sans');
     expect(find.widgetWithText(FilledButton, 'Analyze Song'), findsOneWidget);
   });
 }

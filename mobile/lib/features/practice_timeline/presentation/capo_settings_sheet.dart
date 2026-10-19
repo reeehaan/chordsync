@@ -25,9 +25,9 @@ Future<int?> showCapoSettingsSheet(
         );
         return SafeArea(
           child: DefaultTextStyle.merge(
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: PracticeStageColors.textPrimary),
             child: IconTheme.merge(
-              data: const IconThemeData(color: Colors.white),
+              data: const IconThemeData(color: PracticeStageColors.textPrimary),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 child: Column(
@@ -35,9 +35,9 @@ Future<int?> showCapoSettingsSheet(
                   children: [
                     Text(
                       'Capo settings',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleLarge?.copyWith(color: Colors.white),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: PracticeStageColors.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -54,8 +54,8 @@ Future<int?> showCapoSettingsSheet(
                           children: [
                             IconButton(
                               tooltip: 'Lower capo',
-                              color: Colors.white,
-                              disabledColor: Colors.white54,
+                              color: PracticeStageColors.textPrimary,
+                              disabledColor: PracticeStageColors.textFaint,
                               onPressed: selected == 0
                                   ? null
                                   : () => setModalState(() => selected--),
@@ -63,8 +63,8 @@ Future<int?> showCapoSettingsSheet(
                             ),
                             IconButton(
                               tooltip: 'Raise capo',
-                              color: Colors.white,
-                              disabledColor: Colors.white54,
+                              color: PracticeStageColors.textPrimary,
+                              disabledColor: PracticeStageColors.textFaint,
                               onPressed: selected == 11
                                   ? null
                                   : () => setModalState(() => selected++),
@@ -82,10 +82,6 @@ Future<int?> showCapoSettingsSheet(
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          backgroundColor: PracticeStageColors.surfaceRaised,
-                        ),
                         onPressed: () => Navigator.pop(context, selected),
                         child: const Text('Apply'),
                       ),

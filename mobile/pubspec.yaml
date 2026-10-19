@@ -70,6 +70,34 @@ flutter:
     - assets/practice_timeline/synthetic_shared_timeline.json
     - assets/icons/source_providers/
 
+  # Golden Hour theme fonts (SIL Open Font License; texts beside the files).
+  # Static weights cut from the Google Fonts variable fonts.
+  fonts:
+    - family: Newsreader
+      fonts:
+        - asset: assets/fonts/Newsreader-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Newsreader-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Newsreader-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Newsreader-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Newsreader-ExtraBold.ttf
+          weight: 800
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/DMSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/DMSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/DMSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/DMSans-ExtraBold.ttf
+          weight: 800
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

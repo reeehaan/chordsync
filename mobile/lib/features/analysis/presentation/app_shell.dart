@@ -56,10 +56,9 @@ class BottomDock extends StatelessWidget {
         decoration: BoxDecoration(
           color: UploadPalette.dock,
           borderRadius: BorderRadius.circular(34),
-          border: Border.all(color: UploadPalette.border),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x292B1B12),
+              color: UploadPalette.dockShadow,
               blurRadius: 18,
               offset: Offset(0, 8),
             ),
@@ -82,7 +81,7 @@ class BottomDock extends StatelessWidget {
                     margin: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
                       color: selected
-                          ? UploadPalette.selected
+                          ? UploadPalette.dockSelected
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(28),
                     ),
@@ -93,8 +92,8 @@ class BottomDock extends StatelessWidget {
                         height: index == 1 ? 32 : 27,
                         colorFilter: ColorFilter.mode(
                           selected
-                              ? UploadPalette.coral
-                              : UploadPalette.primaryText,
+                              ? UploadPalette.dockIconSelected
+                              : UploadPalette.dockIcon,
                           BlendMode.srcIn,
                         ),
                       ),

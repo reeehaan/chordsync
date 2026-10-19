@@ -1,22 +1,59 @@
 import 'package:flutter/material.dart';
 
-/// Warm, material-inspired tokens shared by the add and song-sheet screens.
+/// "Golden Hour" — burnt sienna / warm amber / espresso brown on a parchment
+/// background, with pale-peach chord highlights. Warm and reading-focused,
+/// built from a user-specified palette.
+/// Display: Newsreader (song titles & lyrics). Body/UI: DM Sans (controls &
+/// instructional content).
 abstract final class ChordSyncColors {
-  static const background = Color(0xFFF9F5ED);
-  static const surface = Color(0xFFFFFCF7);
-  static const surfaceAlt = Color(0xFFF1E5D5);
-  static const textPrimary = Color(0xFF2B1B12);
-  static const textSecondary = Color(0xFF69584B);
-  static const brand = Color(0xFF5B3A28);
-  static const brandDark = Color(0xFF3A261B);
-  static const brandAccent = Color(0xFFA4713F);
-  static const honey = Color(0xFFC58B4E);
-  static const border = Color(0xFFD8C5AF);
-  static const success = Color(0xFF486B3D);
-  static const warning = Color(0xFF8A5918);
-  static const error = Color(0xFFA83D30);
+  static const background = Color(0xFFFBF6EC); // Parchment
+  static const surface = Color(0xFFFFFFFF);
+  static const surfaceAlt = Color(0xFFF5E1D2); // Pale peach — chord highlights
+  static const textPrimary = Color(0xFF29231F); // Charcoal brown
+  static const textSecondary = Color(
+    0xFF6E6054,
+  ); // derived, not in the spec — muted charcoal
+  static const brand = Color(0xFFA84F2A); // Burnt sienna
+  static const brandDark = Color(
+    0xFF2B201B,
+  ); // Espresso brown — dark nav/player
+  static const brandAccent = Color(
+    0xFFD88732,
+  ); // Warm amber — interactive accent
+  static const honey = Color(0xFFD88732); // same as brandAccent in this palette
+  static const border = Color(
+    0xFFEAD9C3,
+  ); // derived from the peach/parchment family
+
+  // State triad. `warning` reuses the spec's warm amber (it already reads as
+  // a warning color). `success` and `error` are NOT in the spec — added so
+  // the app has a pass/fail signal that isn't just "more orange": a blue
+  // keeps success distinguishable from both burnt sienna and the error red
+  // for colorblind users. Flagging this because burnt sienna (#A84F2A) and
+  // a standard error red sit close in hue — if that pairing is ever used
+  // for a right/wrong indicator, pair it with an icon or shape too, not
+  // color alone.
+  static const success = Color(
+    0xFF2E6FA3,
+  ); // blue — not in the spec, added for state feedback
+  static const warning = Color(0xFFD88732); // = brandAccent, per the spec
+  static const error = Color(
+    0xFF9E2B45,
+  ); // crimson, pulled toward magenta to clear `brand`
+
   static const currentChord = brandDark;
   static const inactiveChord = surfaceAlt;
+
+  /// Chord-chip states now share one background (`surfaceAlt`, the pale
+  /// peach) — state is shown by border + text color + icon instead of a
+  /// background swap:
+  ///   upcoming        → chipBorderUpcoming (invisible), chipTextUpcoming
+  ///   already played  → chipBorderPlayed (solid sienna), chipTextPlayed
+  ///   now playing     → solid brandDark fill, white text, play icon
+  static const chipBorderUpcoming = Colors.transparent;
+  static const chipTextUpcoming = Color(0xFF8A7A6B);
+  static const chipBorderPlayed = brand; // solid, fully opaque sienna
+  static const chipTextPlayed = textPrimary;
 }
 
 abstract final class ChordSyncSpace {
@@ -28,39 +65,59 @@ abstract final class ChordSyncSpace {
 }
 
 abstract final class ChordSyncRadii {
-  static const card = 18.0;
-  static const control = 12.0;
+  static const card = 16.0;
+  static const control = 10.0;
 }
 
 abstract final class ChordSyncTypography {
-  // Georgia is available on iOS/macOS; Flutter's sans fallback handles UI.
-  static const displayFamily = 'Georgia';
+  static const displayFamily = 'Newsreader'; // song titles & lyrics
+  static const bodyFamily = 'DM Sans'; // controls & instructional content
 
   static TextTheme textTheme() => const TextTheme(
     displayLarge: TextStyle(
       fontFamily: displayFamily,
-      fontSize: 56,
-      height: 1.05,
-      fontWeight: FontWeight.w700,
+      fontSize: 54,
+      height: 1.1,
+      fontWeight: FontWeight.w600,
     ),
     displayMedium: TextStyle(
       fontFamily: displayFamily,
-      fontSize: 38,
-      height: 1.12,
-      fontWeight: FontWeight.w700,
+      fontSize: 37,
+      height: 1.15,
+      fontWeight: FontWeight.w600,
     ),
     headlineSmall: TextStyle(
       fontFamily: displayFamily,
-      fontSize: 27,
-      height: 1.2,
+      fontSize: 26,
+      height: 1.22,
       fontWeight: FontWeight.w600,
     ),
-    titleLarge: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
-    titleMedium: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-    bodyLarge: TextStyle(fontSize: 17, height: 1.45),
-    bodyMedium: TextStyle(fontSize: 15, height: 1.45),
-    labelLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-    labelMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    titleLarge: TextStyle(
+      fontFamily: bodyFamily,
+      fontSize: 20,
+      fontWeight: FontWeight.w700,
+    ),
+    titleMedium: TextStyle(
+      fontFamily: bodyFamily,
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+    ),
+    bodyLarge: TextStyle(
+      fontFamily: displayFamily, // lyrics are body-ish but still "reading" text
+      fontSize: 17,
+      height: 1.5,
+    ),
+    bodyMedium: TextStyle(fontFamily: bodyFamily, fontSize: 14, height: 1.5),
+    labelLarge: TextStyle(
+      fontFamily: bodyFamily,
+      fontSize: 14,
+      fontWeight: FontWeight.w700,
+    ),
+    labelMedium: TextStyle(
+      fontFamily: bodyFamily,
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+    ),
   );
 }
 
@@ -72,7 +129,7 @@ abstract final class ChordSyncTheme {
           brightness: Brightness.light,
         ).copyWith(
           primary: ChordSyncColors.brand,
-          onPrimary: ChordSyncColors.background,
+          onPrimary: ChordSyncColors.surface,
           primaryContainer: ChordSyncColors.surfaceAlt,
           onPrimaryContainer: ChordSyncColors.textPrimary,
           secondary: ChordSyncColors.brandAccent,
@@ -130,14 +187,13 @@ abstract final class ChordSyncTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: ChordSyncColors.brand,
+          backgroundColor: ChordSyncColors.brandDark,
           foregroundColor: ChordSyncColors.background,
           disabledBackgroundColor: ChordSyncColors.surfaceAlt,
           disabledForegroundColor: ChordSyncColors.textSecondary,
           minimumSize: const Size(44, 52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(ChordSyncRadii.control),
-            side: const BorderSide(color: ChordSyncColors.brand),
           ),
         ),
       ),
@@ -145,7 +201,7 @@ abstract final class ChordSyncTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: ChordSyncColors.brand,
           minimumSize: const Size(44, 50),
-          side: const BorderSide(color: ChordSyncColors.brand),
+          side: const BorderSide(color: ChordSyncColors.brand, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(ChordSyncRadii.control),
           ),
