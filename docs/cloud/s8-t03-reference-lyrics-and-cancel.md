@@ -123,3 +123,50 @@ Device result for "Her": `reference lyrics are English; using language=en`, lyri
 Remaining: non-English songs without reference lyrics still use automatic detection (a
 wrong guess now completes but may be mistranscribed); Hindi and Sinhala get sentence-level
 timing until their alignment models are staged in the model release.
+
+## Synced lyrics, word alignment and on-demand models (2026-10-19)
+
+**Sinhala via WhisperX failed.** The small Whisper model wrote "Mandaaram Handaawe"
+as noisy Latin text (723 Latin letters, no Sinhala) with a 75-character stuck word,
+and "Naadagam Geeya" (no lyrics at LRCLIB) as a mix of Latin and Devanagari with one
+word repeated 47 times. Only an English aligner is staged, so other languages get
+sentence-level timing at best.
+
+**Synced lyrics replace transcription** for non-English songs when LRCLIB has them
+(`analysis/lyrics/synced_reference.py`): the lines are parsed from LRC, shifted to
+the singing found in the vocals stem (`audioop` RMS), and turned into a WhisperX-shaped
+transcript, so fusion is unchanged (lyric source `lrclib-synced`). Matching was widened:
+the exact LRCLIB lookup rejects a recording more than ~2 s off, so a search fallback
+picks the closest candidate within 10 s, accepted only when title, artist and album all
+match exactly. A rate-limited (429) answer never triggers a second request.
+
+**Word times by forced alignment** (`analysis/lyrics/mms_alignment.py`): the even split
+of words inside a line was off by 0.6 s on average and up to 1.8 s (median late, so
+highlights looked delayed and chords landed on the wrong words, because chords attach to
+whichever word has not ended when the chord changes). Each line is now aligned to the
+vocals with `torchaudio.pipelines.MMS_FA` inside a window around its synced time, with
+words romanised by `uroman` 1.3.1.1. A line that fails keeps the even split. Locally: all
+41 lines aligned, 30 s; on the 4-vCPU Fargate worker 75 s.
+
+**On-demand model.** The 1.18 GB MMS weights (CC-BY-NC 4.0, approved for non-commercial
+research in `docs/licensing/mms-fa.md`) live in model release `2026.10.2` as the optional
+role `alignment_mms`. Startup installs everything except on-demand roles; the processor
+fetches and verifies the aligner just before alignment (`install_role`), so songs that do
+not need it never download it. Containers are one-shot, so a song that does need it
+downloads it each time (13.0 s measured).
+
+| Device run (job `cd459c4d…`, worker revision 7) | |
+| --- | --- |
+| total | 4m45s, exit 0 |
+| lyrics from synced reference | 0.2 s, 41 lines |
+| alignment model ready | 13.0 s |
+| align | 75.0 s |
+
+Also: lyric auto-scroll no longer stalls with a capo (the timeline object changed every
+build), a stuck-letter guard drops words of 15+ identical characters, and the app now uses
+the Golden Hour theme with Newsreader and DM Sans (`docs/licensing/fonts.md`).
+
+Open: songs LRCLIB lacks (for example Naadagam Geeya) still go through Whisper small;
+ideas are a language picker (force `si` instead of guessing), user-supplied lyrics to align,
+or a larger model. The second transcription pass when the alignment model is missing costs
+60-90 s and could be skipped by detecting the language first.
