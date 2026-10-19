@@ -35,6 +35,8 @@ _ARTIFACT_KEY = re.compile(r"^models/[A-Za-z0-9._/-]+$")
 WHISPERX_ASR_CACHE_DIR = "models--Systran--faster-whisper-small"
 ALIGNMENT_EN_CHECKPOINT = "wav2vec2_fairseq_base_ls960_asr_ls960.pth"
 DEMUCS_HTDEMUCS_CHECKPOINT = "955717e8-8726e21a.th"
+# torchaudio.pipelines.MMS_FA looks for this exact file name in the torch hub cache.
+ALIGNMENT_MMS_CHECKPOINT = "model.pt"
 
 
 class ModelBootstrapError(RuntimeError):
@@ -47,9 +49,12 @@ class AssetRole(str, Enum):
     WHISPERX_ASR = "whisperx_asr"
     ALIGNMENT_EN = "alignment_en"
     DEMUCS_HTDEMUCS = "demucs_htdemucs"
+    # Multilingual forced aligner, added in release 2026.10.2. Optional, so older
+    # releases (and workers that do not use it) keep working.
+    ALIGNMENT_MMS = "alignment_mms"
 
 
-REQUIRED_ROLES = frozenset(AssetRole)
+REQUIRED_ROLES = frozenset(AssetRole) - {AssetRole.ALIGNMENT_MMS}
 
 
 class LicenseStatus(str, Enum):
@@ -132,6 +137,9 @@ def approved_destinations(
         ),
         AssetRole.DEMUCS_HTDEMUCS: ApprovedDestination(
             torch_checkpoints, frozenset({DEMUCS_HTDEMUCS_CHECKPOINT})
+        ),
+        AssetRole.ALIGNMENT_MMS: ApprovedDestination(
+            torch_checkpoints, frozenset({ALIGNMENT_MMS_CHECKPOINT})
         ),
     }
 

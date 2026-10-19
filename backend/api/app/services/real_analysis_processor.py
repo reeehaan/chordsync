@@ -165,6 +165,10 @@ class AnalysisPipelineConfig:
     # Build non-English lyrics from the provider's time-synced lines when it has
     # them, instead of transcribing (Whisper is unreliable for e.g. Sinhala).
     synced_lyrics_enabled: bool = True
+    # Align synced lyrics word by word to the vocals (MMS), instead of spreading
+    # each line's words evenly. Falls back to the even split on any failure.
+    mms_alignment_enabled: bool = True
+    alignment_timeout: float = 900.0
     lrclib_reference_enabled: bool = False
     lrclib_timeout: float = DEFAULT_TIMEOUT_SECONDS
     lrclib_user_agent: str = DEFAULT_USER_AGENT
@@ -223,6 +227,9 @@ class AnalysisPipelineConfig:
             ),
             synced_lyrics_enabled=_enabled_by_default(
                 "CHORDSYNC_SYNCED_LYRICS_ENABLED"
+            ),
+            mms_alignment_enabled=_enabled_by_default(
+                "CHORDSYNC_MMS_ALIGNMENT_ENABLED"
             ),
             lrclib_reference_enabled=(
                 os.getenv("CHORDSYNC_LRCLIB_REFERENCE_ENABLED", "").casefold()
@@ -621,7 +628,37 @@ class RealAnalysisProcessor:
             levels is not None,
             time.monotonic() - started_at,
         )
+        self._align_synced_words(workspace, job_id)
         return True
+
+    def _align_synced_words(self, workspace: JobWorkspace, job_id: str) -> None:
+        """Replace the even word split by real word times, or keep it on failure."""
+        if not self._config.mms_alignment_enabled:
+            return
+        aligned_path = workspace.whisperx.with_suffix(".aligned.json")
+        try:
+            self._run_stage(
+                "align",
+                [
+                    str(self._config.whisperx_executable.parent / "python"),
+                    "-m",
+                    "analysis.lyrics.mms_alignment",
+                    "--audio",
+                    str(workspace.vocals),
+                    "--transcript",
+                    str(workspace.whisperx),
+                    "--output",
+                    str(aligned_path),
+                ],
+                self._config.alignment_timeout,
+                aligned_path,
+            )
+            aligned_path.replace(workspace.whisperx)
+        except (AnalysisPipelineError, AnalysisStageTimeout, OSError):
+            logger.warning(
+                "[job %s] word alignment unavailable; keeping the even word split",
+                job_id,
+            )
 
     def _remove_lyric_repetition_loops(self, whisperx_path: Path, job_id: str) -> None:
         """Drop Whisper repetition loops before anything reads the transcript."""

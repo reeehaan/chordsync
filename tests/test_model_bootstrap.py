@@ -10,6 +10,7 @@ import pytest
 from backend.api.app import analysis_worker_consumer as worker_cli
 from backend.api.app.services.model_bootstrap import (
     ALIGNMENT_EN_CHECKPOINT,
+    ALIGNMENT_MMS_CHECKPOINT,
     DEMUCS_HTDEMUCS_CHECKPOINT,
     AssetRole,
     ModelBootstrap,
@@ -35,6 +36,7 @@ SYNTHETIC_FILES = {
     ],
     AssetRole.ALIGNMENT_EN: [(ALIGNMENT_EN_CHECKPOINT, b"synthetic-alignment")],
     AssetRole.DEMUCS_HTDEMUCS: [(DEMUCS_HTDEMUCS_CHECKPOINT, b"synthetic-demucs")],
+    AssetRole.ALIGNMENT_MMS: [(ALIGNMENT_MMS_CHECKPOINT, b"synthetic-mms")],
 }
 
 
@@ -118,7 +120,12 @@ def test_valid_manifest_parses_all_required_roles():
 
 def test_manifest_missing_required_asset_is_rejected():
     s3 = FakeS3()
-    payload = _manifest(s3, tamper=lambda m: m["assets"].pop())
+    payload = _manifest(
+        s3,
+        tamper=lambda m: m["assets"].__setitem__(
+            slice(None), [a for a in m["assets"] if a["role"] != "demucs_htdemucs"]
+        ),
+    )
     with pytest.raises(ModelBootstrapError, match="missing required assets"):
         parse_manifest(json.dumps(payload).encode(), expected_release_id=RELEASE)
 
@@ -190,7 +197,7 @@ def test_bootstrap_installs_and_verifies_synthetic_assets(tmp_path):
 
     report = _bootstrap(tmp_path, s3).run()
 
-    assert report.files_installed == 6
+    assert report.files_installed == 7
     assert (tmp_path / "models/btc/btc_model.pt").read_bytes() == b"synthetic-btc-checkpoint"
     assert (tmp_path / "models/btc/source/btc_model.py").exists()
     hub = tmp_path / "cache/huggingface/hub/models--Systran--faster-whisper-small"
@@ -198,11 +205,12 @@ def test_bootstrap_installs_and_verifies_synthetic_assets(tmp_path):
     checkpoints = tmp_path / "cache/torch/hub/checkpoints"
     assert (checkpoints / ALIGNMENT_EN_CHECKPOINT).exists()
     assert (checkpoints / DEMUCS_HTDEMUCS_CHECKPOINT).exists()
+    assert (checkpoints / ALIGNMENT_MMS_CHECKPOINT).exists()
     assert not list(tmp_path.rglob("*.partial"))
 
     second = _bootstrap(tmp_path, s3).run()
     assert second.files_installed == 0
-    assert second.files_already_present == 6
+    assert second.files_already_present == 7
 
 
 def test_hash_mismatch_fails_and_leaves_no_file(tmp_path):
@@ -326,3 +334,47 @@ def test_consumer_polls_only_after_successful_bootstrap(monkeypatch, tmp_path):
 
     assert consumer.polled
     assert s3.reads[0] == manifest_key_for(RELEASE)
+
+
+# --- the optional multilingual aligner (release 2026.10.2) -------------------------
+
+
+def _without_mms(manifest: dict) -> None:
+    manifest["assets"] = [
+        asset for asset in manifest["assets"] if asset["role"] != "alignment_mms"
+    ]
+
+
+def test_a_release_without_the_multilingual_aligner_is_still_valid():
+    s3 = FakeS3()
+    manifest = parse_manifest(
+        json.dumps(_manifest(s3, tamper=_without_mms)).encode(),
+        expected_release_id=RELEASE,
+    )
+
+    assert AssetRole.ALIGNMENT_MMS not in {asset.role for asset in manifest.assets}
+
+
+def test_the_multilingual_aligner_installs_where_torchaudio_looks_for_it(tmp_path):
+    s3 = FakeS3()
+    _manifest(s3)
+
+    _bootstrap(tmp_path, s3).run()
+
+    installed = tmp_path / "cache/torch/hub/checkpoints" / ALIGNMENT_MMS_CHECKPOINT
+    assert installed.read_bytes() == b"synthetic-mms"
+
+
+def test_other_required_assets_are_still_required():
+    s3 = FakeS3()
+
+    def drop_asr(manifest):
+        manifest["assets"] = [
+            a for a in manifest["assets"] if a["role"] != "whisperx_asr"
+        ]
+
+    with pytest.raises(ModelBootstrapError):
+        parse_manifest(
+            json.dumps(_manifest(s3, tamper=drop_asr)).encode(),
+            expected_release_id=RELEASE,
+        )

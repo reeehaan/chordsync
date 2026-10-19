@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "release_id": "2026.10.2",
+  "assets": [
+    {
+      "asset_name": "btc-ismir19-source",
+      "role": "btc_source",
+      "required": true,
+      "source_project": "https://github.com/jayg996/BTC-ISMIR19",
+      "source_revision": "2682317be668032e6e4b269ded36adaa2ad57df0 + ChordSync compatibility patch sha256:69fc2f81b1e26147e18fb32aa922ff197039b12500fd85de4bc057c63c54b637",
+      "license_status": "permissive",
+      "files": [
+        {
+          "artifact_key": "models/btc/source/2682317be668032e6e4b269ded36adaa2ad57df0-compat-69fc2f81b1e2/LICENSE",
+          "destination": "LICENSE",
+          "sha256": "7439cc22ff2efee600131dc5d800ab1204d8076a1a815d842a0319782520fc85",
+          "size_bytes": 1070
+        },
+        {
+          "artifact_key": "models/btc/source/2682317be668032e6e4b269ded36adaa2ad57df0-compat-69fc2f81b1e2/run_config.yaml",
+          "destination": "run_config.yaml",
+          "sha256": "47ee1db8753d5e3cd2fceea1204c87e4d050ff54b59276f966ef4834962a8756",
+          "size_bytes": 791
+        },
+        {
+          "artifact_key": "models/btc/source/2682317be668032e6e4b269ded36adaa2ad57df0-compat-69fc2f81b1e2/btc_model.py",
+          "destination": "btc_model.py",
+          "sha256": "b8cc0b66f3e7bc92e9703ea408bce21d8a39b10c3133cb2ab569c285fceb3a27",
+          "size_bytes": 7361
+        },
+        {
+          "artifact_key": "models/btc/source/2682317be668032e6e4b269ded36adaa2ad57df0-compat-69fc2f81b1e2/utils/__init__.py",
+          "destination": "utils/__init__.py",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size_bytes": 0
+        },
+        {
+          "artifact_key": "models/btc/source/2682317be668032e6e4b269ded36adaa2ad57df0-compat-69fc2f81b1e2/utils/hparams.py",
+          "destination": "utils/hparams.py",
+          "sha256": "bb42cc36f925078eb501982a5e3f184fca092539bfca1340b3569a2d66bbe822",
+          "size_bytes": 945
+        },
+        {
+          "artifact_key": "models/btc/source/2682317be668032e6e4b269ded36adaa2ad57df0-compat-69fc2f81b1e2/utils/mir_eval_modules.py",
+          "destination": "utils/mir_eval_modules.py",
+          "sha256": "ae605c07ace66e158587431ee8bc5a2fa8ed6f3c0fa1bd9f7673cfd1d9f7f8df",
+          "size_bytes": 26315
+        },
+        {
+          "artifact_key": "models/btc/source/2682317be668032e6e4b269ded36adaa2ad57df0-compat-69fc2f81b1e2/utils/transformer_modules.py",
+          "destination": "utils/transformer_modules.py",
+          "sha256": "c4b588ef4bd5becd18ad45eab4dbf57b8e321b862d664748e71bfd3d51427c2b",
+          "size_bytes": 10477
+        }
+      ]
+    },
+    {
+      "asset_name": "btc-ismir19-checkpoint-25class",
+      "role": "btc_checkpoint",
+      "required": true,
+      "source_project": "https://github.com/jayg996/BTC-ISMIR19",
+      "source_revision": "2682317be668032e6e4b269ded36adaa2ad57df0 test/btc_model.pt",
+      "license_status": "approved",
+      "files": [
+        {
+          "artifact_key": "models/btc/checkpoints/71c2c5db17e8c43b8a9a9da5db36ef2d667158c07a214eba16344c154c00bf54/btc_model.pt",
+          "destination": "btc_model.pt",
+          "sha256": "71c2c5db17e8c43b8a9a9da5db36ef2d667158c07a214eba16344c154c00bf54",
+          "size_bytes": 12154754
+        }
+      ]
+    },
+    {
+      "asset_name": "faster-whisper-small",
+      "role": "whisperx_asr",
+      "required": true,
+      "source_project": "https://huggingface.co/Systran/faster-whisper-small",
+      "source_revision": "536b0662742c02347bc0e980a01041f333bce120",
+      "license_status": "permissive",
+      "files": [
+        {
+          "artifact_key": "models/whisperx/asr/faster-whisper-small/536b0662742c02347bc0e980a01041f333bce120/refs/main",
+          "destination": "refs/main",
+          "sha256": "8d5d066ac370fbf2b2921929949086f12e8466dacb5269c2d4bef92de48844c9",
+          "size_bytes": 40
+        },
+        {
+          "artifact_key": "models/whisperx/asr/faster-whisper-small/536b0662742c02347bc0e980a01041f333bce120/snapshots/536b0662742c02347bc0e980a01041f333bce120/config.json",
+          "destination": "snapshots/536b0662742c02347bc0e980a01041f333bce120/config.json",
+          "sha256": "b55496ac7940a7ae47d2c01eab40edfd8701feec1229d9cce3b40014383fb828",
+          "size_bytes": 2370
+        },
+        {
+          "artifact_key": "models/whisperx/asr/faster-whisper-small/536b0662742c02347bc0e980a01041f333bce120/snapshots/536b0662742c02347bc0e980a01041f333bce120/model.bin",
+          "destination": "snapshots/536b0662742c02347bc0e980a01041f333bce120/model.bin",
+          "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671",
+          "size_bytes": 483546902
+        },
+        {
+          "artifact_key": "models/whisperx/asr/faster-whisper-small/536b0662742c02347bc0e980a01041f333bce120/snapshots/536b0662742c02347bc0e980a01041f333bce120/tokenizer.json",
+          "destination": "snapshots/536b0662742c02347bc0e980a01041f333bce120/tokenizer.json",
+          "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+          "size_bytes": 2203239
+        },
+        {
+          "artifact_key": "models/whisperx/asr/faster-whisper-small/536b0662742c02347bc0e980a01041f333bce120/snapshots/536b0662742c02347bc0e980a01041f333bce120/vocabulary.txt",
+          "destination": "snapshots/536b0662742c02347bc0e980a01041f333bce120/vocabulary.txt",
+          "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+          "size_bytes": 459861
+        }
+      ]
+    },
+    {
+      "asset_name": "wav2vec2-asr-base-960h-en",
+      "role": "alignment_en",
+      "required": true,
+      "source_project": "https://download.pytorch.org/torchaudio/models/wav2vec2_fairseq_base_ls960_asr_ls960.pth",
+      "source_revision": "torchaudio 2.8.0 WAV2VEC2_ASR_BASE_960H",
+      "license_status": "permissive",
+      "files": [
+        {
+          "artifact_key": "models/alignment/en/wav2vec2_asr_base_960h/488fd4f16de84438ffc945334278c1b9fb9b7159a806c1080b16111a958c945d/wav2vec2_fairseq_base_ls960_asr_ls960.pth",
+          "destination": "wav2vec2_fairseq_base_ls960_asr_ls960.pth",
+          "sha256": "488fd4f16de84438ffc945334278c1b9fb9b7159a806c1080b16111a958c945d",
+          "size_bytes": 377664473
+        }
+      ]
+    },
+    {
+      "asset_name": "demucs-htdemucs",
+      "role": "demucs_htdemucs",
+      "required": true,
+      "source_project": "https://github.com/facebookresearch/demucs",
+      "source_revision": "demucs 4.0.1 htdemucs 955717e8-8726e21a",
+      "license_status": "approved",
+      "files": [
+        {
+          "artifact_key": "models/demucs/htdemucs/8726e21a993978c7ba086d3872e7608d7d5bfca646ca4aca459ffda844faa8b4/955717e8-8726e21a.th",
+          "destination": "955717e8-8726e21a.th",
+          "sha256": "8726e21a993978c7ba086d3872e7608d7d5bfca646ca4aca459ffda844faa8b4",
+          "size_bytes": 84141911
+        }
+      ]
+    },
+    {
+      "asset_name": "mms-fa-ctc-uroman",
+      "role": "alignment_mms",
+      "required": false,
+      "source_project": "torchaudio.pipelines.MMS_FA (Meta MMS)",
+      "source_revision": "torchaudio 2.8.0 bundle, ctc_alignment_mling_uroman",
+      "license_status": "approved",
+      "files": [
+        {
+          "artifact_key": "models/alignment/mms/ctc_alignment_mling_uroman/20ef12963ab4924bef49ac4fc7f58ad5da2ee43b2c11bc8c853c9b90ecdbc680/model.pt",
+          "destination": "model.pt",
+          "sha256": "20ef12963ab4924bef49ac4fc7f58ad5da2ee43b2c11bc8c853c9b90ecdbc680",
+          "size_bytes": 1262047414
+        }
+      ]
+    }
+  ]
+}

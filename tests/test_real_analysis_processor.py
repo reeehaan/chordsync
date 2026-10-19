@@ -109,6 +109,8 @@ class FakePipelineRunner:
 
     @staticmethod
     def _stage(argv: list[str]) -> str:
+        if "analysis.lyrics.mms_alignment" in argv:
+            return "align"
         executable_name = Path(argv[0]).name
         if executable_name == "whisperx":
             return "lyrics"
@@ -198,6 +200,16 @@ class FakePipelineRunner:
                     ],
                 },
             )
+        elif stage == "align":
+            source = json.loads(
+                Path(argv[argv.index("--transcript") + 1]).read_text(encoding="utf-8")
+            )
+            for segment in source["segments"]:
+                for word in segment["words"]:
+                    word["start"] += 0.25  # a recognisable change
+                    word["end"] += 0.25
+            source["alignment"] = "mms_fa"
+            self._write_json(Path(argv[argv.index("--output") + 1]), source)
         elif stage == "chordino-diagnostic":
             self._write_json(
                 Path(argv[argv.index("--output") + 1]),
@@ -1349,3 +1361,63 @@ def test_synced_lyrics_follow_the_singer_when_the_vocals_are_readable(
 
     first = runner.fusion_whisperx_payload["segments"][0]
     assert first["start"] == pytest.approx(13.0, abs=0.2)
+
+
+def _first_word_start(runner):
+    return runner.fusion_whisperx_payload["segments"][0]["words"][0]["start"]
+
+
+def test_synced_words_are_aligned_to_the_vocals(processor_context, monkeypatch):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=SYNCED_SINHALA)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    align = next(c for c in runner.calls if runner._stage(c.argv) == "align")
+    assert align.argv[0] == "/env/whisperx/python"
+    assert align.argv[1:3] == ["-m", "analysis.lyrics.mms_alignment"]
+    assert runner.fusion_whisperx_payload["alignment"] == "mms_fa"
+    assert _first_word_start(runner) == pytest.approx(10.25)
+
+
+@pytest.mark.parametrize("failure", ["failing_stage", "missing_stage"])
+def test_a_failed_alignment_keeps_the_even_word_split(
+    processor_context, monkeypatch, caplog, failure
+):
+    caplog.set_level(logging.WARNING)
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=SYNCED_SINHALA)
+    runner = FakePipelineRunner(**{failure: "align"})
+
+    outcome = RealAnalysisProcessor(_reference_config(config), runner).analyze(
+        input_path
+    )
+
+    assert outcome.timeline is not None
+    assert "alignment" not in runner.fusion_whisperx_payload
+    assert _first_word_start(runner) == pytest.approx(10.0)
+    assert "keeping the even word split" in caplog.text
+
+
+def test_alignment_can_be_switched_off(processor_context, monkeypatch):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=SYNCED_SINHALA)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(
+        _reference_config(config, mms_alignment_enabled=False), runner
+    ).analyze(input_path)
+
+    assert not any(runner._stage(c.argv) == "align" for c in runner.calls)
+    assert _first_word_start(runner) == pytest.approx(10.0)
+
+
+def test_english_songs_are_not_aligned_with_mms(processor_context, monkeypatch):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=ENGLISH_LYRICS, synced=None)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    assert not any(runner._stage(c.argv) == "align" for c in runner.calls)
