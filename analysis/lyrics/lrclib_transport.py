@@ -19,6 +19,10 @@ from analysis.lyrics.lyrics_reference import SongIdentity
 
 
 LRCLIB_GET_URL = "https://lrclib.net/api/get"
+LRCLIB_SEARCH_URL = "https://lrclib.net/api/search"
+# The exact lookup rejects a recording whose length differs by more than a couple
+# of seconds; the search fallback picks the closest one within this many seconds.
+SEARCH_DURATION_TOLERANCE_SECONDS = 10.0
 DEFAULT_USER_AGENT = (
     "ChordSync/0.1 (academic development; contact: developer@localhost)"
 )
@@ -67,8 +71,61 @@ class LrclibTransport:
             parameters["album_name"] = song_identity.album
         if duration_seconds is not None and duration_seconds > 0:
             parameters["duration"] = str(round(duration_seconds, 3))
+        try:
+            return _map_response(self._request_json(LRCLIB_GET_URL, parameters))
+        except LyricsApiRateLimitedError:
+            raise  # never send a second request while rate limited
+        except LyricsApiUnavailableError as exact_failure:
+            candidate = self._closest_search_result(
+                song_identity, duration_seconds, parameters
+            )
+            if candidate is None:
+                raise exact_failure
+            return _map_response(candidate)
+
+    def _closest_search_result(
+        self,
+        song_identity: SongIdentity,
+        duration_seconds: float | None,
+        parameters: Mapping[str, str],
+    ) -> Mapping[str, object] | None:
+        search = {
+            key: value
+            for key, value in parameters.items()
+            if key in {"track_name", "artist_name", "album_name"}
+        }
+        try:
+            results = self._request_json(LRCLIB_SEARCH_URL, search, expect_list=True)
+        except (LyricsApiUnavailableError, LyricsApiResponseRejectedError):
+            return None
+        wanted_title = _same_text(song_identity.title)
+        wanted_artist = _same_text(song_identity.artist)
+        best: tuple[float, Mapping[str, object]] | None = None
+        for item in results:
+            if not isinstance(item, dict) or item.get("instrumental"):
+                continue
+            if _same_text(str(item.get("trackName", ""))) != wanted_title:
+                continue
+            if _same_text(str(item.get("artistName", ""))) != wanted_artist:
+                continue
+            if not item.get("plainLyrics"):
+                continue
+            delta = _duration_gap(item.get("duration"), duration_seconds)
+            if delta is None or delta > SEARCH_DURATION_TOLERANCE_SECONDS:
+                continue
+            if best is None or delta < best[0]:
+                best = (delta, item)
+        return best[1] if best else None
+
+    def _request_json(
+        self,
+        url: str,
+        parameters: Mapping[str, str],
+        *,
+        expect_list: bool = False,
+    ):
         request = Request(
-            f"{LRCLIB_GET_URL}?{urlencode(parameters)}",
+            f"{url}?{urlencode(parameters)}",
             headers={"Accept": "application/json", "User-Agent": self._user_agent},
             method="GET",
         )
@@ -99,11 +156,27 @@ class LrclibTransport:
             raise LyricsApiResponseRejectedError(
                 "Lyrics provider response is malformed."
             ) from error
-        if not isinstance(payload, dict):
+        if not isinstance(payload, list if expect_list else dict):
             raise LyricsApiResponseRejectedError(
                 "Lyrics provider response is malformed."
             )
-        return _map_response(payload)
+        return payload
+
+
+def _same_text(value: str) -> str:
+    from analysis.lyrics.lyrics_api_reference import _identity_text
+
+    return _identity_text(value)
+
+
+def _duration_gap(provider_value: object, requested: float | None) -> float | None:
+    try:
+        provider = float(provider_value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if requested is None or requested <= 0 or provider <= 0:
+        return None
+    return abs(provider - requested)
 
 
 def _map_response(payload: Mapping[str, object]) -> Mapping[str, object]:

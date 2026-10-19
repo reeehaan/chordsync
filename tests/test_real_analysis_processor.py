@@ -1215,3 +1215,137 @@ def test_without_a_reference_detection_stays_automatic(processor_context):
 
     lyrics_call = next(c for c in runner.calls if runner._stage(c.argv) == "lyrics")
     assert "--language" not in lyrics_call.argv
+
+
+SINHALA_LINES = [
+    "මන්දාරම් හැන්දෑවේ",
+    "ආදරයෙන් වෙලා ඔබ",
+    "රාගයක මා හට පෙම්",
+    "කරන මාලයේ රඟා",
+    "නෙතන් ගෙවූ සිහිනේ",
+]
+SYNCED_SINHALA = "\n".join(
+    f"[00:{10 + index * 8:02d}.00] {line}" for index, line in enumerate(SINHALA_LINES)
+)
+
+
+def _reference_config(config, **updates):
+    return AnalysisPipelineConfig(
+        **{
+            **config.__dict__,
+            "multilingual_lyrics_enabled": True,
+            "lrclib_reference_enabled": True,
+            **updates,
+        }
+    )
+
+
+def _patch_reference(monkeypatch, *, plain, synced):
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor.obtain_lrclib_reference",
+        lambda *args, **kwargs: SimpleNamespace(plain_lyrics=plain, synced_lyrics=synced),
+    )
+
+
+def _lyrics_calls(runner):
+    return [call for call in runner.calls if runner._stage(call.argv) == "lyrics"]
+
+
+def test_synced_reference_lyrics_replace_transcription_for_non_english_songs(
+    processor_context, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=SYNCED_SINHALA)
+    runner = FakePipelineRunner()
+
+    outcome = RealAnalysisProcessor(_reference_config(config), runner).analyze(
+        input_path
+    )
+
+    assert _lyrics_calls(runner) == []  # no speech recognition was run
+    segments = runner.fusion_whisperx_payload["segments"]
+    assert [segment["text"].strip() for segment in segments] == SINHALA_LINES
+    assert segments[0]["start"] == pytest.approx(10.0)
+    assert all(segment["words"] for segment in segments)
+    assert "built from synced reference" in caplog.text
+    assert outcome.timeline is not None
+    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
+    assert fuse.argv[fuse.argv.index("--lyric-source") + 1] == "lrclib-synced"
+
+
+def test_english_songs_still_use_transcription_even_with_synced_lyrics(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    english = "\n".join(
+        f"[00:{10 + i * 8:02d}.00] I know that you are all that I need and the sky"
+        for i in range(5)
+    )
+    _patch_reference(monkeypatch, plain=ENGLISH_LYRICS, synced=english)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    assert len(_lyrics_calls(runner)) == 1
+    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
+    assert fuse.argv[fuse.argv.index("--lyric-source") + 1].startswith("whisperx-")
+
+
+@pytest.mark.parametrize(
+    "synced, flag",
+    [
+        (None, True),  # the provider has no synced lyrics
+        ("[00:10.00] only\n[00:20.00] two lines", True),  # too few to trust
+        (SYNCED_SINHALA, False),  # switched off
+    ],
+)
+def test_synced_lyrics_are_only_used_when_suitable(
+    processor_context, monkeypatch, synced, flag
+):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=synced)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(
+        _reference_config(config, synced_lyrics_enabled=flag), runner
+    ).analyze(input_path)
+
+    assert len(_lyrics_calls(runner)) >= 1
+
+
+def test_synced_lyrics_follow_the_singer_when_the_vocals_are_readable(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=SYNCED_SINHALA)
+
+    class SungRunner(FakePipelineRunner):
+        """Writes real vocals: the singer starts 3 s after the provider's lines."""
+
+        def _write_output(self, stage, argv):
+            super()._write_output(stage, argv)
+            if stage == "separate":
+                import struct
+                import wave
+
+                output_dir = Path(argv[argv.index("-o") + 1])
+                model = argv[argv.index("-n") + 1]
+                target = output_dir / model / Path(argv[-1]).stem / "vocals.wav"
+                rate = 2000
+                loud = struct.pack("<h", 9000) * rate
+                quiet = struct.pack("<h", 0) * rate
+                singing = {13 + i * 8 + k for i in range(5) for k in range(6)}
+                with wave.open(str(target), "wb") as audio:
+                    audio.setnchannels(1)
+                    audio.setsampwidth(2)
+                    audio.setframerate(rate)
+                    for second in range(60):
+                        audio.writeframes(loud if second in singing else quiet)
+
+    runner = SungRunner()
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    first = runner.fusion_whisperx_payload["segments"][0]
+    assert first["start"] == pytest.approx(13.0, abs=0.2)

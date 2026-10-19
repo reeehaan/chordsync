@@ -33,6 +33,14 @@ from analysis.lyrics.production_verification import (
 from analysis.lyrics.production_reference import obtain_lrclib_reference
 from analysis.lyrics.language_hint import looks_english
 from analysis.lyrics.repetition_guard import remove_repetition_loops
+from analysis.lyrics.synced_reference import (
+    MINIMUM_TIMED_LINES,
+    build_transcript,
+    estimate_offset,
+    parse_synced_lyrics,
+    timed_line_count,
+    vocal_activity,
+)
 from analysis.lyrics.romanization import (
     add_approximate_word_timings,
     romanize_whisperx_result,
@@ -154,6 +162,9 @@ class AnalysisPipelineConfig:
     # Show non-English lyrics converted to Latin letters instead of their own
     # script. Off by default: songs are shown in the script they are sung in.
     romanize_lyrics: bool = False
+    # Build non-English lyrics from the provider's time-synced lines when it has
+    # them, instead of transcribing (Whisper is unreliable for e.g. Sinhala).
+    synced_lyrics_enabled: bool = True
     lrclib_reference_enabled: bool = False
     lrclib_timeout: float = DEFAULT_TIMEOUT_SECONDS
     lrclib_user_agent: str = DEFAULT_USER_AGENT
@@ -209,6 +220,9 @@ class AnalysisPipelineConfig:
             romanize_lyrics=(
                 os.getenv("CHORDSYNC_ROMANIZE_LYRICS", "").casefold()
                 in {"1", "true", "yes"}
+            ),
+            synced_lyrics_enabled=_enabled_by_default(
+                "CHORDSYNC_SYNCED_LYRICS_ENABLED"
             ),
             lrclib_reference_enabled=(
                 os.getenv("CHORDSYNC_LRCLIB_REFERENCE_ENABLED", "").casefold()
@@ -523,6 +537,8 @@ class RealAnalysisProcessor:
         job_id: str,
         reference: LyricsReferenceResult | None = None,
     ) -> None:
+        if self._write_synced_transcript(workspace, job_id, reference):
+            return
         lyrics_command = [
             str(self._config.whisperx_executable),
             str(workspace.vocals),
@@ -563,6 +579,49 @@ class RealAnalysisProcessor:
                 workspace.whisperx,
                 job_id,
             )
+
+    def _write_synced_transcript(
+        self,
+        workspace: JobWorkspace,
+        job_id: str,
+        reference: LyricsReferenceResult | None,
+    ) -> bool:
+        """Use the provider's synced lyrics instead of transcribing, if suitable."""
+        if (
+            reference is None
+            or not self._config.synced_lyrics_enabled
+            or not self._config.multilingual_lyrics_enabled
+            or not getattr(reference, "synced_lyrics", None)
+            or looks_english(getattr(reference, "plain_lyrics", ""))
+        ):
+            return False
+        lines = parse_synced_lyrics(reference.synced_lyrics)
+        if timed_line_count(lines) < MINIMUM_TIMED_LINES:
+            return False
+        started_at = time.monotonic()
+        levels = vocal_activity(workspace.vocals)
+        offset = estimate_offset(lines, levels) if levels else 0.0
+        total = len(levels) * 0.05 if levels else None
+        transcript = build_transcript(lines, offset, total)
+        if not transcript["segments"]:
+            return False
+        try:
+            workspace.whisperx.parent.mkdir(parents=True, exist_ok=True)
+            workspace.whisperx.write_text(
+                json.dumps(transcript, ensure_ascii=False), encoding="utf-8"
+            )
+        except OSError:
+            return False
+        logger.info(
+            "[job %s] lyrics: built from synced reference, lines=%d offset=%+.2fs "
+            "calibrated=%s in %.1fs",
+            job_id,
+            len(transcript["segments"]),
+            offset,
+            levels is not None,
+            time.monotonic() - started_at,
+        )
+        return True
 
     def _remove_lyric_repetition_loops(self, whisperx_path: Path, job_id: str) -> None:
         """Drop Whisper repetition loops before anything reads the transcript."""
@@ -804,7 +863,7 @@ class RealAnalysisProcessor:
             "--whisperx",
             str(whisperx_path),
             "--lyric-source",
-            f"whisperx-{self._config.whisperx_model}",
+            self._lyric_source_label(whisperx_path),
             "--output",
             str(timeline_path),
         ]
@@ -816,6 +875,18 @@ class RealAnalysisProcessor:
             self._config.fusion_timeout,
             timeline_path,
         )
+
+    def _lyric_source_label(self, whisperx_path: Path) -> str:
+        """Say where the lyrics came from: transcription or synced reference."""
+        try:
+            language = json.loads(whisperx_path.read_text(encoding="utf-8")).get(
+                "language"
+            )
+        except (OSError, ValueError, AttributeError):
+            language = None
+        if language == "synced":
+            return "lrclib-synced"
+        return f"whisperx-{self._config.whisperx_model}"
 
     def _module_command(
         self,

@@ -103,6 +103,7 @@ class LyricsApiReferenceSource:
         credential_environment_variable: str | None = None,
         minimum_confidence: IdentityConfidence = IdentityConfidence.MEDIUM,
         duration_tolerance_seconds: float = 3.0,
+        exact_album_duration_tolerance_seconds: float = 10.0,
     ) -> None:
         self._transport = transport
         self._provider = provider
@@ -110,6 +111,9 @@ class LyricsApiReferenceSource:
         self._credential_environment_variable = credential_environment_variable
         self._minimum_confidence = minimum_confidence
         self._duration_tolerance_seconds = duration_tolerance_seconds
+        self._exact_album_duration_tolerance_seconds = max(
+            exact_album_duration_tolerance_seconds, duration_tolerance_seconds
+        )
 
     def get_lyrics(self, song_identity: SongIdentity) -> str:
         return self.get_reference(song_identity).plain_lyrics
@@ -205,9 +209,16 @@ class LyricsApiReferenceSource:
             duration_delta is not None
             and duration_delta > self._duration_tolerance_seconds
         ):
-            raise LyricsApiResponseRejectedError(
-                "Provider duration does not match the requested recording."
-            )
+            # A different cut of the same release (another intro or fade) can
+            # differ by several seconds. Accept it only when the album is named
+            # and matches too; the identity is then still exact.
+            if not (
+                album_match is True
+                and duration_delta <= self._exact_album_duration_tolerance_seconds
+            ):
+                raise LyricsApiResponseRejectedError(
+                    "Provider duration does not match the requested recording."
+                )
 
         strong_match = (
             duration_delta is not None

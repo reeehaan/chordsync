@@ -19,6 +19,9 @@ _LONGEST_PHRASE_WORDS = 8
 # How many repeats of a looping phrase are kept.
 _KEPT_REPEATS = 3
 
+# One character repeated this often is a decoding glitch, not a word.
+_STUCK_CHARACTER = re.compile(r"(.)\1{14,}")
+
 _TOKEN = re.compile(r"[^\W_]+(?:'[^\W_]+)*", re.UNICODE)
 
 
@@ -44,6 +47,11 @@ def remove_repetition_loops(transcript: dict[str, Any]) -> RepetitionReport:
             continue
         keep_flags, segment_loops = _loop_mask([_token(word) for word in words])
         loops += segment_loops
+        for position, word in enumerate(words):
+            if _is_stuck(word):
+                if keep_flags[position]:
+                    loops += 1
+                keep_flags[position] = False
         if all(keep_flags):
             kept_segments.append(segment)
             continue
@@ -64,6 +72,11 @@ def remove_repetition_loops(transcript: dict[str, Any]) -> RepetitionReport:
                 word for word in flat if _identity(word) not in gone
             ]
     return RepetitionReport(len(removed), loops)
+
+
+def _is_stuck(word: Any) -> bool:
+    text = str(word.get("word", "")) if isinstance(word, dict) else ""
+    return bool(_STUCK_CHARACTER.search(text))
 
 
 def _token(word: Any) -> str:

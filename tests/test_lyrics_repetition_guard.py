@@ -113,3 +113,22 @@ def test_words_without_timestamps_do_not_break_the_guard():
 
     assert report.loops == 1
     assert len(transcript["segments"][0]["words"]) == 3
+
+
+def test_a_word_made_of_one_stuck_character_is_dropped():
+    stuck = "ḍ" + "ᴀ" * 70
+    transcript = _transcript(["so", stuck, "tonight"])
+
+    report = remove_repetition_loops(transcript)
+
+    assert report.removed_words == 1
+    assert _texts(transcript, 0) == ["so", "tonight"]
+
+
+def test_a_stretched_vowel_is_a_real_word_and_stays():
+    transcript = _transcript(["yeeeeeeeeeah", "ooooooooh", "love"])
+
+    report = remove_repetition_loops(transcript)
+
+    assert (report.removed_words, report.loops) == (0, 0)
+    assert _texts(transcript, 0) == ["yeeeeeeeeeah", "ooooooooh", "love"]
