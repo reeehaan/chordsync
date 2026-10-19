@@ -45,12 +45,13 @@ variable "worker_image_digest" {
 
 variable "model_release_id" {
   description = <<-EOT
-    Model asset release the worker installs at startup. The worker reads
+    Model asset release the worker installs at startup (2026.10.2 adds the
+    optional multilingual aligner, fetched only when a song needs it). It reads
     models/releases/<id>/manifest.json and refuses to poll the queue unless
     every required asset verifies against the manifest's SHA-256 values.
   EOT
   type        = string
-  default     = "2026.10.1"
+  default     = "2026.10.2"
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9._-]{0,63}$", var.model_release_id))
