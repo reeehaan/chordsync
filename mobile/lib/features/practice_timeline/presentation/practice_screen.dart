@@ -272,7 +272,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
               chordStart: state.currentChordStart,
               showAllChords: isBeforePlayback,
             ),
-          const Divider(height: 1, thickness: 1),
+          // No rule between the chords and the lyrics, just a little air.
+          const SizedBox(height: 12),
           Expanded(
             child: Container(
               key: const ValueKey('lyricsSection'),
