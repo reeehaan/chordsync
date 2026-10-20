@@ -272,7 +272,7 @@ def _default(name: str) -> str:
 def test_warm_workers_have_a_master_switch_and_bounded_waits():
     assert _default("warm_workers_enabled") == "true"
     assert _default("worker_initial_wait_seconds") == "120"
-    assert _default("worker_linger_seconds") == "600"
+    assert _default("worker_linger_seconds") == "300"
     assert "<= 900" in _block(ALL_TF["variables.tf"], 'variable "worker_initial_wait_seconds"')
     assert "<= 3600" in _block(ALL_TF["variables.tf"], 'variable "worker_linger_seconds"')
 

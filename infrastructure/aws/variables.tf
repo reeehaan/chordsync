@@ -124,7 +124,7 @@ variable "worker_initial_wait_seconds" {
 variable "worker_linger_seconds" {
   description = "How long a worker stays idle after a song, waiting for the next one."
   type        = number
-  default     = 600
+  default     = 300
 
   validation {
     condition     = var.worker_linger_seconds >= 0 && var.worker_linger_seconds <= 3600
