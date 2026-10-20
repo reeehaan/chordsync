@@ -166,6 +166,7 @@ resource "aws_lambda_function" "dispatcher" {
       CHORDSYNC_DYNAMODB_JOB_TABLE       = aws_dynamodb_table.jobs.name
       CHORDSYNC_MAX_WORKER_TASKS         = "1"
       CHORDSYNC_DISPATCH_LEASE_SECONDS   = "60"
+      CHORDSYNC_WARM_START_ENABLED       = tostring(var.warm_workers_enabled)
     }
   }
 

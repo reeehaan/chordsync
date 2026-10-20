@@ -48,6 +48,9 @@ class DispatcherConfig:
     # look again this many times, this many seconds apart.
     recheck_attempts: int = 2
     recheck_delay_seconds: float = 3.0
+    # Start a worker as soon as an upload begins (before any message exists), so
+    # its cold start overlaps with the upload. The worker waits for the message.
+    warm_start_enabled: bool = False
 
     @property
     def task_family(self) -> str:
@@ -91,6 +94,10 @@ class DispatcherConfig:
                 MIN_LEASE_SECONDS,
                 MAX_LEASE_SECONDS,
             ),
+            warm_start_enabled=environment.get(
+                "CHORDSYNC_WARM_START_ENABLED", ""
+            ).strip().casefold()
+            in {"1", "true", "yes"},
         )
 
 

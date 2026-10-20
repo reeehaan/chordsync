@@ -30,7 +30,11 @@ logger.setLevel(logging.INFO)
 
 REASON_JOB_DISPATCHED = "job_dispatched"
 REASON_SCHEDULED = "scheduled_reconcile"
-KNOWN_REASONS = frozenset({REASON_JOB_DISPATCHED, REASON_SCHEDULED})
+# The user has begun uploading a song. No message exists yet.
+REASON_UPLOAD_STARTED = "upload_started"
+KNOWN_REASONS = frozenset(
+    {REASON_JOB_DISPATCHED, REASON_SCHEDULED, REASON_UPLOAD_STARTED}
+)
 
 
 class DependencyError(Exception):
@@ -104,6 +108,7 @@ class WorkerDispatcher:
         lease_seconds: int = 60,
         recheck_attempts: int = 2,
         recheck_delay_seconds: float = 3.0,
+        warm_start_enabled: bool = False,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._queue = queue
@@ -113,6 +118,7 @@ class WorkerDispatcher:
         self._lease_seconds = lease_seconds
         self._recheck_attempts = recheck_attempts
         self._recheck_delay = recheck_delay_seconds
+        self._warm_start = warm_start_enabled
         self._sleep = sleep
 
     def dispatch(self, reason: str) -> DispatchResult:
@@ -125,8 +131,12 @@ class WorkerDispatcher:
             return self._finish(reason, Outcome.DEPENDENCY_UNAVAILABLE, detail=error.code)
 
     def _dispatch(self, reason: str) -> DispatchResult:
-        depth = self._look_for_work(reason)
-        if depth.visible <= 0:
+        # A warm start has no message to find yet: the worker is started early and
+        # waits for it. Everything else (one worker at a time, the lease) is the
+        # same, so an upload can never start a second worker.
+        warm = reason == REASON_UPLOAD_STARTED and self._warm_start
+        depth = QueueDepth(0, 0) if warm else self._look_for_work(reason)
+        if depth.visible <= 0 and not warm:
             # In-flight messages belong to a live worker, or reappear on their own.
             return self._finish(reason, Outcome.NO_WORK, depth=depth)
         if len(self._workers.active()) >= self._max_active:

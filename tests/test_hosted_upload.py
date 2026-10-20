@@ -926,3 +926,38 @@ def test_local_mode_has_no_cancel_route():
     client = TestClient(app, raise_server_exceptions=False)
 
     assert client.post("/analysis/jobs/anything/cancel").status_code in {404, 405}
+
+
+# --- warm start --------------------------------------------------------------------
+
+
+def test_creating_an_upload_asks_for_a_warm_worker_once(env, monkeypatch):
+    calls = []
+    monkeypatch.setattr(env.application._dispatcher, "warm", lambda: calls.append(1), raising=False)
+
+    response = env.create()
+
+    assert response.status_code == 201
+    assert calls == [1]
+
+
+def test_a_failing_warm_up_never_fails_job_creation(env, monkeypatch):
+    def boom():
+        raise RuntimeError("dispatcher unreachable")
+
+    monkeypatch.setattr(env.application._dispatcher, "warm", boom, raising=False)
+
+    response = env.create()
+
+    assert response.status_code == 201
+    assert env.job(response.json()["job_id"]).status is CloudJobStatus.AWAITING_UPLOAD
+
+
+def test_confirming_an_upload_does_not_ask_for_another_warm_worker(env, monkeypatch):
+    calls = []
+    monkeypatch.setattr(env.application._dispatcher, "warm", lambda: calls.append(1), raising=False)
+    job_id = env.create_and_upload(WAV)
+
+    env.confirm(job_id)
+
+    assert calls == [1]  # only the creation asked

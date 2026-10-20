@@ -20,18 +20,21 @@ from backend.api.app.services.cloud_job_repository import (
 )
 from backend.api.app.services.worker_dispatch_trigger import (
     REASON_JOB_DISPATCHED,
+    REASON_UPLOAD_STARTED,
     WorkerDispatchTrigger,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def _notify(trigger: WorkerDispatchTrigger | None) -> None:
+def _notify(
+    trigger: WorkerDispatchTrigger | None, reason: str = REASON_JOB_DISPATCHED
+) -> None:
     """Best effort: the message is already queued, so nothing here may raise."""
     if trigger is None:
         return
     try:
-        trigger.notify(REASON_JOB_DISPATCHED)
+        trigger.notify(reason)
     except Exception:
         logger.warning("worker dispatch trigger failed; reconcile will recover")
 
@@ -60,6 +63,13 @@ class QueueBackedDispatcher:
         self._storage = storage
         self._queue = queue
         self._worker_trigger = worker_trigger
+
+    def warm(self) -> None:
+        """An upload has begun: let the dispatcher start a worker early.
+
+        Nothing is queued yet, so this only asks; it never fails job creation.
+        """
+        _notify(self._worker_trigger, REASON_UPLOAD_STARTED)
 
     def dispatch(self, job_id: str) -> None:
         job = self._repository.get(job_id)

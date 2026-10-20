@@ -1115,3 +1115,90 @@ def test_only_the_dispatcher_logger_changed_not_boto_or_the_root_logger():
     source = (ROOT / "backend/dispatcher/dispatcher.py").read_text()
     assert "basicConfig" not in source and "DEBUG" not in source
     assert "getLogger()" not in source  # never touches the root logger
+
+
+# --- warm start: begin an upload, start the worker early ---------------------------
+
+
+def test_an_upload_starts_a_worker_before_any_message_exists():
+    world = World(visible=0)
+
+    result = world.dispatcher(warm_start_enabled=True).dispatch("upload_started")
+
+    assert result.outcome is Outcome.WORKER_STARTED
+    assert len(world.ecs.run_calls) == 1
+
+
+def test_a_warm_start_is_off_unless_enabled():
+    world = World(visible=0)
+
+    result = world.dispatcher().dispatch("upload_started")
+
+    assert result.outcome is Outcome.NO_WORK
+    assert world.ecs.run_calls == []
+    assert world.table.puts == 0
+
+
+def test_a_warm_start_never_adds_a_second_worker():
+    world = World(visible=0)
+    world.ecs.add_task("RUNNING")
+
+    result = world.dispatcher(warm_start_enabled=True).dispatch("upload_started")
+
+    assert result.outcome is Outcome.WORKER_ALREADY_ACTIVE
+    assert world.ecs.run_calls == []
+
+
+def test_repeated_uploads_start_one_worker_not_one_each():
+    world = World(visible=0)
+    dispatcher = world.dispatcher(warm_start_enabled=True)
+
+    outcomes = [dispatcher.dispatch("upload_started").outcome for _ in range(5)]
+
+    assert outcomes[0] is Outcome.WORKER_STARTED
+    assert all(o is Outcome.WORKER_ALREADY_ACTIVE for o in outcomes[1:])
+    assert len(world.ecs.run_calls) == 1
+
+
+def test_a_warm_start_respects_the_lease_cooldown():
+    world = World(visible=0, listing_lag=5.0)  # ECS lists the new task late
+    dispatcher = world.dispatcher(warm_start_enabled=True)
+
+    first = dispatcher.dispatch("upload_started")
+    second = dispatcher.dispatch("upload_started")
+
+    assert first.outcome is Outcome.WORKER_STARTED
+    assert second.outcome is Outcome.LOCK_NOT_ACQUIRED
+    assert len(world.ecs.run_calls) == 1
+
+
+def test_a_failed_warm_start_is_reported_not_raised():
+    world = World(visible=0)
+    world.ecs.run_error = AwsError("ClusterNotFoundException")
+
+    result = world.dispatcher(warm_start_enabled=True).dispatch("upload_started")
+
+    assert result.outcome is Outcome.RUN_TASK_FAILED
+
+
+def test_the_warm_start_setting_comes_from_the_environment():
+    from backend.dispatcher.config import DispatcherConfig
+
+    base = {
+        "AWS_REGION": "ap-southeast-1",
+        "CHORDSYNC_ECS_CLUSTER": CONFIG.cluster,
+        "CHORDSYNC_WORKER_TASK_DEFINITION": CONFIG.task_definition,
+        "CHORDSYNC_WORKER_SUBNET_IDS": ",".join(CONFIG.subnet_ids),
+        "CHORDSYNC_WORKER_SECURITY_GROUP_ID": CONFIG.security_group_id,
+        "CHORDSYNC_SQS_ANALYSIS_QUEUE_URL": CONFIG.queue_url,
+        "CHORDSYNC_DYNAMODB_JOB_TABLE": CONFIG.lock_table,
+    }
+
+    assert DispatcherConfig.from_env(base).warm_start_enabled is False
+    for value in ("true", "1", "YES"):
+        assert DispatcherConfig.from_env(
+            {**base, "CHORDSYNC_WARM_START_ENABLED": value}
+        ).warm_start_enabled is True
+    assert DispatcherConfig.from_env(
+        {**base, "CHORDSYNC_WARM_START_ENABLED": "false"}
+    ).warm_start_enabled is False

@@ -32,6 +32,7 @@ def build_dispatcher(
         lease_seconds=config.lease_seconds,
         recheck_attempts=config.recheck_attempts,
         recheck_delay_seconds=config.recheck_delay_seconds,
+        warm_start_enabled=config.warm_start_enabled,
         sleep=sleep,
     )
 

@@ -99,3 +99,35 @@ variable "alert_email" {
   default     = ""
   sensitive   = true
 }
+
+variable "warm_workers_enabled" {
+  description = <<-EOT
+    Start a worker as soon as an upload begins and keep it for the next song, so
+    songs skip most of the Fargate cold start (about 70 s). Costs idle worker time
+    (about 4 cents per 10 minutes). Set to false to return to one-song workers.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "worker_initial_wait_seconds" {
+  description = "How long a worker started by an upload waits for its song before exiting."
+  type        = number
+  default     = 120
+
+  validation {
+    condition     = var.worker_initial_wait_seconds >= 0 && var.worker_initial_wait_seconds <= 900
+    error_message = "worker_initial_wait_seconds must be between 0 and 900."
+  }
+}
+
+variable "worker_linger_seconds" {
+  description = "How long a worker stays idle after a song, waiting for the next one."
+  type        = number
+  default     = 600
+
+  validation {
+    condition     = var.worker_linger_seconds >= 0 && var.worker_linger_seconds <= 3600
+    error_message = "worker_linger_seconds must be between 0 and 3600."
+  }
+}

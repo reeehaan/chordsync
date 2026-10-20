@@ -322,6 +322,10 @@ resource "aws_ecs_task_definition" "worker" {
       # lyrics at LRCLIB from the song's embedded tags. Kept in memory only.
       { name = "CHORDSYNC_LRCLIB_REFERENCE_ENABLED", value = "true" },
       { name = "CHORDSYNC_LRCLIB_USER_AGENT", value = "ChordSync/0.1 (https://github.com/reeehaan/chordsync)" },
+      # Warm workers: start early and wait for the song, then stay for the next
+      # one. Both 0 is the original one-song-then-exit behaviour.
+      { name = "CHORDSYNC_WORKER_INITIAL_WAIT_SECONDS", value = tostring(var.warm_workers_enabled ? var.worker_initial_wait_seconds : 0) },
+      { name = "CHORDSYNC_WORKER_LINGER_SECONDS", value = tostring(var.warm_workers_enabled ? var.worker_linger_seconds : 0) },
       # Bootstrap installs and verifies this release before polling the queue.
       { name = "CHORDSYNC_MODEL_RELEASE", value = var.model_release_id },
       { name = "CHORDSYNC_MODEL_MANIFEST_KEY", value = "models/releases/${var.model_release_id}/manifest.json" },

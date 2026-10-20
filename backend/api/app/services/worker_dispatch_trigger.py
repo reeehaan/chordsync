@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 REASON_JOB_DISPATCHED = "job_dispatched"
 REASON_SCHEDULED = "scheduled_reconcile"
+REASON_UPLOAD_STARTED = "upload_started"
 
 
 class WorkerDispatchTrigger(Protocol):

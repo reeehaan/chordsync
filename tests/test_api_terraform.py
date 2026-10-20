@@ -259,3 +259,26 @@ def test_reserved_concurrency_defaults_to_none_and_rejects_zero():
 def test_the_dispatcher_terraform_has_no_user_auth():
     for word in ("demo_token", "ssm:", "bearer"):
         assert word not in DISPATCHER.casefold()
+
+
+# --- warm workers ------------------------------------------------------------------
+
+
+def _default(name: str) -> str:
+    block = _block(ALL_TF["variables.tf"], f'variable "{name}"')
+    return re.search(r"default\s+= (\S+)", block).group(1)
+
+
+def test_warm_workers_have_a_master_switch_and_bounded_waits():
+    assert _default("warm_workers_enabled") == "true"
+    assert _default("worker_initial_wait_seconds") == "120"
+    assert _default("worker_linger_seconds") == "600"
+    assert "<= 900" in _block(ALL_TF["variables.tf"], 'variable "worker_initial_wait_seconds"')
+    assert "<= 3600" in _block(ALL_TF["variables.tf"], 'variable "worker_linger_seconds"')
+
+
+def test_turning_the_switch_off_restores_one_song_workers():
+    # Both waits become 0 for the worker, and the dispatcher stops warm starts.
+    assert "var.warm_workers_enabled ? var.worker_initial_wait_seconds : 0" in MAIN
+    assert "var.warm_workers_enabled ? var.worker_linger_seconds : 0" in MAIN
+    assert "CHORDSYNC_WARM_START_ENABLED       = tostring(var.warm_workers_enabled)" in DISPATCHER

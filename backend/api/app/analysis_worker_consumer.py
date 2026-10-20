@@ -3,10 +3,15 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from backend.api.app.services.analysis_worker_consumer import AnalysisWorkerConsumer
+from backend.api.app.services.analysis_worker_consumer import (
+    AnalysisWorkerConsumer,
+    WorkerOutcome,
+)
 from backend.api.app.services.artifact_cleanup import ArtifactCleanup
 from backend.api.app.services.cloud_runtime import (
     CloudRuntimeConfig,
@@ -28,6 +33,81 @@ logger = logging.getLogger(__name__)
 
 # Distinct from Python's generic 1 so a failed bootstrap is visible in ECS.
 BOOTSTRAP_FAILED_EXIT_CODE = 3
+
+
+@dataclass(frozen=True)
+class WarmWorkerSettings:
+    """How long the worker waits for work before it exits.
+
+    Both zero (the default) is the original behaviour: one pass, then exit.
+    initial_wait: after starting, wait this long for the first message (the worker
+        may be started while the audio is still uploading).
+    linger: after finishing a song, stay this long for the next one, so the next
+        song skips the cold start.
+    """
+
+    initial_wait_seconds: int = 0
+    linger_seconds: int = 0
+    max_lifetime_seconds: int = 7200
+    poll_pause_seconds: float = 1.0
+
+    @property
+    def enabled(self) -> bool:
+        return self.initial_wait_seconds > 0 or self.linger_seconds > 0
+
+    @classmethod
+    def from_env(cls, environment: dict[str, str] | os._Environ) -> "WarmWorkerSettings":
+        def number(name: str, default: int, low: int, high: int) -> int:
+            raw = str(environment.get(name, "")).strip()
+            if not raw:
+                return default
+            try:
+                value = int(raw)
+            except ValueError:
+                return default
+            return value if low <= value <= high else default
+
+        return cls(
+            initial_wait_seconds=number("CHORDSYNC_WORKER_INITIAL_WAIT_SECONDS", 0, 0, 900),
+            linger_seconds=number("CHORDSYNC_WORKER_LINGER_SECONDS", 0, 0, 3600),
+            max_lifetime_seconds=number(
+                "CHORDSYNC_WORKER_MAX_LIFETIME_SECONDS", 7200, 600, 14400
+            ),
+        )
+
+
+def run_worker(
+    consumer: AnalysisWorkerConsumer,
+    settings: WarmWorkerSettings,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """Process songs until there is nothing to do for long enough. Returns how
+    many deliveries were handled."""
+    if not settings.enabled:
+        consumer.process_once()
+        return 0
+    started = clock()
+    deadline = started + settings.initial_wait_seconds
+    handled = 0
+    while True:
+        outcome = consumer.process_once()
+        now = clock()
+        if outcome is WorkerOutcome.EMPTY:
+            if now >= deadline:
+                break
+            sleep(settings.poll_pause_seconds)
+        else:
+            handled += 1
+            if settings.linger_seconds <= 0:
+                break  # a warm start only; exit after the song, as before
+            deadline = now + settings.linger_seconds
+            logger.info("worker staying warm for up to %ds", settings.linger_seconds)
+        if clock() - started >= settings.max_lifetime_seconds:
+            logger.info("worker reached its maximum lifetime; exiting")
+            break
+    return handled
 
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
@@ -118,7 +198,7 @@ def main(
     parse_arguments(argv)
     config = CloudRuntimeConfig.from_env()
     bootstrap_models(config, s3_client)
-    consumer_factory(config).process_once()
+    run_worker(consumer_factory(config), WarmWorkerSettings.from_env(os.environ))
 
 
 if __name__ == "__main__":

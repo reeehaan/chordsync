@@ -361,6 +361,12 @@ class CloudAnalysisApplication:
         job.upload_expires_at = expires_at
         job.transition_to(CloudJobStatus.AWAITING_UPLOAD, stage="upload_pending")
         self._repository.add(job)  # nothing is queued yet
+        warm = getattr(self._dispatcher, "warm", None)
+        if callable(warm):
+            try:
+                warm()  # best effort: start the worker while the audio uploads
+            except Exception:
+                logger.warning("worker warm-up request failed; the upload goes on")
         return UploadInitiationResponse(
             job_id=job_id,
             status=AnalysisJobStatus.AWAITING_UPLOAD,
