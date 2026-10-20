@@ -172,10 +172,14 @@ resource "aws_dynamodb_table" "jobs" {
   }
 
   point_in_time_recovery {
-    enabled = false
+    enabled = true
   }
 
-  deletion_protection_enabled = false
+  deletion_protection_enabled = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_sqs_queue" "analysis_dlq" {
