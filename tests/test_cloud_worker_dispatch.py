@@ -229,3 +229,96 @@ def test_source_materialization_preserves_bytes_and_uses_safe_job_path(tmp_path)
     assert result.path.read_bytes() == b"source"
     with pytest.raises(ValueError):
         SourceMaterializer(storage, tmp_path / "work").materialize("../bad", key.value)
+
+
+# --- a warm worker meets the API's own write -----------------------------------------
+
+
+class CollidingRepository(InMemoryCloudJobRepository):
+    """The API writes to the job just before the worker's claim, `times` times."""
+
+    def __init__(self, times):
+        super().__init__()
+        self.times = times
+        self.claims = 0
+
+    def save(self, job, *, expected_status):
+        if job.status is CloudJobStatus.PROCESSING and self.times > 0:
+            self.times -= 1
+            other = self.get(job.job_id)
+            other.dispatch_pending = False  # what the API does after queueing
+            super().save(other, expected_status=CloudJobStatus.QUEUED)
+        if job.status is CloudJobStatus.PROCESSING:
+            self.claims += 1
+        super().save(job, expected_status=expected_status)
+
+
+def _colliding_setup(tmp_path, times):
+    repository = CollidingRepository(times)
+    storage = LocalArtifactStorage(tmp_path / "objects")
+    queue = InMemoryAnalysisJobQueue()
+    source_key = ArtifactKeyFactory().source("job-one", ".mp3")
+    storage.put_bytes(source_key, b"exact source bytes", content_type="audio/mpeg")
+    job = new_cloud_job("job-one", "Song")
+    job.source_object_key = source_key.value
+    job.transition_to(CloudJobStatus.AWAITING_UPLOAD)
+    repository.add(job)
+    QueueBackedDispatcher(repository, storage, queue).dispatch(job.job_id)
+    releases = []
+    original = queue.release
+    queue.release = lambda delivery, **kw: (releases.append(kw), original(delivery, **kw))[1]
+    pauses = []
+    workspaces = tmp_path / "workspaces"
+    consumer = AnalysisWorkerConsumer(
+        queue,
+        repository,
+        storage,
+        SourceMaterializer(storage, workspaces),
+        FakeProcessor(),
+        AnalysisResultPublisher(repository, storage),
+        ArtifactCleanup(workspaces, storage),
+        sleep=pauses.append,
+    )
+    return repository, queue, consumer, releases, pauses
+
+
+def test_a_collision_with_the_api_is_retried_at_once_not_after_a_minute(tmp_path):
+    repository, queue, consumer, releases, pauses = _colliding_setup(tmp_path, times=1)
+
+    outcome = consumer.process_once()
+
+    assert outcome is WorkerOutcome.COMPLETED
+    assert repository.get("job-one").status is CloudJobStatus.COMPLETED
+    assert releases == []  # the message was never handed back
+    assert pauses == [0.5]  # one short wait, not 60 s
+    assert queue.receive() is None
+
+
+def test_several_collisions_in_a_row_are_still_retried(tmp_path):
+    _, _, consumer, releases, pauses = _colliding_setup(tmp_path, times=3)
+
+    assert consumer.process_once() is WorkerOutcome.COMPLETED
+    assert releases == []
+    assert pauses == [0.5, 1.0, 1.5]
+
+
+def test_endless_collisions_hand_the_message_back_after_a_few_seconds(tmp_path):
+    repository, queue, consumer, releases, pauses = _colliding_setup(tmp_path, times=99)
+
+    outcome = consumer.process_once()
+
+    assert outcome is WorkerOutcome.RELEASED_BUSY
+    assert releases == [{"visibility_timeout_seconds": 5}]  # 5 s, not 60 s
+    assert repository.get("job-one").status is CloudJobStatus.QUEUED
+    assert pauses == [0.5, 1.0, 1.5]
+
+
+def test_a_job_another_worker_took_meanwhile_is_still_left_alone(tmp_path):
+    repository, queue, consumer, releases, pauses = _colliding_setup(tmp_path, times=0)
+    job = repository.get("job-one")
+    job.transition_to(CloudJobStatus.PROCESSING)
+    repository.save(job, expected_status=CloudJobStatus.QUEUED)
+
+    assert consumer.process_once() is WorkerOutcome.RELEASED_BUSY
+    assert releases == [{"visibility_timeout_seconds": 60}]
+    assert pauses == []

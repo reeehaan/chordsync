@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from contextlib import AbstractContextManager
 from enum import Enum
 from typing import Callable
@@ -36,6 +37,15 @@ from backend.api.app.services.visibility_heartbeat import VisibilityHeartbeat
 HeartbeatFactory = Callable[[QueueDelivery], AbstractContextManager[object]]
 
 
+# The API is still saving its own bookkeeping on a job (marking it dispatched) at
+# the moment a warm worker, already polling, picks up its message. The claim then
+# collides. Collisions are short, so try again almost at once instead of handing
+# the message back for a minute.
+CLAIM_ATTEMPTS = 4
+CLAIM_RETRY_DELAY_SECONDS = 0.5
+CLAIM_CONFLICT_RELEASE_SECONDS = 5
+
+
 class WorkerOutcome(str, Enum):
     EMPTY = "empty"
     COMPLETED = "completed"
@@ -61,7 +71,9 @@ class AnalysisWorkerConsumer:
         cleanup: ArtifactCleanup,
         *,
         heartbeat_factory: HeartbeatFactory | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        self._sleep = sleep
         self._queue = queue
         self._repository = repository
         self._storage = storage
@@ -77,41 +89,48 @@ class AnalysisWorkerConsumer:
         delivery = self._queue.receive()
         if delivery is None:
             return WorkerOutcome.EMPTY
-        job = self._repository.get(delivery.descriptor.job_id)
-        if job is None:
-            self._queue.acknowledge(delivery)
-            return WorkerOutcome.ACKNOWLEDGED_STALE
-        if delivery.descriptor.source_artifact_key != job.source_object_key:
-            self._queue.acknowledge(delivery)
-            return WorkerOutcome.ACKNOWLEDGED_STALE
-        if job.status is CloudJobStatus.COMPLETED:
-            if self._retained_artifacts_exist(job):
+        for attempt in range(CLAIM_ATTEMPTS):
+            job = self._repository.get(delivery.descriptor.job_id)
+            if job is None:
                 self._queue.acknowledge(delivery)
                 return WorkerOutcome.ACKNOWLEDGED_STALE
-            self._queue.release(delivery)
-            return WorkerOutcome.RELEASED_BUSY
-        if job.status in {
-            CloudJobStatus.CANCELLED,
-            CloudJobStatus.EXPIRED,
-        }:
-            self._queue.acknowledge(delivery)
-            return WorkerOutcome.ACKNOWLEDGED_STALE
-        if job.status is CloudJobStatus.PROCESSING:
-            self._queue.release(delivery, visibility_timeout_seconds=60)
-            return WorkerOutcome.RELEASED_BUSY
-        if job.status is not CloudJobStatus.QUEUED:
-            self._queue.acknowledge(delivery)
-            return WorkerOutcome.ACKNOWLEDGED_STALE
+            if delivery.descriptor.source_artifact_key != job.source_object_key:
+                self._queue.acknowledge(delivery)
+                return WorkerOutcome.ACKNOWLEDGED_STALE
+            if job.status is CloudJobStatus.COMPLETED:
+                if self._retained_artifacts_exist(job):
+                    self._queue.acknowledge(delivery)
+                    return WorkerOutcome.ACKNOWLEDGED_STALE
+                self._queue.release(delivery)
+                return WorkerOutcome.RELEASED_BUSY
+            if job.status in {
+                CloudJobStatus.CANCELLED,
+                CloudJobStatus.EXPIRED,
+            }:
+                self._queue.acknowledge(delivery)
+                return WorkerOutcome.ACKNOWLEDGED_STALE
+            if job.status is CloudJobStatus.PROCESSING:
+                self._queue.release(delivery, visibility_timeout_seconds=60)
+                return WorkerOutcome.RELEASED_BUSY
+            if job.status is not CloudJobStatus.QUEUED:
+                self._queue.acknowledge(delivery)
+                return WorkerOutcome.ACKNOWLEDGED_STALE
 
-        try:
-            job.dispatch_pending = False
-            job.transition_to(CloudJobStatus.PROCESSING, stage="materializing")
-            self._repository.save(job, expected_status=CloudJobStatus.QUEUED)
-        except JobWriteConflictError:
-            self._queue.release(delivery, visibility_timeout_seconds=60)
-            return WorkerOutcome.RELEASED_BUSY
-
-        return self._process_claimed(delivery, job)
+            try:
+                job.dispatch_pending = False
+                job.transition_to(CloudJobStatus.PROCESSING, stage="materializing")
+                self._repository.save(job, expected_status=CloudJobStatus.QUEUED)
+            except JobWriteConflictError:
+                if attempt + 1 < CLAIM_ATTEMPTS:
+                    # Look at the job again: if it is still queued, claim it.
+                    self._sleep(CLAIM_RETRY_DELAY_SECONDS * (attempt + 1))
+                    continue
+                self._queue.release(
+                    delivery, visibility_timeout_seconds=CLAIM_CONFLICT_RELEASE_SECONDS
+                )
+                return WorkerOutcome.RELEASED_BUSY
+            return self._process_claimed(delivery, job)
+        raise AssertionError("unreachable")
 
     def _process_claimed(
         self,
