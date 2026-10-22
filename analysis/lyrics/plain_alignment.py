@@ -118,7 +118,7 @@ def main_cluster(
             groups[-1].append(letter)
     best = max(
         enumerate(groups),
-        key=lambda item: (len(item[1]), sum(l[2] for l in item[1]), item[0]),
+        key=lambda item: (len(item[1]), sum(letter[2] for letter in item[1]), item[0]),
     )[1]
     return (
         best[0][0],
@@ -287,7 +287,7 @@ def align_whole_song(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     parser.add_argument("--audio", type=Path, required=True)
     parser.add_argument("--lyrics", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
