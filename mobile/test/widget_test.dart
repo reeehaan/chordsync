@@ -5,14 +5,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'features/practice_timeline/fakes/fake_practice_audio_player.dart';
 
 void main() {
-  testWidgets('normal app entry opens the audio import flow', (tester) async {
+  testWidgets('normal app entry opens on the song library', (tester) async {
     await tester.pumpWidget(const MyApp());
 
-    expect(find.text('Upload'), findsOneWidget);
-    expect(find.text('Shazam'), findsOneWidget);
-    expect(find.text('Files'), findsOneWidget);
-    expect(find.text('Upload from local files'), findsOneWidget);
+    expect(find.text('Your songs'), findsOneWidget);
+    expect(find.text('Upload'), findsNothing);
     expect(find.text('ChordSync Practice'), findsNothing);
+
+    // The Upload tab offers only uploading a file.
+    await tester.tap(find.byKey(const ValueKey('bottomNav1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Upload'), findsOneWidget);
+    expect(find.text('Upload from files'), findsWidgets);
+    expect(find.text('Shazam'), findsNothing);
   });
 
   testWidgets('explicit fixture entry still opens the practice screen', (

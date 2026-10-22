@@ -38,7 +38,8 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
   List<AnalyzedPracticeSession> _savedSessions = const [];
   String? _loadedReadyJobId;
   String? _openedReadyJobId;
-  int _selectedTab = 1;
+  // The app opens on the song library (tab 0); upload is the middle tab.
+  int _selectedTab = 0;
 
   @override
   void initState() {

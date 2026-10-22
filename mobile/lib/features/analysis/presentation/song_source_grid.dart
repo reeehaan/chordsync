@@ -12,6 +12,9 @@ bool _prefersCupertinoIcons(BuildContext context) {
   return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
 }
 
+/// Whether YouTube, Camera Roll, Record and Shazam show beside Files.
+const _showProviderSources = false;
+
 /// Grid of places a song can come from on the upload tab.
 class SongSourceGrid extends StatelessWidget {
   const SongSourceGrid({
@@ -58,8 +61,8 @@ class SongSourceGrid extends StatelessWidget {
       ),
       _SongSource(
         key: 'filesSource',
-        title: 'Files',
-        description: 'Upload from local files',
+        title: 'Upload from files',
+        description: 'Choose a song from your phone',
         onTap: onFiles,
         badgeBuilder: (size) => _SvgBadge(
           'assets/icons/source_providers/folder.svg',
@@ -92,20 +95,28 @@ class SongSourceGrid extends StatelessWidget {
             _SvgBadge('assets/icons/source_providers/shazem.svg', size: size),
       ),
     ];
+    // Only uploading a file is offered for now. The other sources stay defined
+    // above, ready to bring back by turning the switch on.
+    final shown = _showProviderSources
+        ? sources
+        : sources.where((source) => source.key == 'filesSource').toList();
+    final single = shown.length == 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: sources.length,
+          itemCount: shown.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+            crossAxisCount: single ? 1 : 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: compact ? 0.9 : 1.05,
+            childAspectRatio: single
+                ? (compact ? 2.0 : 1.8)
+                : (compact ? 0.9 : 1.05),
           ),
-          itemBuilder: (context, index) => _SourceCard(source: sources[index]),
+          itemBuilder: (context, index) => _SourceCard(source: shown[index]),
         ),
         const SizedBox(height: 12),
         Text(

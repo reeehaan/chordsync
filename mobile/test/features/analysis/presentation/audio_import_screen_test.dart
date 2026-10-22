@@ -41,9 +41,12 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
+  /// Pumps the screen and, unless told otherwise, switches to the Upload tab:
+  /// the app itself opens on the song library.
   Future<void> pumpScreen(
     WidgetTester tester, {
     AnalyzedSessionLibrary? sessionLibrary,
+    bool openUpload = true,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -59,6 +62,10 @@ void main() {
       ),
     );
     await tester.pump();
+    if (openUpload) {
+      await tester.tap(find.byKey(const ValueKey('bottomNav1')));
+      await tester.pumpAndSettle();
+    }
   }
 
   testWidgets('selects audio and presents upload through ready states', (
@@ -111,37 +118,27 @@ void main() {
     expect(find.text('safe_song.wav'), findsNothing);
   });
 
-  testWidgets('shows song sources and explains Shazam behavior', (
-    tester,
-  ) async {
+  testWidgets('offers only uploading from files', (tester) async {
     await pumpScreen(tester);
 
-    expect(find.byKey(const ValueKey('youtubeSource')), findsOneWidget);
-    expect(find.byKey(const ValueKey('cameraRollSource')), findsOneWidget);
     expect(find.byKey(const ValueKey('filesSource')), findsOneWidget);
-    expect(find.byKey(const ValueKey('recordSource')), findsOneWidget);
-    expect(find.byKey(const ValueKey('shazamSource')), findsOneWidget);
-
-    final shazamSource = find.byKey(const ValueKey('shazamSource'));
-    await tester.ensureVisible(shazamSource);
-    await tester.tap(shazamSource);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Shazam'), findsWidgets);
-    expect(
-      find.textContaining('does not connect to it directly yet'),
-      findsOneWidget,
-    );
+    expect(find.text('Upload from files'), findsWidgets);
+    expect(find.byKey(const ValueKey('youtubeSource')), findsNothing);
+    expect(find.byKey(const ValueKey('cameraRollSource')), findsNothing);
+    expect(find.byKey(const ValueKey('recordSource')), findsNothing);
+    expect(find.byKey(const ValueKey('shazamSource')), findsNothing);
   });
 
   testWidgets('opens a previously analyzed song without analyzing again', (
     tester,
   ) async {
     final saved = _session(audio);
-    await pumpScreen(tester, sessionLibrary: _FakeSessionLibrary([saved]));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('bottomNav0')));
+    // The app opens straight on the library, with the saved song listed.
+    await pumpScreen(
+      tester,
+      sessionLibrary: _FakeSessionLibrary([saved]),
+      openUpload: false,
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Previously analyzed'), findsOneWidget);
@@ -158,9 +155,11 @@ void main() {
   testWidgets('bottom dock switches between Home, Add Song, and Tuner', (
     tester,
   ) async {
-    await pumpScreen(tester);
+    await pumpScreen(tester, openUpload: false);
 
-    expect(find.text('Upload'), findsOneWidget);
+    // The app opens on the song library.
+    expect(find.text('Your songs'), findsOneWidget);
+    expect(find.text('Upload'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('bottomNav2')));
     await tester.pumpAndSettle();
     expect(find.text('Tuner'), findsOneWidget);
