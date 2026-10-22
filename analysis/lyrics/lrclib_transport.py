@@ -94,6 +94,18 @@ class LrclibTransport:
                 raise exact_failure
             return _map_response(candidate)
         if exact.get("syncedLyrics"):
+            if _is_devanagari(exact.get("syncedLyrics")):
+                # Hindi songs have many entries, most written in English letters.
+                # Those are easier to read, so use one when there is one.
+                romanized = self._search(
+                    song_identity,
+                    duration_seconds,
+                    parameters,
+                    require_synced=True,
+                    latin_only=True,
+                )
+                if romanized is not None:
+                    return _map_response(romanized)
             return _map_response(exact)
         # The exact match only has plain lyrics. Another release of the same
         # recording may have timed lyrics, which are far more useful.
@@ -109,6 +121,7 @@ class LrclibTransport:
         parameters: Mapping[str, str],
         *,
         require_synced: bool = False,
+        latin_only: bool = False,
     ) -> Mapping[str, object] | None:
         search = {
             key: value
@@ -125,7 +138,7 @@ class LrclibTransport:
         wanted_title = _same_text(song_identity.title)
         wanted_artist = _same_text(song_identity.artist)
         wanted_album = _same_text(song_identity.album or "")
-        best: tuple[tuple[int, float], Mapping[str, object]] | None = None
+        best: tuple[tuple[int, int, float], Mapping[str, object]] | None = None
         for item in results:
             if not isinstance(item, dict) or item.get("instrumental"):
                 continue
@@ -137,6 +150,8 @@ class LrclibTransport:
                 continue
             synced = bool(item.get("syncedLyrics"))
             if require_synced and not synced:
+                continue
+            if latin_only and _is_devanagari(item.get("syncedLyrics")):
                 continue
             delta = _duration_gap(item.get("duration"), duration_seconds)
             if delta is None:
@@ -151,7 +166,12 @@ class LrclibTransport:
             )
             if delta > limit:
                 continue
-            rank = (0 if synced else 1, delta)  # timed lyrics first, then closest
+            # Timed lyrics first, then English letters over Devanagari, then closest.
+            rank = (
+                0 if synced else 1,
+                1 if _is_devanagari(item.get("syncedLyrics")) else 0,
+                delta,
+            )
             if best is None or rank < best[0]:
                 best = (rank, item)
         return best[1] if best else None
@@ -223,6 +243,15 @@ def _same_text(value: str) -> str:
     from analysis.lyrics.lyrics_api_reference import _identity_text
 
     return _identity_text(value)
+
+
+def _is_devanagari(text: object) -> bool:
+    """Whether lyrics are mostly written in Devanagari (Hindi, Marathi, Nepali)."""
+    letters = [character for character in str(text or "") if character.isalpha()]
+    if len(letters) < 10:
+        return False
+    devanagari = sum(1 for character in letters if "\u0900" <= character <= "\u097f")
+    return devanagari / len(letters) >= 0.5
 
 
 def _duration_gap(provider_value: object, requested: float | None) -> float | None:

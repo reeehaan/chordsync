@@ -417,3 +417,48 @@ def test_the_same_title_on_another_album_is_rejected_when_the_length_differs():
 
     with pytest.raises(LyricsApiResponseRejectedError):
         _source(lambda r, *, timeout: FakeResponse(far)).get_reference(IDENTITY)
+
+
+DEVANAGARI_SYNCED = "[00:10.00] जो तुम मेरे हो\n[00:14.00] मैं तुम्हारा हूँ"
+LATIN_SYNCED = "[00:10.00] jo tum mere ho\n[00:14.00] main tumhara hoon"
+
+
+def test_a_hindi_entry_in_devanagari_gives_way_to_one_in_english_letters():
+    opener = _routing_opener(
+        _payload(id=1, syncedLyrics=DEVANAGARI_SYNCED, plainLyrics="जो तुम मेरे हो"),
+        [
+            _payload(id=1, syncedLyrics=DEVANAGARI_SYNCED, plainLyrics="जो तुम मेरे हो"),
+            _payload(id=2, syncedLyrics=LATIN_SYNCED, plainLyrics="jo tum mere ho", duration=121.0),
+        ],
+    )
+
+    result = _source(opener).get_reference(IDENTITY)
+
+    assert result.provider_track_id == "2"
+    assert result.synced_lyrics == LATIN_SYNCED
+
+
+def test_a_devanagari_entry_is_kept_when_there_is_no_english_letter_version():
+    opener = _routing_opener(
+        _payload(id=1, syncedLyrics=DEVANAGARI_SYNCED, plainLyrics="जो तुम मेरे हो"),
+        [_payload(id=1, syncedLyrics=DEVANAGARI_SYNCED, plainLyrics="जो तुम मेरे हो")],
+    )
+
+    assert _source(opener).get_reference(IDENTITY).provider_track_id == "1"
+
+
+def test_an_entry_already_in_english_letters_causes_no_extra_search():
+    opener = _routing_opener(_payload(id=1, syncedLyrics=LATIN_SYNCED), [])
+
+    assert _source(opener).get_reference(IDENTITY).provider_track_id == "1"
+    assert not any("/api/search" in url for url in opener.calls)
+
+
+def test_a_sinhala_entry_is_never_swapped_for_another_script():
+    sinhala = "[00:10.00] මා හඬවලා හදවත සලා\n[00:14.00] ආදරයෙන් වෙලා ඔබ"
+    opener = _routing_opener(
+        _payload(id=1, syncedLyrics=sinhala, plainLyrics="මා හඬවලා"), []
+    )
+
+    assert _source(opener).get_reference(IDENTITY).provider_track_id == "1"
+    assert not any("/api/search" in url for url in opener.calls)
