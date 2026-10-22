@@ -91,7 +91,21 @@ class LrclibTransport:
         except LyricsApiUnavailableError as exact_failure:
             candidate = self._search(song_identity, duration_seconds, parameters)
             if candidate is None:
-                raise exact_failure
+                # Some entries list no length at all (0 seconds), so no length can
+                # confirm the recording. Plain lyrics in another script are still
+                # worth a try: they only get shown when they fit the audio.
+                unmeasured = self._search(
+                    song_identity,
+                    duration_seconds,
+                    parameters,
+                    unknown_duration=True,
+                )
+                if unmeasured is None:
+                    raise exact_failure
+                mapped = dict(_map_response(unmeasured))
+                mapped["synced_lyrics"] = None  # its times cannot be trusted either
+                mapped["duration_seconds"] = None  # 0 means unknown, not zero seconds
+                return mapped
             return _map_response(candidate)
         if exact.get("syncedLyrics"):
             if _is_devanagari(exact.get("syncedLyrics")):
@@ -129,6 +143,7 @@ class LrclibTransport:
         *,
         require_synced: bool = False,
         latin_only: bool = False,
+        unknown_duration: bool = False,
     ) -> Mapping[str, object] | None:
         search = {
             key: value
@@ -166,6 +181,14 @@ class LrclibTransport:
             if latin_only and _is_devanagari(item.get("syncedLyrics")):
                 continue
             delta = _duration_gap(item.get("duration"), duration_seconds)
+            if unknown_duration:
+                # Only entries with no usable length, and only lyrics that are not in
+                # Latin letters: for English a wrong match could not be told apart.
+                if delta is not None or not _mostly_non_latin(item.get("plainLyrics")):
+                    continue
+                if best is None:
+                    best = ((0, 0, 0.0), item)
+                continue
             if delta is None:
                 continue
             same_album = bool(wanted_album) and (
@@ -255,6 +278,13 @@ def _same_text(value: str) -> str:
     from analysis.lyrics.lyrics_api_reference import _identity_text
 
     return _identity_text(value)
+
+
+def _mostly_non_latin(text: object) -> bool:
+    letters = [character for character in str(text or "") if character.isalpha()]
+    if len(letters) < 10:
+        return False
+    return sum(1 for character in letters if ord(character) > 0x024F) / len(letters) >= 0.5
 
 
 def _is_devanagari(text: object) -> bool:

@@ -502,3 +502,61 @@ def test_a_different_artist_is_never_taken_as_the_english_letter_version():
     )
 
     assert _source(opener).get_reference(IDENTITY).provider_track_id == "1"
+
+
+SINHALA_PLAIN = "\n".join(
+    [
+        "මන්දාරම් හැන්දෑවේ",
+        "ආදරයෙන් වෙලා ඔබ",
+        "රාගයක මා හට පෙම්",
+        "කරන මාලයේ රඟා",
+        "නෙතන් ගෙවූ සිහිනේ",
+        "මා හඬවලා හදවත සලා",
+    ]
+)
+
+
+def test_a_non_latin_entry_with_no_length_is_used_when_nothing_else_matches():
+    opener = _routing_opener(
+        _http_error(404),
+        [
+            _payload(
+                id=7, duration=0.0, plainLyrics=SINHALA_PLAIN, syncedLyrics="[00:01.00] x"
+            )
+        ],
+    )
+
+    result = _source(opener).get_reference(IDENTITY)
+
+    assert result.provider_track_id == "7"
+    assert result.plain_lyrics == SINHALA_PLAIN
+    assert result.synced_lyrics is None  # without a length its times are not trusted
+
+
+def test_an_entry_with_no_length_is_not_used_for_latin_lyrics():
+    opener = _routing_opener(
+        _http_error(404), [_payload(id=7, duration=0.0, plainLyrics="plain english words")]
+    )
+
+    assert _source(opener).get_reference_or_none(IDENTITY) is None
+
+
+def test_a_length_checked_match_wins_over_an_entry_with_no_length():
+    opener = _routing_opener(
+        _http_error(404),
+        [
+            _payload(id=7, duration=0.0, plainLyrics=SINHALA_PLAIN),
+            _payload(id=8, duration=120.5, plainLyrics=SINHALA_PLAIN),
+        ],
+    )
+
+    assert _source(opener).get_reference(IDENTITY).provider_track_id == "8"
+
+
+def test_an_entry_with_no_length_still_needs_the_same_title_and_artist():
+    opener = _routing_opener(
+        _http_error(404),
+        [_payload(id=7, duration=0.0, artistName="Someone Else", plainLyrics=SINHALA_PLAIN)],
+    )
+
+    assert _source(opener).get_reference_or_none(IDENTITY) is None
