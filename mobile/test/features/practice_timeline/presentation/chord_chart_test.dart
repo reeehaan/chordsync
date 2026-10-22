@@ -86,7 +86,7 @@ void main() {
   ) async {
     await _pump(tester, _timeline(8), 0.5);
 
-    expect(find.text('No lyrics detected'), findsOneWidget);
+    expect(find.text('Unable to provide lyrics for this song'), findsOneWidget);
     expect(find.byKey(const ValueKey('chordChart')), findsOneWidget);
     expect(find.byKey(const ValueKey('chartBar0')), findsOneWidget);
     expect(find.text('C'), findsWidgets); // a repeated chord shows once

@@ -219,6 +219,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
     );
     final isBeforePlayback = controller.position == Duration.zero;
     return SafeArea(
+      bottom: false,
       child: Column(
         children: [
           PracticeSheetHeader(

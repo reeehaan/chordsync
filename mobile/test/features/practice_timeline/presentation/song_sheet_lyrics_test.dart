@@ -56,6 +56,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an orange bar stays beside the line being sung', (tester) async {
+    final timeline = _singleSegmentTimeline();
+    final bar = find.descendant(
+      of: find.byKey(const ValueKey('currentLineIndicator')),
+      matching: find.byType(DecoratedBox),
+    );
+
+    for (final time in const [0.7, 1.7, 2.7]) {
+      await _pumpLyrics(tester, timeline, time);
+      await tester.pumpAndSettle();
+      final line = tester.getCenter(
+        find.byKey(const ValueKey('currentLyricBlock')),
+      );
+      expect(
+        tester.getCenter(bar).dy,
+        closeTo(line.dy, 1.0),
+        reason: 'the bar sits level with the current line at $time s',
+      );
+    }
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const ValueKey('currentLineIndicator')),
+          )
+          .opacity,
+      1,
+    );
+  });
+
   testWidgets('sizes each word to its own text so none overlap', (
     tester,
   ) async {

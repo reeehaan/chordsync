@@ -133,7 +133,7 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
             child: Column(
               children: [
                 const Text(
-                  'No lyrics detected',
+                  'Unable to provide lyrics for this song',
                   key: ValueKey('noLyricsFallback'),
                 ),
                 Text(
@@ -157,39 +157,53 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
 
     return Stack(
       children: [
-        NotificationListener<UserScrollNotification>(
-          onNotification: _handleUserScroll,
-          child: ListView.builder(
-            key: const ValueKey('lyricScrollView'),
-            controller: _scrollController,
-            // Always draggable, so browsing the sheet by hand still suspends
-            // auto-follow even when a short song fits the viewport.
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: ClampingScrollPhysics(),
-            ),
-            itemExtent: SongSheetLyrics.blockExtent,
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            itemCount: _blocks.length,
-            itemBuilder: (context, index) {
-              final block = _blocks[index];
-              return _FocusedLyricBlock(
-                key: ValueKey('lyricBlock$index'),
-                block: block,
-                playbackTime: widget.playbackTime,
-                isFocused: index == _focusedBlockIndex,
-              );
-            },
+        _EdgeFade(
+          child: Stack(
+            children: [
+              NotificationListener<UserScrollNotification>(
+                onNotification: _handleUserScroll,
+                child: ListView.builder(
+                  key: const ValueKey('lyricScrollView'),
+                  controller: _scrollController,
+                  // Always draggable, so browsing the sheet by hand still suspends
+                  // auto-follow even when a short song fits the viewport.
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: ClampingScrollPhysics(),
+                  ),
+                  itemExtent: SongSheetLyrics.blockExtent,
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  itemCount: _blocks.length,
+                  itemBuilder: (context, index) {
+                    final block = _blocks[index];
+                    return _FocusedLyricBlock(
+                      key: ValueKey('lyricBlock$index'),
+                      block: block,
+                      playbackTime: widget.playbackTime,
+                      isFocused: index == _focusedBlockIndex,
+                    );
+                  },
+                ),
+              ),
+              _CurrentLineIndicator(
+                controller: _scrollController,
+                focusedIndex: _focusedBlockIndex,
+              ),
+            ],
           ),
         ),
         if (!_autoFollow)
           Positioned(
             right: 12,
             bottom: 12,
-            child: FilledButton.tonalIcon(
+            child: FilledButton.tonal(
               key: const ValueKey('followLyricsButton'),
               onPressed: _resumeFollow,
-              icon: const Icon(Icons.my_location, size: 17),
-              label: const Text('Follow'),
+              style: FilledButton.styleFrom(
+                shape: const StadiumBorder(),
+                minimumSize: const Size(0, 38),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+              ),
+              child: const Text('Follow'),
             ),
           ),
       ],
@@ -384,6 +398,109 @@ class _ChordChip extends StatelessWidget {
           color: textColor,
           fontWeight: FontWeight.w700,
           height: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
+/// Fades whatever scrolls into the top and bottom edge of the lyrics area, so
+/// lines slip out of view smoothly instead of being cut off by a hard line.
+/// Only the lyrics inside the fade zones are affected.
+class _EdgeFade extends StatelessWidget {
+  const _EdgeFade({required this.child});
+
+  final Widget child;
+
+  static const _fadeExtent = 44.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight;
+        if (!height.isFinite || height <= _fadeExtent * 2) return child;
+        final fade = _fadeExtent / height;
+        return ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: const [
+              Color(0x00000000),
+              Color(0xFF000000),
+              Color(0xFF000000),
+              Color(0x00000000),
+            ],
+            stops: [0, fade, 1 - fade, 1],
+          ).createShader(bounds),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
+/// The orange bar beside the line being sung. It glides to the next line when
+/// the lyric timing moves on, and rides along with its line while the sheet
+/// scrolls. It fades out when no line is current (an intro or a gap).
+class _CurrentLineIndicator extends StatelessWidget {
+  const _CurrentLineIndicator({
+    required this.controller,
+    required this.focusedIndex,
+  });
+
+  final ScrollController controller;
+  final int? focusedIndex;
+
+  static const _width = 4.0;
+  // Same timing as the sheet's own follow scroll, so the bar and the lines
+  // move together instead of drifting apart.
+  static const _glide = Duration(milliseconds: 320);
+
+  @override
+  Widget build(BuildContext context) {
+    final index = focusedIndex;
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        key: const ValueKey('currentLineIndicator'),
+        opacity: index == null ? 0 : 1,
+        duration: const Duration(milliseconds: 200),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: (index ?? 0).toDouble()),
+          duration: _glide,
+          curve: Curves.easeOutCubic,
+          builder: (context, animatedIndex, _) => AnimatedBuilder(
+            animation: controller,
+            builder: (context, _) {
+              final offset = controller.hasClients ? controller.offset : 0.0;
+              const extent = SongSheetLyrics.blockExtent;
+              const barHeight = SongSheetLyrics.runExtent;
+              // The list pads 24 above its first row; the bar is centred in
+              // the row's spare space.
+              final top =
+                  24 +
+                  animatedIndex * extent +
+                  (extent - barHeight) / 2 -
+                  offset;
+              return Stack(
+                children: [
+                  Positioned(
+                    left: 6,
+                    top: top,
+                    width: _width,
+                    height: barHeight,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: PracticeStageColors.amberBright,
+                        borderRadius: BorderRadius.all(Radius.circular(2)),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

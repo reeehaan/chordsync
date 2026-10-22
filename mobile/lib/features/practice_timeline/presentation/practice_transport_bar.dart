@@ -44,7 +44,14 @@ class PracticeTransportBar extends StatelessWidget {
     return Container(
       key: const ValueKey('transportSection'),
       color: PracticeStageColors.background,
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+      // The bar sits a little lower than the safe area: it takes less than the
+      // full home-indicator inset.
+      padding: EdgeInsets.fromLTRB(
+        40,
+        4,
+        40,
+        2 + MediaQuery.viewPaddingOf(context).bottom * 0.4,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -52,10 +59,10 @@ class PracticeTransportBar extends StatelessWidget {
             children: [
               Expanded(
                 child: Container(
-                  height: 60,
+                  height: 56,
                   decoration: BoxDecoration(
                     color: PracticeStageColors.player,
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(28),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   child: Row(
@@ -64,7 +71,7 @@ class PracticeTransportBar extends StatelessWidget {
                         key: const ValueKey('previousBarButton'),
                         onPressed: canGoPrevious ? onPrevious : null,
                         tooltip: 'Previous bar',
-                        iconSize: 20,
+                        iconSize: 18,
                         visualDensity: VisualDensity.compact,
                         color: PracticeStageColors.onPlayerMuted,
                         disabledColor: PracticeStageColors.playerTrack,
@@ -73,7 +80,7 @@ class PracticeTransportBar extends StatelessWidget {
                       IconButton(
                         onPressed: onPlayPause,
                         tooltip: isPlaying ? 'Pause' : playLabel,
-                        iconSize: 30,
+                        iconSize: 26,
                         visualDensity: VisualDensity.compact,
                         color: PracticeStageColors.onPlayer,
                         icon: Icon(
@@ -86,7 +93,7 @@ class PracticeTransportBar extends StatelessWidget {
                         key: const ValueKey('nextBarButton'),
                         onPressed: canGoNext ? onNext : null,
                         tooltip: 'Next bar',
-                        iconSize: 20,
+                        iconSize: 18,
                         visualDensity: VisualDensity.compact,
                         color: PracticeStageColors.onPlayerMuted,
                         disabledColor: PracticeStageColors.playerTrack,
@@ -130,8 +137,8 @@ class _SpeedSelector extends StatelessWidget {
       fontWeight: FontWeight.w700,
     );
     return Container(
-      width: 60,
-      height: 60,
+      width: 56,
+      height: 56,
       alignment: Alignment.center,
       decoration: const BoxDecoration(
         color: PracticeStageColors.player,
@@ -139,7 +146,7 @@ class _SpeedSelector extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: SizedBox(
-          width: 46,
+          width: 38,
           child: DropdownButton<double>(
             key: const ValueKey('speedSelector'),
             value: speed,
