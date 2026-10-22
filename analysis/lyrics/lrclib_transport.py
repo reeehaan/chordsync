@@ -105,7 +105,14 @@ class LrclibTransport:
                     latin_only=True,
                 )
                 if romanized is not None:
-                    return _map_response(romanized)
+                    mapped = dict(_map_response(romanized))
+                    # Same recording as the exact match, which is the one that
+                    # matched the song's own title and artist: the English-letter
+                    # entry may name the artist differently ("A & B" for "A").
+                    mapped["title"] = exact.get("trackName")
+                    mapped["artist"] = exact.get("artistName")
+                    mapped["album"] = exact.get("albumName")
+                    return mapped
             return _map_response(exact)
         # The exact match only has plain lyrics. Another release of the same
         # recording may have timed lyrics, which are far more useful.
@@ -144,7 +151,12 @@ class LrclibTransport:
                 continue
             if _same_text(str(item.get("trackName", ""))) != wanted_title:
                 continue
-            if _same_text(str(item.get("artistName", ""))) != wanted_artist:
+            item_artist = _same_text(str(item.get("artistName", "")))
+            if item_artist != wanted_artist and not (
+                latin_only
+                and wanted_artist
+                and (wanted_artist in item_artist or item_artist in wanted_artist)
+            ):
                 continue
             if not item.get("plainLyrics"):
                 continue

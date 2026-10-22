@@ -462,3 +462,43 @@ def test_a_sinhala_entry_is_never_swapped_for_another_script():
 
     assert _source(opener).get_reference(IDENTITY).provider_track_id == "1"
     assert not any("/api/search" in url for url in opener.calls)
+
+
+def test_the_english_letter_entry_may_name_the_artist_differently():
+    # "Tagged Artist" is in the file's tags; the English-letter entry credits
+    # "Composer & Tagged Artist". Same title and length, so it is the same song.
+    opener = _routing_opener(
+        _payload(id=1, syncedLyrics=DEVANAGARI_SYNCED, plainLyrics="जो तुम मेरे हो"),
+        [
+            _payload(
+                id=2,
+                artistName="Composer & Tagged Artist",
+                syncedLyrics=LATIN_SYNCED,
+                plainLyrics="jo tum mere ho",
+                duration=121.0,
+            )
+        ],
+    )
+
+    result = _source(opener).get_reference(IDENTITY)
+
+    assert result.synced_lyrics == LATIN_SYNCED
+    # It is still reported under the song's own title and artist.
+    assert result.song_identity.artist == "Tagged Artist"
+
+
+def test_a_different_artist_is_never_taken_as_the_english_letter_version():
+    opener = _routing_opener(
+        _payload(id=1, syncedLyrics=DEVANAGARI_SYNCED, plainLyrics="जो तुम मेरे हो"),
+        [
+            _payload(
+                id=2,
+                artistName="Someone Else",
+                syncedLyrics=LATIN_SYNCED,
+                plainLyrics="jo tum mere ho",
+                duration=121.0,
+            )
+        ],
+    )
+
+    assert _source(opener).get_reference(IDENTITY).provider_track_id == "1"
