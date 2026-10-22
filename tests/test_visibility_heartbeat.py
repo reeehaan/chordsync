@@ -210,7 +210,7 @@ def test_real_heartbeat_with_failing_extensions_still_completes_once(tmp_path):
     policy = VisibilityPolicy(heartbeat_interval_seconds=0.001, extension_seconds=60)
 
     class SlowProcessor(FakeProcessor):
-        def process(self, path):
+        def process(self, path, source_title=None):
             time.sleep(0.02)
             return super().process(path)
 

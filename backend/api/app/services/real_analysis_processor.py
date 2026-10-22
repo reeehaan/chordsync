@@ -347,16 +347,22 @@ class RealAnalysisProcessor:
         # libraries find their models themselves (local development).
         self._model_installer = model_installer
 
-    def process(self, input_path: Path) -> SharedTimeline:
-        return self.analyze(input_path).timeline
+    def process(
+        self, input_path: Path, *, source_title: str | None = None
+    ) -> SharedTimeline:
+        return self.analyze(input_path, source_title=source_title).timeline
 
-    def analyze(self, input_path: Path) -> AnalysisOutcome:
+    def analyze(
+        self, input_path: Path, *, source_title: str | None = None
+    ) -> AnalysisOutcome:
         if not input_path.is_file():
             raise AnalysisPipelineError("input stage output is missing")
         self._require_configured_chord_estimator()
 
         job_id = input_path.parent.name
-        reference = self._obtain_optional_lyrics_reference(input_path, job_id)
+        reference = self._obtain_optional_lyrics_reference(
+            input_path, job_id, source_title=source_title
+        )
         workspace = self._create_workspace(job_id)
 
         self._run_preprocess(input_path, workspace)
@@ -373,7 +379,7 @@ class RealAnalysisProcessor:
             # LRCLIB errors come and go. Several minutes have passed, so try once
             # more before falling back to speech recognition.
             reference = self._obtain_optional_lyrics_reference(
-                input_path, job_id, second_attempt=True
+                input_path, job_id, second_attempt=True, source_title=source_title
             )
         self._run_lyrics(workspace, job_id, reference)
         self._remove_lyric_repetition_loops(workspace.whisperx, job_id)
@@ -744,6 +750,7 @@ class RealAnalysisProcessor:
         job_id: str,
         *,
         second_attempt: bool = False,
+        source_title: str | None = None,
     ) -> LyricsReferenceResult | None:
         if not self._config.lrclib_reference_enabled:
             return None
@@ -754,6 +761,7 @@ class RealAnalysisProcessor:
                     user_agent=self._config.lrclib_user_agent,
                     timeout_seconds=self._config.lrclib_timeout,
                 ),
+                source_title=source_title,
             )
         except Exception as error:
             logger.warning(

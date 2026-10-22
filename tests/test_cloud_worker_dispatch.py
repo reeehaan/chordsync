@@ -55,7 +55,7 @@ class FakeProcessor:
         self.error = error
         self.paths: list[Path] = []
 
-    def process(self, path):
+    def process(self, path, source_title=None):
         self.paths.append(path)
         if self.error:
             raise self.error

@@ -161,7 +161,7 @@ class AnalysisWorkerConsumer:
             job.job_id,
             delivery.descriptor.source_artifact_key,
         )
-        timeline = self._processor.process(source.path)
+        timeline = self._processor.process(source.path, source_title=job.title)
         latest = self._repository.get(job.job_id)
         if latest is None or latest.status is CloudJobStatus.CANCELLED:
             return WorkerOutcome.ACKNOWLEDGED_STALE

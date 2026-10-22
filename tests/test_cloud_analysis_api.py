@@ -48,7 +48,7 @@ def _timeline() -> SharedTimeline:
 
 
 class Processor:
-    def process(self, path: Path) -> SharedTimeline:
+    def process(self, path: Path, source_title: str | None = None) -> SharedTimeline:
         assert path.read_bytes() == b"RIFF cloud audio"
         return _timeline()
 

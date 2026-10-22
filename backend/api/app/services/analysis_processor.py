@@ -5,7 +5,9 @@ from analysis.fusion.models import SharedTimeline
 
 
 class AnalysisProcessor(Protocol):
-    def process(self, input_path: Path) -> SharedTimeline: ...
+    def process(
+        self, input_path: Path, *, source_title: str | None = None
+    ) -> SharedTimeline: ...
 
 
 class AnalysisProcessorUnavailableError(RuntimeError):
@@ -15,7 +17,9 @@ class AnalysisProcessorUnavailableError(RuntimeError):
 class UnavailableAnalysisProcessor:
     """Safe placeholder until the real isolated pipeline adapter is available."""
 
-    def process(self, input_path: Path) -> SharedTimeline:
+    def process(
+        self, input_path: Path, *, source_title: str | None = None
+    ) -> SharedTimeline:
         raise AnalysisProcessorUnavailableError(
             "No real analysis processor is configured."
         )
