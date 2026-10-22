@@ -24,6 +24,13 @@ MINIMUM_COMPARED_WORDS = 30
 # transcript is not trusted. A starting value: the score is logged for every song.
 MINIMUM_MEAN_WORD_SCORE = 0.45
 MINIMUM_SCORED_WORDS = 20
+# Whole-song alignment of plain lyrics. A correct text scored 0.49 and 0.68 on
+# average (21% and 8% of words scoring under 0.3); the wrong lyrics on the same
+# audio scored 0.14, 0.31 and 0.38 (81%, 52% and 35%). The cutoffs sit between.
+PLAIN_ALIGNMENT_MINIMUM_MEAN_SCORE = 0.45
+PLAIN_ALIGNMENT_MAXIMUM_LOW_SCORE_SHARE = 0.30
+MINIMUM_PLAIN_LINES = 4
+MINIMUM_PLAIN_WORDS = 20
 
 
 class LyricsPath(str, enum.Enum):
@@ -99,7 +106,7 @@ def non_english_without_timed_lyrics_reason(
     from analysis.lyrics.language_hint import looks_english
 
     language = str(transcript.get("language", "")).casefold()
-    if language in {"synced", "unreliable"}:
+    if language in {"synced", "aligned", "unreliable"}:
         return None
     if reference_plain_lyrics is not None:
         if language == "en" or looks_english(reference_plain_lyrics):
@@ -144,3 +151,28 @@ def _dominant_script(text: str) -> str:
         if ord(character) > 0x024F
     )
     return counts.most_common(1)[0][0] if counts else "another script"
+
+
+def plain_alignment_is_trustworthy(
+    mean_score: float, low_score_share: float
+) -> tuple[bool, str]:
+    """Whether the aligned plain lyrics are good enough to show, and why not if not."""
+    if mean_score < PLAIN_ALIGNMENT_MINIMUM_MEAN_SCORE:
+        return False, f"mean alignment score {mean_score:.2f} is too low"
+    if low_score_share > PLAIN_ALIGNMENT_MAXIMUM_LOW_SCORE_SHARE:
+        return False, f"{low_score_share:.0%} of the words align poorly"
+    return True, "the lyrics fit the vocals"
+
+
+def reference_is_non_english(plain_lyrics: str | None) -> bool:
+    """Whether reference lyrics are plainly not English (other script, or other words)."""
+    from analysis.lyrics.language_hint import _WORD, looks_english
+
+    text = plain_lyrics or ""
+    letters = [character for character in text if character.isalpha()]
+    if len(letters) < 20:
+        return False
+    outside = sum(1 for character in letters if ord(character) > 0x024F)
+    if outside / len(letters) >= 0.5:
+        return True
+    return len(_WORD.findall(text.casefold())) >= 30 and not looks_english(text)

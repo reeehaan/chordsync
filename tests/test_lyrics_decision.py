@@ -91,3 +91,27 @@ def test_text_in_another_script_is_not_english_whatever_it_was_labelled():
     assert non_english_without_timed_lyrics_reason(
         {"language": "nn", "segments": english * 5}, reference_plain_lyrics=None
     ) is None
+
+
+def test_aligned_plain_lyrics_are_trusted_only_when_they_fit():
+    from analysis.lyrics.lyrics_decision import plain_alignment_is_trustworthy
+
+    assert plain_alignment_is_trustworthy(0.68, 0.08)[0]  # Hindi, right lyrics
+    assert plain_alignment_is_trustworthy(0.49, 0.21)[0]  # Sinhala, right lyrics
+    assert not plain_alignment_is_trustworthy(0.14, 0.81)[0]  # wrong song
+    assert not plain_alignment_is_trustworthy(0.31, 0.52)[0]  # scrambled lines
+    assert not plain_alignment_is_trustworthy(0.38, 0.35)[0]  # wrong song, other pair
+
+
+def test_reference_lyrics_are_non_english_by_script_or_by_words():
+    from analysis.lyrics.lyrics_decision import reference_is_non_english
+
+    assert reference_is_non_english("මන්දාරම් හැන්දෑවේ ආදරයෙන් වෙලා ඔබ රාගයක මා හට පෙම් කරන මාලයේ රඟා")
+    romanized_hindi = " ".join(["dil ka dariya bah hi gaya"] * 8)
+    assert reference_is_non_english(romanized_hindi)
+    english = (
+        "I know that you are all that I need and I love the way you hold me in the "
+        "night when the world is quiet and we are alone with the stars"
+    )
+    assert not reference_is_non_english(english)
+    assert not reference_is_non_english("too short")
