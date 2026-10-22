@@ -1295,13 +1295,52 @@ def test_english_songs_still_use_transcription_even_with_synced_lyrics(
         for i in range(5)
     )
     _patch_reference(monkeypatch, plain=ENGLISH_LYRICS, synced=english)
-    runner = FakePipelineRunner()
+    # The transcript matches the reference, so it is kept.
+    runner = FakePipelineRunner(whisperx_words=ENGLISH_LYRICS.split())
 
     RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
 
     assert len(_lyrics_calls(runner)) == 1
     fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
     assert fuse.argv[fuse.argv.index("--lyric-source") + 1].startswith("whisperx-")
+
+
+def _english_synced():
+    return "\n".join(
+        f"[00:{10 + i * 8:02d}.00] I know that you are all that I need and the sky"
+        for i in range(5)
+    )
+
+
+def test_a_transcript_that_disagrees_with_the_reference_is_replaced_by_it(
+    processor_context, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=ENGLISH_LYRICS, synced=_english_synced())
+    runner = FakePipelineRunner(whisperx_words=["steady"])
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
+    assert fuse.argv[fuse.argv.index("--lyric-source") + 1] == "lrclib-synced"
+    assert "lyrics decision: path=reference" in caplog.text
+
+
+def test_a_disagreeing_transcript_with_an_untimed_reference_gives_chords_only(
+    processor_context, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=ENGLISH_LYRICS, synced=None)
+    runner = FakePipelineRunner(whisperx_words=["steady"])
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    assert runner.fusion_whisperx_payload["segments"] == []
+    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
+    assert fuse.argv[fuse.argv.index("--lyric-source") + 1] == "none"
+    assert "lyrics decision: path=none" in caplog.text
 
 
 @pytest.mark.parametrize(

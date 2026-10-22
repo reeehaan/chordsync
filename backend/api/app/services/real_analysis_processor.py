@@ -33,6 +33,12 @@ from analysis.lyrics.production_verification import (
 )
 from analysis.lyrics.production_reference import obtain_lrclib_reference
 from analysis.lyrics.language_hint import looks_english
+from analysis.lyrics.lyrics_decision import (
+    LyricsPath,
+    decide_with_reference,
+    low_confidence_reason,
+    mean_word_score,
+)
 from analysis.lyrics.lyric_quality import (
     english_vocabulary_reason,
     unreliable_reason,
@@ -383,7 +389,7 @@ class RealAnalysisProcessor:
             )
         self._run_lyrics(workspace, job_id, reference)
         self._remove_lyric_repetition_loops(workspace.whisperx, job_id)
-        self._drop_unreliable_lyrics(workspace.whisperx, job_id)
+        self._drop_unreliable_lyrics(workspace.whisperx, job_id, reference)
         with tempfile.TemporaryDirectory(
             prefix="chordsync-verified-lyrics-"
         ) as temporary_directory:
@@ -615,14 +621,23 @@ class RealAnalysisProcessor:
         workspace: JobWorkspace,
         job_id: str,
         reference: LyricsReferenceResult | None,
+        *,
+        replace_transcript: bool = False,
     ) -> bool:
-        """Use the provider's synced lyrics instead of transcribing, if suitable."""
+        """Use the provider's synced lyrics instead of transcribing, if suitable.
+
+        English songs are transcribed unless ``replace_transcript`` is set, which is
+        done when the transcript turned out to disagree with the reference.
+        """
         if (
             reference is None
             or not self._config.synced_lyrics_enabled
             or not self._config.multilingual_lyrics_enabled
             or not getattr(reference, "synced_lyrics", None)
-            or looks_english(getattr(reference, "plain_lyrics", ""))
+            or (
+                not replace_transcript
+                and looks_english(getattr(reference, "plain_lyrics", ""))
+            )
         ):
             return False
         lines = parse_synced_lyrics(reference.synced_lyrics)
@@ -725,6 +740,7 @@ class RealAnalysisProcessor:
             workspace.vocals,
             job_id,
         )
+        lyrics = self._apply_lyrics_decision(lyrics, reference, workspace, job_id)
         if not self._config.multilingual_lyrics_enabled:
             return lyrics
         return replace(
@@ -952,7 +968,12 @@ class RealAnalysisProcessor:
             timeline_path,
         )
 
-    def _drop_unreliable_lyrics(self, whisperx_path: Path, job_id: str) -> None:
+    def _drop_unreliable_lyrics(
+        self,
+        whisperx_path: Path,
+        job_id: str,
+        reference: LyricsReferenceResult | None = None,
+    ) -> None:
         """Publish chords only when a transcript is unusable.
 
         Lyrics built from a synced reference are always kept. A transcript labelled
@@ -968,6 +989,19 @@ class RealAnalysisProcessor:
                 if whisperx_needs_romanization(transcript)
                 else english_vocabulary_reason(transcript)
             )
+            mean_score, scored_words = mean_word_score(transcript)
+            logger.info(
+                "[job %s] transcript confidence: mean_word_score=%s scored_words=%d "
+                "reference=%s",
+                job_id,
+                "n/a" if mean_score is None else f"{mean_score:.3f}",
+                scored_words,
+                "yes" if reference is not None else "no",
+            )
+            if reason is None and reference is None:
+                # Nothing to check the words against: trust the recogniser's own
+                # confidence.
+                reason = low_confidence_reason(transcript)
             if reason is None:
                 return
             whisperx_path.write_text(
@@ -981,6 +1015,64 @@ class RealAnalysisProcessor:
             job_id,
             reason,
         )
+
+    def _apply_lyrics_decision(
+        self,
+        lyrics: _FusionLyrics,
+        reference: LyricsReferenceResult | None,
+        workspace: JobWorkspace,
+        job_id: str,
+    ) -> _FusionLyrics:
+        """Keep the transcript, swap in the reference lyrics, or publish none.
+
+        Runs only when the transcript was compared with a reference. The outcome and
+        the numbers behind it are logged for every song.
+        """
+        verification = lyrics.verification
+        if reference is None or verification is None:
+            return lyrics
+        diagnostics = verification.diagnostics
+        compared = (
+            diagnostics.matches + diagnostics.substitutions + diagnostics.deletions
+        )
+        timed = timed_line_count(
+            parse_synced_lyrics(getattr(reference, "synced_lyrics", None))
+        )
+        decision = decide_with_reference(
+            error_rate=diagnostics.corrected_wer,
+            compared_words=compared,
+            reference_is_timed=timed >= MINIMUM_TIMED_LINES,
+        )
+        logger.info(
+            "[job %s] lyrics decision: path=%s wer=%.4f compared_words=%d "
+            "timed_reference_lines=%d (%s)",
+            job_id,
+            decision.path.value,
+            diagnostics.corrected_wer,
+            compared,
+            timed,
+            decision.reason,
+        )
+        if decision.path is LyricsPath.TRANSCRIPT:
+            return lyrics
+        try:
+            transcribed = lyrics.whisperx_path.read_text(encoding="utf-8")
+            workspace.whisperx.with_suffix(".transcribed.json").write_text(
+                transcribed, encoding="utf-8"
+            )
+            if decision.path is LyricsPath.REFERENCE and self._write_synced_transcript(
+                workspace, job_id, reference, replace_transcript=True
+            ):
+                return _FusionLyrics(workspace.whisperx)
+            workspace.whisperx.write_text(
+                json.dumps(without_lyrics(json.loads(transcribed)), ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except (OSError, ValueError, TypeError, AttributeError):
+            logger.warning("[job %s] lyrics decision could not be applied", job_id)
+            return lyrics
+        logger.info("[job %s] lyrics dropped; publishing chords only", job_id)
+        return _FusionLyrics(workspace.whisperx)
 
     def _lyric_source_label(self, whisperx_path: Path) -> str:
         """Say where the lyrics came from: transcription or synced reference."""
