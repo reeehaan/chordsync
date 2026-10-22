@@ -79,7 +79,9 @@ class FakePipelineRunner:
         timeout_stage: str | None = None,
         whisperx_words: list[str] | None = None,
         whisperx_language: str = "en",
+        plain_alignment_scores: tuple[float, float] = (0.6, 0.1),
     ) -> None:
+        self.plain_alignment_scores = plain_alignment_scores
         self.failing_stage = failing_stage
         self.missing_stage = missing_stage
         self.malformed_stage = malformed_stage
@@ -111,6 +113,8 @@ class FakePipelineRunner:
     def _stage(argv: list[str]) -> str:
         if "analysis.lyrics.mms_alignment" in argv:
             return "align"
+        if "analysis.lyrics.plain_alignment" in argv:
+            return "align_plain"
         executable_name = Path(argv[0]).name
         if executable_name == "whisperx":
             return "lyrics"
@@ -198,6 +202,37 @@ class FakePipelineRunner:
                             ],
                         }
                     ],
+                },
+            )
+        elif stage == "align_plain":
+            lyric_lines = Path(argv[argv.index("--lyrics") + 1]).read_text(
+                encoding="utf-8"
+            ).splitlines()
+            segments = []
+            for number, line in enumerate(lyric_lines):
+                words = line.split()
+                segments.append(
+                    {
+                        "start": number * 4.0,
+                        "end": number * 4.0 + 3.0,
+                        "text": " " + line,
+                        "words": [
+                            {"word": word, "start": number * 4.0 + i * 0.5,
+                             "end": number * 4.0 + i * 0.5 + 0.4, "score": 0.6}
+                            for i, word in enumerate(words)
+                        ],
+                    }
+                )
+            mean_score, low_share = self.plain_alignment_scores
+            self._write_json(
+                Path(argv[argv.index("--output") + 1]),
+                {
+                    "segments": segments,
+                    "word_segments": [w for seg in segments for w in seg["words"]],
+                    "language": "aligned",
+                    "alignment": "mms_fa_whole_song",
+                    "alignment_mean_score": mean_score,
+                    "alignment_low_score_share": low_share,
                 },
             )
         elif stage == "align":
@@ -1712,3 +1747,106 @@ def test_a_song_with_no_reference_is_only_looked_up_twice(
     )
 
     assert len(calls) == 2
+
+
+PLAIN_SINHALA = "\n".join(SINHALA_LINES + ["වෙනස් වචන හතරක් ඇත මෙහි", "ආදරය සොයා ගියෙමි මම"])
+HINDI_TIMED = "\n".join(
+    f"[00:{10 + i * 8:02d}.00] {line}"
+    for i, line in enumerate(
+        ["दिल का दरिया बह ही गया", "इश्क़ इबादत बन ही गया", "खुद को मुझे तू सौंप दे",
+         "जो तुम मेरे हो", "मैं तुम्हारा हूँ"]
+    )
+)
+
+
+def test_plain_lyrics_of_a_non_english_song_are_aligned_to_the_vocals(
+    processor_context, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=PLAIN_SINHALA, synced=None)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    assert _lyrics_calls(runner) == []  # no speech recognition was run
+    assert [c for c in runner.calls if runner._stage(c.argv) == "align_plain"]
+    segments = runner.fusion_whisperx_payload["segments"]
+    assert [s["text"].strip() for s in segments] == PLAIN_SINHALA.splitlines()
+    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
+    assert fuse.argv[fuse.argv.index("--lyric-source") + 1] == "lrclib-aligned"
+    assert "lyrics decision: path=aligned" in caplog.text
+
+
+def test_plain_lyrics_that_do_not_fit_the_vocals_give_chords_only(
+    processor_context, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=PLAIN_SINHALA, synced=None)
+    runner = FakePipelineRunner(plain_alignment_scores=(0.14, 0.81))
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    assert _lyrics_calls(runner) == []  # the recogniser is not asked to guess either
+    assert runner.fusion_whisperx_payload["segments"] == []
+    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
+    assert fuse.argv[fuse.argv.index("--lyric-source") + 1] == "none"
+    assert "lyrics decision: path=none" in caplog.text
+    assert "publishing chords only" in caplog.text
+
+
+def test_plain_alignment_can_be_turned_off(processor_context, monkeypatch):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=PLAIN_SINHALA, synced=None)
+    runner = FakePipelineRunner(whisperx_words=["x"], whisperx_language="si")
+
+    RealAnalysisProcessor(
+        _reference_config(config, plain_alignment_enabled=False), runner
+    ).analyze(input_path)
+
+    assert [c for c in runner.calls if runner._stage(c.argv) == "align_plain"] == []
+    assert len(_lyrics_calls(runner)) >= 1  # the old route
+
+
+def test_english_plain_lyrics_are_never_sent_to_whole_song_alignment(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=ENGLISH_LYRICS, synced=None)
+    runner = FakePipelineRunner(whisperx_words=ENGLISH_LYRICS.split())
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    assert [c for c in runner.calls if runner._stage(c.argv) == "align_plain"] == []
+    assert len(_lyrics_calls(runner)) == 1
+
+
+def test_hindi_lyrics_in_devanagari_are_shown_in_english_letters(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=HINDI_TIMED, synced=HINDI_TIMED)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    texts = [s["text"].strip() for s in runner.fusion_whisperx_payload["segments"]]
+    assert texts[0] == "dil ka dariya bah hi gaya"
+    assert texts[2] == "khud ko mujhe tu saunp de"
+
+
+def test_hindi_lyrics_stay_in_devanagari_when_the_switch_is_off(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain=HINDI_TIMED, synced=HINDI_TIMED)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(
+        _reference_config(config, hindi_in_english_letters=False), runner
+    ).analyze(input_path)
+
+    assert runner.fusion_whisperx_payload["segments"][0]["text"].strip() == (
+        "दिल का दरिया बह ही गया"
+    )

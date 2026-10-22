@@ -39,7 +39,16 @@ from analysis.lyrics.lyrics_decision import (
     low_confidence_reason,
     mean_word_score,
     non_english_without_timed_lyrics_reason,
+    plain_alignment_is_trustworthy,
+    reference_is_non_english,
+    MINIMUM_PLAIN_LINES,
+    MINIMUM_PLAIN_WORDS,
 )
+from analysis.lyrics.hindi_transliteration import (
+    contains_devanagari,
+    transliterate_hindi,
+)
+from analysis.lyrics.plain_alignment import parse_plain_lines
 from analysis.lyrics.lyric_quality import (
     english_vocabulary_reason,
     unreliable_reason,
@@ -48,6 +57,7 @@ from analysis.lyrics.lyric_quality import (
 from analysis.lyrics.repetition_guard import remove_repetition_loops
 from analysis.lyrics.synced_reference import (
     MINIMUM_TIMED_LINES,
+    SyncedLine,
     build_transcript,
     estimate_offset,
     parse_synced_lyrics,
@@ -182,6 +192,12 @@ class AnalysisPipelineConfig:
     # (LRCLIB); with none, it is published as chords only. Speech recognition is
     # not trusted on other languages. Turn off to keep such transcripts.
     non_english_needs_reference: bool = True
+    # Lyrics written in Devanagari are shown in English letters, spelled the way
+    # Hindi is usually typed ("dil ka dariya").
+    hindi_in_english_letters: bool = True
+    # A non-English song whose reference has only plain (untimed) lyrics: align
+    # the whole text to the vocals instead of giving up. Needs the MMS model.
+    plain_alignment_enabled: bool = True
     # Align synced lyrics word by word to the vocals (MMS), instead of spreading
     # each line's words evenly. Falls back to the even split on any failure.
     mms_alignment_enabled: bool = True
@@ -247,6 +263,12 @@ class AnalysisPipelineConfig:
             ),
             non_english_needs_reference=_enabled_by_default(
                 "CHORDSYNC_NON_ENGLISH_NEEDS_REFERENCE"
+            ),
+            hindi_in_english_letters=_enabled_by_default(
+                "CHORDSYNC_HINDI_IN_ENGLISH_LETTERS"
+            ),
+            plain_alignment_enabled=_enabled_by_default(
+                "CHORDSYNC_PLAIN_ALIGNMENT_ENABLED"
             ),
             mms_alignment_enabled=_enabled_by_default(
                 "CHORDSYNC_MMS_ALIGNMENT_ENABLED"
@@ -583,6 +605,8 @@ class RealAnalysisProcessor:
     ) -> None:
         if self._write_synced_transcript(workspace, job_id, reference):
             return
+        if self._write_plain_aligned_transcript(workspace, job_id, reference):
+            return
         lyrics_command = [
             str(self._config.whisperx_executable),
             str(workspace.vocals),
@@ -651,6 +675,12 @@ class RealAnalysisProcessor:
         lines = parse_synced_lyrics(reference.synced_lyrics)
         if timed_line_count(lines) < MINIMUM_TIMED_LINES:
             return False
+        if self._config.hindi_in_english_letters and any(
+            contains_devanagari(line.text) for line in lines
+        ):
+            lines = [
+                SyncedLine(line.start, transliterate_hindi(line.text)) for line in lines
+            ]
         started_at = time.monotonic()
         levels = vocal_activity(workspace.vocals)
         offset = estimate_offset(lines, levels) if levels else 0.0
@@ -675,6 +705,100 @@ class RealAnalysisProcessor:
             time.monotonic() - started_at,
         )
         self._align_synced_words(workspace, job_id)
+        return True
+
+    def _write_plain_aligned_transcript(
+        self,
+        workspace: JobWorkspace,
+        job_id: str,
+        reference: LyricsReferenceResult | None,
+    ) -> bool:
+        """Time a non-English song's plain reference lyrics against its vocals.
+
+        Returns True when a transcript was written, which spares the speech
+        recogniser: either the aligned lyrics, or none at all when they do not fit.
+        """
+        plain = getattr(reference, "plain_lyrics", None) if reference else None
+        if (
+            not self._config.plain_alignment_enabled
+            or not self._config.multilingual_lyrics_enabled
+            or not self._config.non_english_needs_reference
+            or not plain
+            or not reference_is_non_english(plain)
+        ):
+            return False
+        if self._config.hindi_in_english_letters and contains_devanagari(plain):
+            plain = transliterate_hindi(plain)
+        lines = parse_plain_lines(plain)
+        if len(lines) < MINIMUM_PLAIN_LINES or sum(map(len, lines)) < MINIMUM_PLAIN_WORDS:
+            return False
+        lyrics_path = workspace.whisperx.with_suffix(".plain.txt")
+        aligned_path = workspace.whisperx.with_suffix(".plain.json")
+        accepted = False
+        reason = "the alignment could not run"
+        try:
+            lyrics_path.parent.mkdir(parents=True, exist_ok=True)
+            lyrics_path.write_text(
+                "\n".join(" ".join(line) for line in lines), encoding="utf-8"
+            )
+            if self._model_installer is not None:
+                self._model_installer(AssetRole.ALIGNMENT_MMS)
+            self._run_stage(
+                "align_plain",
+                [
+                    str(self._config.whisperx_executable.parent / "python"),
+                    "-m",
+                    "analysis.lyrics.plain_alignment",
+                    "--audio",
+                    str(workspace.vocals),
+                    "--lyrics",
+                    str(lyrics_path),
+                    "--output",
+                    str(aligned_path),
+                ],
+                self._config.alignment_timeout,
+                aligned_path,
+            )
+            result = json.loads(aligned_path.read_text(encoding="utf-8"))
+            mean_score = float(result.get("alignment_mean_score", 0.0))
+            low_share = float(result.get("alignment_low_score_share", 1.0))
+            accepted, reason = plain_alignment_is_trustworthy(mean_score, low_share)
+            logger.info(
+                "[job %s] lyrics decision: path=%s plain reference aligned, "
+                "mean_score=%.3f low_score_share=%.3f lines=%d (%s)",
+                job_id,
+                "aligned" if accepted else "none",
+                mean_score,
+                low_share,
+                len(lines),
+                reason,
+            )
+            if accepted:
+                workspace.whisperx.parent.mkdir(parents=True, exist_ok=True)
+                workspace.whisperx.write_text(
+                    json.dumps(result, ensure_ascii=False), encoding="utf-8"
+                )
+                return True
+        except (
+            AnalysisPipelineError,
+            AnalysisStageTimeout,
+            OSError,
+            ValueError,
+            ModelBootstrapError,
+        ):
+            logger.warning("[job %s] plain lyrics alignment unavailable", job_id)
+        # The reference is not in English and could not be fitted to the audio: the
+        # speech recogniser would only invent words, so publish chords only.
+        logger.info(
+            "[job %s] lyrics dropped as unreliable (%s); publishing chords only",
+            job_id,
+            reason,
+        )
+        workspace.whisperx.parent.mkdir(parents=True, exist_ok=True)
+        workspace.whisperx.write_text(
+            json.dumps(without_lyrics({"language": "aligned"}), ensure_ascii=False),
+            encoding="utf-8",
+        )
         return True
 
     def _align_synced_words(self, workspace: JobWorkspace, job_id: str) -> None:
@@ -1105,6 +1229,8 @@ class RealAnalysisProcessor:
             language = None
         if language == "synced":
             return "lrclib-synced"
+        if language == "aligned":
+            return "lrclib-aligned"
         if language == "unreliable":
             return "none"
         return f"whisperx-{self._config.whisperx_model}"
