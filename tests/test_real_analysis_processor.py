@@ -685,6 +685,7 @@ def test_multilingual_lyrics_romanizes_words_after_alignment(processor_context):
             **config.__dict__,
             "multilingual_lyrics_enabled": True,
             "romanize_lyrics": True,
+            "non_english_needs_reference": False,
         }
     )
     runner = FakePipelineRunner(
@@ -705,7 +706,11 @@ def test_multilingual_lyrics_falls_back_when_language_has_no_alignment_model(
 ):
     config, input_path = processor_context
     config = AnalysisPipelineConfig(
-        **{**config.__dict__, "multilingual_lyrics_enabled": True}
+        **{
+            **config.__dict__,
+            "multilingual_lyrics_enabled": True,
+            "non_english_needs_reference": False,  # test the retry, not the gate
+        }
     )
     runner = MissingAlignmentModelRunner(
         whisperx_words=["මන්දාරම්", "හැන්දෑවේ"],
@@ -740,6 +745,7 @@ def test_romanizing_lyrics_can_be_turned_on(processor_context):
             **config.__dict__,
             "multilingual_lyrics_enabled": True,
             "romanize_lyrics": True,
+            "non_english_needs_reference": False,
         }
     )
     runner = MissingAlignmentModelRunner(
@@ -1161,8 +1167,11 @@ def test_an_alignment_model_missing_offline_falls_back_instead_of_failing(
         message = NYNORSK_ERROR
 
     runner = NynorskRunner(whisperx_words=["hello", "there"], whisperx_language="nn")
+    config = AnalysisPipelineConfig(
+        **{**_multilingual(config).__dict__, "non_english_needs_reference": False}
+    )
 
-    timeline = RealAnalysisProcessor(_multilingual(config), runner).process(input_path)
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
 
     lyrics_calls = [c for c in runner.calls if runner._stage(c.argv) == "lyrics"]
     assert len(lyrics_calls) == 2
@@ -1527,29 +1536,83 @@ BAD_SINHALA_WORDS = (
 GOOD_HINDI_WORDS = [f"shabd{i}" for i in range(40)]
 
 
-def test_an_unusable_non_english_transcript_is_published_as_chords_only(
+def test_a_non_english_song_with_no_reference_is_published_as_chords_only(
+    processor_context, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    # Even a clean-looking Hindi transcript is not trusted without a reference.
+    runner = FakePipelineRunner(whisperx_words=GOOD_HINDI_WORDS, whisperx_language="hi")
+
+    outcome = RealAnalysisProcessor(
+        _reference_config(config, lrclib_reference_enabled=False), runner
+    ).analyze(input_path)
+
+    assert runner.fusion_whisperx_payload["segments"] == []
+    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
+    assert fuse.argv[fuse.argv.index("--lyric-source") + 1] == "none"
+    assert (
+        "lyrics dropped as unreliable (non-English song (detected hi) with no "
+        "lyrics reference" in caplog.text
+    )
+    assert outcome.timeline is not None  # the chords are still published
+
+
+def test_a_non_english_song_with_untimed_reference_lyrics_is_chords_only(
+    processor_context, monkeypatch
+):
+    config, input_path = processor_context
+    _patch_reference(monkeypatch, plain="\n".join(SINHALA_LINES), synced=None)
+    runner = FakePipelineRunner(whisperx_words=GOOD_HINDI_WORDS, whisperx_language="si")
+
+    RealAnalysisProcessor(_reference_config(config), runner).analyze(input_path)
+
+    assert runner.fusion_whisperx_payload["segments"] == []
+
+
+def test_an_english_song_labelled_as_another_language_is_kept(processor_context):
+    config, input_path = processor_context
+    runner = FakePipelineRunner(
+        whisperx_words=ENGLISH_LYRICS.split(), whisperx_language="nn"
+    )
+
+    RealAnalysisProcessor(
+        _reference_config(config, lrclib_reference_enabled=False), runner
+    ).analyze(input_path)
+
+    assert runner.fusion_whisperx_payload["segments"] != []
+
+
+def test_non_english_transcripts_are_kept_when_the_rule_is_off(processor_context):
+    config, input_path = processor_context
+    runner = FakePipelineRunner(whisperx_words=GOOD_HINDI_WORDS, whisperx_language="hi")
+
+    RealAnalysisProcessor(
+        _reference_config(
+            config, lrclib_reference_enabled=False, non_english_needs_reference=False
+        ),
+        runner,
+    ).analyze(input_path)
+
+    assert len(runner.fusion_whisperx_payload["segments"]) == 1
+
+
+def test_a_mixed_script_transcript_is_dropped_even_when_the_rule_is_off(
     processor_context, caplog
 ):
     caplog.set_level(logging.INFO)
     config, input_path = processor_context
     runner = FakePipelineRunner(whisperx_words=BAD_SINHALA_WORDS, whisperx_language="hi")
 
-    outcome = RealAnalysisProcessor(_reference_config(config, lrclib_reference_enabled=False), runner).analyze(input_path)
+    RealAnalysisProcessor(
+        _reference_config(
+            config, lrclib_reference_enabled=False, non_english_needs_reference=False
+        ),
+        runner,
+    ).analyze(input_path)
 
     assert runner.fusion_whisperx_payload["segments"] == []
-    fuse = next(c for c in runner.calls if runner._stage(c.argv) == "fuse")
-    assert fuse.argv[fuse.argv.index("--lyric-source") + 1] == "none"
     assert "lyrics dropped as unreliable (mixed scripts" in caplog.text
-    assert outcome.timeline is not None  # the chords are still published
-
-
-def test_a_usable_non_english_transcript_is_kept(processor_context):
-    config, input_path = processor_context
-    runner = FakePipelineRunner(whisperx_words=GOOD_HINDI_WORDS, whisperx_language="hi")
-
-    RealAnalysisProcessor(_reference_config(config, lrclib_reference_enabled=False), runner).analyze(input_path)
-
-    assert len(runner.fusion_whisperx_payload["segments"]) == 1
 
 
 def test_english_transcripts_are_never_dropped(processor_context):

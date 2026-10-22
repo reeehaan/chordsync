@@ -81,3 +81,37 @@ def low_confidence_reason(transcript: dict[str, Any]) -> str | None:
     if mean < MINIMUM_MEAN_WORD_SCORE:
         return f"speech recognition was unsure (mean word score {mean:.2f})"
     return None
+
+
+def non_english_without_timed_lyrics_reason(
+    transcript: dict[str, Any],
+    *,
+    reference_plain_lyrics: str | None,
+) -> str | None:
+    """Why a non-English song gets no lyrics, or None when it may keep the transcript.
+
+    Speech recognition cannot be trusted on a song that is not in English: it
+    labels Sinhala as Hindi or Korean and writes invented words. For those songs
+    the lyrics come only from the reference with timed lines, and this runs after
+    that was tried, so any transcript still here has no timed reference behind it.
+    English songs are left to the vocabulary and agreement checks.
+    """
+    from analysis.lyrics.language_hint import looks_english
+
+    language = str(transcript.get("language", "")).casefold()
+    if language in {"synced", "unreliable"}:
+        return None
+    if reference_plain_lyrics is not None:
+        if language == "en" or looks_english(reference_plain_lyrics):
+            return None
+        return "non-English song and the reference has no timed lyrics"
+    if language == "en":
+        return None
+    text = " ".join(
+        str(segment.get("text", ""))
+        for segment in transcript.get("segments", [])
+        if isinstance(segment, dict)
+    )
+    if looks_english(text):
+        return None  # an English song the recogniser labelled as another language
+    return f"non-English song (detected {language or 'unknown'}) with no lyrics reference"

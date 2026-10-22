@@ -38,6 +38,7 @@ from analysis.lyrics.lyrics_decision import (
     decide_with_reference,
     low_confidence_reason,
     mean_word_score,
+    non_english_without_timed_lyrics_reason,
 )
 from analysis.lyrics.lyric_quality import (
     english_vocabulary_reason,
@@ -177,6 +178,10 @@ class AnalysisPipelineConfig:
     # Build non-English lyrics from the provider's time-synced lines when it has
     # them, instead of transcribing (Whisper is unreliable for e.g. Sinhala).
     synced_lyrics_enabled: bool = True
+    # A song that is not in English gets lyrics only from a timed reference
+    # (LRCLIB); with none, it is published as chords only. Speech recognition is
+    # not trusted on other languages. Turn off to keep such transcripts.
+    non_english_needs_reference: bool = True
     # Align synced lyrics word by word to the vocals (MMS), instead of spreading
     # each line's words evenly. Falls back to the even split on any failure.
     mms_alignment_enabled: bool = True
@@ -239,6 +244,9 @@ class AnalysisPipelineConfig:
             ),
             synced_lyrics_enabled=_enabled_by_default(
                 "CHORDSYNC_SYNCED_LYRICS_ENABLED"
+            ),
+            non_english_needs_reference=_enabled_by_default(
+                "CHORDSYNC_NON_ENGLISH_NEEDS_REFERENCE"
             ),
             mms_alignment_enabled=_enabled_by_default(
                 "CHORDSYNC_MMS_ALIGNMENT_ENABLED"
@@ -984,11 +992,23 @@ class RealAnalysisProcessor:
             transcript = json.loads(whisperx_path.read_text(encoding="utf-8"))
             if transcript.get("language") == "synced":
                 return
+            # A non-English song gets lyrics only from a timed reference.
             reason = (
-                unreliable_reason(transcript)
-                if whisperx_needs_romanization(transcript)
-                else english_vocabulary_reason(transcript)
+                non_english_without_timed_lyrics_reason(
+                    transcript,
+                    reference_plain_lyrics=getattr(reference, "plain_lyrics", None)
+                    if reference is not None
+                    else None,
+                )
+                if self._config.non_english_needs_reference
+                else None
             )
+            if reason is None:
+                reason = (
+                    unreliable_reason(transcript)
+                    if whisperx_needs_romanization(transcript)
+                    else english_vocabulary_reason(transcript)
+                )
             mean_score, scored_words = mean_word_score(transcript)
             logger.info(
                 "[job %s] transcript confidence: mean_word_score=%s scored_words=%d "
