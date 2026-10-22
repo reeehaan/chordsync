@@ -64,7 +64,7 @@ void main() {
             .widget<Text>(find.byKey(const ValueKey('currentChordValue')))
             .style
             ?.fontWeight,
-        FontWeight.w800,
+        FontWeight.w600, // not raised until playback starts
       );
       final scrollable = find.descendant(
         of: find.byKey(const ValueKey('lyricScrollView')),
@@ -181,9 +181,10 @@ void main() {
 
     expect(playerFile, same(audioFile));
     expect(find.text('Selected local audio'), findsOneWidget);
-    expect(find.text('No lyrics detected'), findsOneWidget);
-    expect(find.byKey(const ValueKey('noChordFallback')), findsOneWidget);
-    expect(_text(tester, 'currentChordValue'), 'N');
+    expect(find.text('Unable to provide lyrics for this song'), findsOneWidget);
+    // Before playing the row lists the song's chords: no rest card.
+    expect(find.byKey(const ValueKey('noChordFallback')), findsNothing);
+    expect(find.text('Rest'), findsNothing);
     expect(find.byKey(const ValueKey('lyricValue')), findsNothing);
 
     tester.widget<Slider>(find.byType(Slider)).onChanged!(2);

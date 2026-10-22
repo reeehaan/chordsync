@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/chord_transposition.dart';
 import '../data/shared_timeline.dart';
+import 'chord_diagram.dart';
 import 'practice_stage_colors.dart';
 
 /// Lets the player pick a capo fret. Resolves to the chosen fret, or null when
@@ -76,7 +77,24 @@ Future<int?> showCapoSettingsSheet(
                     ),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Shapes: ${chords.join('  ·  ')}'),
+                      child: Text(
+                        'Chords:',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(color: PracticeStageColors.textPrimary),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 128,
+                      child: ListView.separated(
+                        key: const ValueKey('capoShapeDiagrams'),
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: chords.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
+                        itemBuilder: (context, index) =>
+                            _CapoShape(chord: chords[index]),
+                      ),
                     ),
                     const SizedBox(height: 18),
                     SizedBox(
@@ -95,4 +113,40 @@ Future<int?> showCapoSettingsSheet(
       },
     ),
   );
+}
+
+/// One chord shape in the capo sheet: the diagram above the shape's name.
+class _CapoShape extends StatelessWidget {
+  const _CapoShape({required this.chord});
+
+  final String chord;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 92,
+      child: Column(
+        children: [
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: ChordDiagram(
+                chord: chord,
+                foregroundColor: PracticeStageColors.textPrimary,
+                accentColor: PracticeStageColors.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            chord,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: PracticeStageColors.amberBright,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

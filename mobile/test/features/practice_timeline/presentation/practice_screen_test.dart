@@ -110,7 +110,7 @@ void main() {
 
       expect(find.byKey(const ValueKey('chordFocus')), findsOneWidget);
       expect(find.text('Practice sheet'), findsOneWidget);
-      expect(find.byKey(const ValueKey('noChordFallback')), findsOneWidget);
+      expect(find.byKey(const ValueKey('noChordFallback')), findsNothing);
       expect(find.byKey(const ValueKey('lyricsSection')), findsOneWidget);
       expect(find.byKey(const ValueKey('rhythmSection')), findsNothing);
       expect(find.byKey(const ValueKey('progressionSection')), findsNothing);
@@ -125,15 +125,14 @@ void main() {
       final nextChord = tester.widget<Text>(
         find.byKey(const ValueKey('nextChordValue')),
       );
-      expect(
-        currentChord.style!.fontSize!,
-        greaterThan(nextChord.style!.fontSize!),
-      );
-      expect(currentChord.style?.fontWeight, FontWeight.w800);
+      // Before playing no chord is raised: the song's shapes all look alike.
+      expect(currentChord.style!.fontSize!, nextChord.style!.fontSize!);
+      expect(currentChord.style?.fontWeight, FontWeight.w600);
 
+      // Before playing the row opens on the song's own first two chords.
       expectState(
-        chord: 'N',
-        nextChord: 'C',
+        chord: 'C',
+        nextChord: 'G',
         bar: '—',
         beat: '— / 4',
         downbeat: 'No',
@@ -474,9 +473,10 @@ void main() {
       expect(find.text('Playing'), findsOneWidget);
       expect(player.speed, 0.5);
       expectBarNavigation(tester, previousEnabled: false, nextEnabled: true);
+      // Back at 0.0 s the row lists the song's chords again.
       expectState(
-        chord: 'N',
-        nextChord: 'C',
+        chord: 'C',
+        nextChord: 'G',
         bar: '—',
         beat: '— / 4',
         downbeat: 'No',

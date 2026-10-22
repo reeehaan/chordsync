@@ -15,7 +15,7 @@ void main() {
   testWidgets('barre chords with no open shape render a diagram', (
     tester,
   ) async {
-    for (final chord in ['F#', 'G#', 'A#', 'Bm', 'C#', 'D#m']) {
+    for (final chord in ['F#', 'G#', 'A#', 'Bm', 'C#', 'D#m', 'Gm']) {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(body: ChordDiagram(chord: chord)),
@@ -44,7 +44,8 @@ void main() {
         home: Scaffold(body: ChordDiagram(chord: 'N')),
       ),
     );
-    expect(find.text('Rest / No chord'), findsOneWidget);
+    // A rest has no shape: nothing is drawn, but it is still announced.
+    expect(find.byKey(const ValueKey('noChordFallback')), findsOneWidget);
     expect(find.byKey(const ValueKey('chordDiagram')), findsNothing);
   });
 }

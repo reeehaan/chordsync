@@ -33,6 +33,7 @@ class ChordDiagram extends StatelessWidget {
     'Fm': _ChordVoicing([1, 3, 3, 1, 1, 1], baseFret: 1),
     'F#': _ChordVoicing([2, 4, 4, 3, 2, 2], baseFret: 2),
     'F#m': _ChordVoicing([2, 4, 4, 2, 2, 2], baseFret: 2),
+    'Gm': _ChordVoicing([3, 5, 5, 3, 3, 3], baseFret: 3),
     'G#': _ChordVoicing([4, 6, 6, 5, 4, 4], baseFret: 4),
     'G#m': _ChordVoicing([4, 6, 6, 4, 4, 4], baseFret: 4),
     // Movable A-shape barre (root on the A string, low E muted).
@@ -53,7 +54,7 @@ class ChordDiagram extends StatelessWidget {
     if (chord == 'N') {
       return Semantics(
         label: 'Rest, no chord',
-        child: const Text('Rest / No chord', key: ValueKey('noChordFallback')),
+        child: const SizedBox(key: ValueKey('noChordFallback')),
       );
     }
     if (voicing == null) {

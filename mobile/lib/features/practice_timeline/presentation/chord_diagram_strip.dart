@@ -27,8 +27,8 @@ class ChordDiagramStrip extends StatefulWidget {
   final double? chordStart;
   final bool showAllChords;
 
-  static const compactHeight = 196.0;
-  static const expandedHeight = 254.0;
+  static const compactHeight = 150.0;
+  static const expandedHeight = 176.0;
 
   @override
   State<ChordDiagramStrip> createState() => _ChordDiagramStripState();
@@ -36,6 +36,9 @@ class ChordDiagramStrip extends StatefulWidget {
 
 class _ChordDiagramStripState extends State<ChordDiagramStrip> {
   final ScrollController _scrollController = ScrollController();
+  // The song-wide row shown before playing has its own scroll position, so
+  // the two rows can cross-fade without sharing one controller.
+  final ScrollController _songScrollController = ScrollController();
   bool _isExpanded = false;
 
   @override
@@ -48,14 +51,17 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
   void didUpdateWidget(covariant ChordDiagramStrip oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentChord != widget.currentChord ||
-        oldWidget.chordStart != widget.chordStart) {
+        oldWidget.chordStart != widget.chordStart ||
+        oldWidget.showAllChords != widget.showAllChords) {
       _scheduleCenterActive();
     }
   }
 
   void _scheduleCenterActive() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
+      if (!mounted || widget.showAllChords || !_scrollController.hasClients) {
+        return;
+      }
       final position = _scrollController.position;
       final entries = _entries();
       final activeIndex = entries.indexWhere((entry) => entry.isCurrent);
@@ -110,19 +116,27 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
         ),
     ];
     if (!widget.showAllChords) return entries;
+    return _songEntries();
+  }
 
-    final seen = <String>{widget.currentChord};
+  /// Every chord of the song once, in the order it first plays, so the player
+  /// can see all the shapes before pressing play. No chord is raised: that
+  /// only begins once playback does.
+  List<_StripEntry> _songEntries() {
+    final seen = <String>{};
     final songChords = widget.progression
         .where((chord) => chord != 'N' && seen.add(chord))
         .toList(growable: false);
     return [
-      entries.firstWhere((entry) => entry.isCurrent),
       for (var index = 0; index < songChords.length; index++)
         _StripEntry(
           chord: songChords[index],
-          valueKey: index == 0
-              ? const ValueKey('nextChordValue')
-              : ValueKey('songChordValue${songChords[index]}'),
+          valueKey: switch (index) {
+            0 => const ValueKey('currentChordValue'),
+            1 => const ValueKey('nextChordValue'),
+            _ => ValueKey('songChordValue${songChords[index]}'),
+          },
+          isStatic: true,
         ),
     ];
   }
@@ -130,6 +144,7 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _songScrollController.dispose();
     super.dispose();
   }
 
@@ -151,30 +166,51 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
             // Every card is built, never lazily: the strip holds at most a
             // handful and the neighbouring shapes must stay readable even
             // while the active one is being centred.
-            SingleChildScrollView(
-              key: const ValueKey('chordDiagramStrip'),
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var index = 0; index < entries.length; index++) ...[
-                    if (index > 0) SizedBox(width: _cardGap),
-                    _ChordCard(
-                      key: entries[index].slotKey,
-                      entry: entries[index],
-                      width: _cardWidth,
-                      chordProgress: entries[index].isCurrent
-                          ? widget.chordProgress
-                          : null,
-                      chordStart: entries[index].isCurrent
-                          ? widget.chordStart
-                          : null,
-                    ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 420),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: SingleChildScrollView(
+                key: ValueKey(
+                  widget.showAllChords
+                      ? 'songChordDiagramStrip'
+                      : 'playingChordDiagramStrip',
+                ),
+                controller: widget.showAllChords
+                    ? _songScrollController
+                    : _scrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var index = 0; index < entries.length; index++) ...[
+                      if (index > 0) SizedBox(width: _cardGap),
+                      _ChordCard(
+                        key: entries[index].slotKey,
+                        entry: entries[index],
+                        width: _cardWidth,
+                        chordProgress: entries[index].isCurrent
+                            ? widget.chordProgress
+                            : null,
+                        chordStart: entries[index].isCurrent
+                            ? widget.chordStart
+                            : null,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             Positioned(
@@ -202,6 +238,7 @@ class _StripEntry {
     this.slotKey,
     this.isCurrent = false,
     this.isPlaceholder = false,
+    this.isStatic = false,
   });
 
   final String chord;
@@ -209,6 +246,9 @@ class _StripEntry {
   final Key? slotKey;
   final bool isCurrent;
   final bool isPlaceholder;
+
+  /// Part of the song-wide row shown before playing: all cards look alike.
+  final bool isStatic;
 }
 
 class _ChordCard extends StatelessWidget {
@@ -229,7 +269,7 @@ class _ChordCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final isCurrent = entry.isCurrent;
-    final foreground = isCurrent
+    final foreground = isCurrent || entry.isStatic
         ? PracticeStageColors.textPrimary
         : PracticeStageColors.textSecondary;
 
@@ -237,7 +277,7 @@ class _ChordCard extends StatelessWidget {
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
       width: entry.isPlaceholder ? width * 0.6 : width,
-      padding: const EdgeInsets.fromLTRB(6, 10, 6, 8),
+      padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
       decoration: BoxDecoration(
         color: isCurrent
             ? PracticeStageColors.surfaceRaised
@@ -252,7 +292,7 @@ class _ChordCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            entry.chord,
+            chordDisplayName(entry.chord),
             key: entry.valueKey,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -263,12 +303,14 @@ class _ChordCard extends StatelessWidget {
                     height: 1.1,
                   )
                 : textTheme.titleMedium?.copyWith(
-                    color: PracticeStageColors.textSecondary,
+                    color: entry.isStatic
+                        ? PracticeStageColors.textPrimary
+                        : PracticeStageColors.textSecondary,
                     fontWeight: FontWeight.w600,
                     height: 1.1,
                   ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Expanded(
             child: Center(
               child: entry.isPlaceholder
@@ -284,7 +326,7 @@ class _ChordCard extends StatelessWidget {
             ),
           ),
           if (isCurrent) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             _ChordProgressBar(
               key: const ValueKey('chordProgressBar'),
               progress: chordProgress,
@@ -364,3 +406,6 @@ class _StripIconButton extends StatelessWidget {
     );
   }
 }
+
+/// What the player reads for a chord label: "N" (no chord) is a rest.
+String chordDisplayName(String chord) => chord == 'N' ? 'Rest' : chord;
