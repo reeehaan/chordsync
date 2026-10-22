@@ -1558,6 +1558,24 @@ def test_a_non_english_song_with_no_reference_is_published_as_chords_only(
     assert outcome.timeline is not None  # the chords are still published
 
 
+def test_hangul_text_with_no_reference_is_dropped_even_if_labelled_english(
+    processor_context, caplog
+):
+    caplog.set_level(logging.INFO)
+    config, input_path = processor_context
+    runner = FakePipelineRunner(
+        whisperx_words=["안녕하세요", "사랑해요"] * 20, whisperx_language="en"
+    )
+
+    RealAnalysisProcessor(
+        _reference_config(config, lrclib_reference_enabled=False), runner
+    ).analyze(input_path)
+
+    assert runner.fusion_whisperx_payload["segments"] == []
+    assert "written in Hangul, labelled en" in caplog.text
+    assert "transcript confidence: language=en" in caplog.text
+
+
 def test_a_non_english_song_with_untimed_reference_lyrics_is_chords_only(
     processor_context, monkeypatch
 ):

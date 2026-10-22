@@ -1011,9 +1011,10 @@ class RealAnalysisProcessor:
                 )
             mean_score, scored_words = mean_word_score(transcript)
             logger.info(
-                "[job %s] transcript confidence: mean_word_score=%s scored_words=%d "
-                "reference=%s",
+                "[job %s] transcript confidence: language=%s mean_word_score=%s "
+                "scored_words=%d reference=%s",
                 job_id,
+                transcript.get("language"),
                 "n/a" if mean_score is None else f"{mean_score:.3f}",
                 scored_words,
                 "yes" if reference is not None else "no",

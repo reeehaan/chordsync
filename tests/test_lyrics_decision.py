@@ -75,3 +75,19 @@ def test_english_songs_and_reference_built_lyrics_are_left_alone():
     assert non_english_without_timed_lyrics_reason(
         {"language": "en", "segments": []}, reference_plain_lyrics="short"
     ) is None
+
+
+def test_text_in_another_script_is_not_english_whatever_it_was_labelled():
+    from analysis.lyrics.lyrics_decision import non_english_without_timed_lyrics_reason
+
+    hangul = [{"text": "안녕하세요 사랑해요 안녕하세요 사랑해요"}]
+    for label in ("en", "ko", ""):
+        reason = non_english_without_timed_lyrics_reason(
+            {"language": label, "segments": hangul}, reference_plain_lyrics=None
+        )
+        assert reason and "Hangul" in reason
+
+    english = [{"text": "I know that you are all that I need and the sky is blue"}]
+    assert non_english_without_timed_lyrics_reason(
+        {"language": "nn", "segments": english * 5}, reference_plain_lyrics=None
+    ) is None

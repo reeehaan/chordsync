@@ -105,13 +105,42 @@ def non_english_without_timed_lyrics_reason(
         if language == "en" or looks_english(reference_plain_lyrics):
             return None
         return "non-English song and the reference has no timed lyrics"
-    if language == "en":
-        return None
     text = " ".join(
         str(segment.get("text", ""))
         for segment in transcript.get("segments", [])
         if isinstance(segment, dict)
     )
-    if looks_english(text):
-        return None  # an English song the recogniser labelled as another language
+    # The words' script says more than the label does: text written in Hangul,
+    # Devanagari or Sinhala letters is not English whatever it was labelled.
+    if _mostly_non_latin(text):
+        return (
+            f"non-English song (written in {_dominant_script(text)}, labelled "
+            f"{language or 'unknown'}) with no lyrics reference"
+        )
+    if language == "en" or looks_english(text):
+        return None  # an English song, or one the recogniser labelled otherwise
     return f"non-English song (detected {language or 'unknown'}) with no lyrics reference"
+
+
+def _letters(text: str) -> list[str]:
+    return [character for character in text if character.isalpha()]
+
+
+def _mostly_non_latin(text: str) -> bool:
+    letters = _letters(text)
+    if len(letters) < 10:
+        return False
+    outside = sum(1 for character in letters if ord(character) > 0x024F)
+    return outside / len(letters) >= 0.5
+
+
+def _dominant_script(text: str) -> str:
+    import collections
+    import unicodedata
+
+    counts = collections.Counter(
+        unicodedata.name(character, "UNKNOWN").split()[0].title()
+        for character in _letters(text)
+        if ord(character) > 0x024F
+    )
+    return counts.most_common(1)[0][0] if counts else "another script"
