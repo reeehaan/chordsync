@@ -23,11 +23,14 @@ def predict(
     audio_path: Path,
     checkpoint_path: Path,
     source_path: Path,
+    *,
+    large_vocabulary: bool = False,
 ) -> Sequence[Mapping[str, object]]:
     predictions, _ = predict_with_diagnostics(
         audio_path,
         checkpoint_path,
         source_path,
+        large_vocabulary=large_vocabulary,
     )
     return predictions
 
@@ -36,7 +39,15 @@ def predict_with_diagnostics(
     audio_path: Path,
     checkpoint_path: Path,
     source_path: Path,
+    *,
+    large_vocabulary: bool = False,
 ) -> tuple[Sequence[Mapping[str, object]], Sequence[Mapping[str, object]]]:
+    """Run BTC. The default model knows 25 chords (12 major, 12 minor, none).
+
+    With [large_vocabulary] the 170-chord checkpoint is expected instead: 12
+    roots times 14 chord types, plus "none" and "unknown". Its labels look like
+    "A:sus4" or "E:min7"; the major triad is just the root, "A".
+    """
     source_text = str(source_path.resolve())
     if source_text not in sys.path:
         sys.path.insert(0, source_text)
@@ -55,8 +66,14 @@ def predict_with_diagnostics(
 
     try:
         config = HParams.load(str(source_path / "run_config.yaml"))
-        config.feature["large_voca"] = False
-        config.model["num_chords"] = 25
+        config.feature["large_voca"] = large_vocabulary
+        config.model["num_chords"] = 170 if large_vocabulary else 25
+        if large_vocabulary:
+            from utils.mir_eval_modules import idx2voca_chord
+
+            vocabulary = idx2voca_chord()
+        else:
+            vocabulary = idx2chord
         device = _select_device(torch)
         load_started = time.perf_counter()
         model = BTC_model(config=config.model).to(device)
@@ -101,13 +118,15 @@ def predict_with_diagnostics(
             frame_labels[:useful_frames], _SMOOTHING_WINDOW_FRAMES
         )
         segmented = _frames_to_segments(
-            smoothed_labels, time_unit, song_length, idx2chord
+            smoothed_labels, time_unit, song_length, vocabulary
         )
         predictions = _stabilize_segments(
             segmented,
             max_interruption_seconds=_MAX_ISOLATED_INTERRUPTION_SECONDS,
         )
         try:
+            if large_vocabulary:
+                raise ValueError("diagnostics are only kept for the 25-chord model")
             labels = tuple(idx2chord[index] for index in range(25))
             diagnostics = [
                 _frame_diagnostic(scores, index * float(time_unit), labels)
@@ -115,10 +134,11 @@ def predict_with_diagnostics(
             ]
         except Exception:
             diagnostics = []
-            print(
-                "BTC uncertainty diagnostics unavailable; preserving chord output",
-                file=sys.stderr,
-            )
+            if not large_vocabulary:
+                print(
+                    "BTC uncertainty diagnostics unavailable; preserving chord output",
+                    file=sys.stderr,
+                )
         inference_seconds = time.perf_counter() - inference_started
     except Exception as error:
         raise BtcInferenceError("BTC inference failed.") from error
