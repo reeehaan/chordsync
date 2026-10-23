@@ -284,6 +284,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   : SongSheetLyrics(
                       timeline: displayTimeline,
                       playbackTime: state.playbackTime,
+                      isPlaying:
+                          synchronizer.status == PracticePlaybackStatus.playing,
+                      speed: synchronizer.speed,
                     ),
             ),
           ),

@@ -9,6 +9,116 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('the line keeps its width as the words are sung', (tester) async {
+    final timeline = _singleSegmentTimeline();
+    // "Sing this line." is one line (0.5 to 3.3 s): emphasis moving along it
+    // must not make it wider or narrower.
+    final widths = <double>[];
+    for (final time in const [0.7, 1.7, 2.7]) {
+      await _pumpLyrics(tester, timeline, time);
+      widths.add(tester.getSize(find.byKey(const ValueKey('lyricRow0'))).width);
+    }
+    expect(widths.toSet(), hasLength(1));
+  });
+
+  testWidgets('the sung word fills in as it plays, other words stay plain', (
+    tester,
+  ) async {
+    final timeline = _singleSegmentTimeline();
+    // Half way through "Sing" (0.5 to 1.3 s).
+    await _pumpLyrics(tester, timeline, 0.9);
+    Finder sweepIn(String cell) => find.descendant(
+      of: find.byKey(ValueKey(cell)),
+      matching: find.byType(ShaderMask),
+    );
+    expect(sweepIn('lyricWordCell0_0'), findsOneWidget);
+    expect(sweepIn('lyricWordCell0_1'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('while playing, the clock moves between position updates', (
+    tester,
+  ) async {
+    final timeline = _singleSegmentTimeline();
+    Future<void> pump(double time) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 280,
+            child: SongSheetLyrics(
+              timeline: timeline,
+              playbackTime: time,
+              isPlaying: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    // The player last said 1.25 s, just before "Sing" ends at 1.3 s.
+    await pump(1.25);
+    Color? colorAt(double start) => tester
+        .widget<AnimatedDefaultTextStyle>(
+          find.byKey(ValueKey('sheetWordStyle$start')),
+        )
+        .style
+        .color;
+    expect(colorAt(0.5), PracticeStageColors.amberBright);
+    // No new position arrives, but frames keep coming: the next word lights
+    // on its own (1.5 s) instead of waiting for the next report, while the
+    // word already sung stays lit and the one after it is still dim.
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(colorAt(0.5), PracticeStageColors.amberBright);
+    expect(colorAt(1.5), PracticeStageColors.amberBright);
+    expect(colorAt(2.5), PracticeStageColors.textSecondary);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a Japanese line lights as a whole, an English line by word', (
+    tester,
+  ) async {
+    await _pumpLyrics(tester, _japaneseLineTimeline(), 1.2);
+    // Playback is inside the first word only, yet the whole line is lit.
+    final sung = [
+      for (final start in const [1.0, 1.5, 2.0])
+        tester
+            .widget<AnimatedDefaultTextStyle>(
+              find.byKey(ValueKey('sheetWordStyle$start')),
+            )
+            .style
+            .color,
+    ];
+    expect(sung.toSet(), {PracticeStageColors.amberBright});
+
+    await _pumpLyrics(tester, _japaneseLineTimeline(), 5);
+    final past = tester.widget<AnimatedDefaultTextStyle>(
+      find.byKey(const ValueKey('sheetWordStyle1.5')),
+    );
+    expect(past.style.color, PracticeStageColors.textFaint);
+
+    await _pumpLyrics(tester, _singleSegmentTimeline(), 0.7);
+    Color? colorAt(double start) => tester
+        .widget<AnimatedDefaultTextStyle>(
+          find.byKey(ValueKey('sheetWordStyle$start')),
+        )
+        .style
+        .color;
+    expect(colorAt(0.5), PracticeStageColors.amberBright);
+    expect(colorAt(1.5), PracticeStageColors.textSecondary);
+  });
+
+  test('only Chinese, Japanese and Korean lines highlight as a whole line', () {
+    expect(LyricScript.isCjk('夜に駆ける'), isTrue);
+    expect(LyricScript.isCjk('사랑해 너를'), isTrue);
+    expect(LyricScript.isCjk('Sing this line.'), isFalse);
+    expect(LyricScript.isCjk('मैं तुझसे'), isFalse);
+    expect(LyricScript.isCjk('我爱你'), isTrue);
+    expect(LyricScript.isCjk('I love you Anna 你'), isFalse);
+    expect(LyricScript.isCjk('夜に駆ける Yoru'), isTrue);
+  });
+
   testWidgets('groups words naturally and keeps inline chords anchored', (
     tester,
   ) async {
@@ -145,7 +255,7 @@ void main() {
       find.byKey(const ValueKey('sheetWordStyle20.5')),
     );
     expect(active.style.color, PracticeStageColors.amberBright);
-    expect(active.duration, const Duration(milliseconds: 180));
+    expect(active.duration, const Duration(milliseconds: 320));
   });
 
   testWidgets('keeps following when the timeline is rebuilt on every frame', (
@@ -398,5 +508,31 @@ SharedTimeline _multiBlockTimeline() {
           ],
         ),
     ],
+  );
+}
+
+SharedTimeline _japaneseLineTimeline() {
+  const words = [
+    LyricWord(start: 1.0, end: 1.4, text: '夢'),
+    LyricWord(start: 1.5, end: 1.9, text: 'ならば'),
+    LyricWord(start: 2.0, end: 2.4, text: 'どれほど'),
+  ];
+  return const SharedTimeline(
+    schemaVersion: 1,
+    bpm: 120,
+    beatsPerBar: 4,
+    beatSource: 'test',
+    lyricSource: 'test',
+    bars: [
+      TimelineBar(
+        barNumber: 1,
+        startTime: 0,
+        endTime: 6,
+        beats: [
+          TimelineEvent(time: 0, beatNumber: 1, isDownbeat: true, chord: 'C'),
+        ],
+      ),
+    ],
+    lyrics: [LyricSegment(start: 1, end: 2.4, text: 'source', words: words)],
   );
 }

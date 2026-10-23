@@ -55,18 +55,37 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // One frame to rebuild, then time for the transitions to finish.
+  Future<void> runFor(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+  }
+
+  // The lyric sweep animates for as long as the song plays, so a playing
+  // screen never settles: let it run for a fixed time instead.
+  Future<void> settle(WidgetTester tester) =>
+      find.byTooltip('Pause').evaluate().isNotEmpty
+      ? runFor(tester)
+      : tester.pumpAndSettle();
+
   Future<void> tapControl(WidgetTester tester, String tooltip) async {
     final control = find.byTooltip(tooltip);
     await tester.ensureVisible(control);
     await tester.tap(control);
-    await tester.pumpAndSettle();
+    // The screen only shows Pause once it rebuilds, so a Play tap is known to
+    // start playback before the tree says so.
+    if (tooltip == 'Play' || tooltip == 'Replay') {
+      await runFor(tester);
+    } else {
+      await settle(tester);
+    }
   }
 
   Future<void> tapTextButton(WidgetTester tester, String label) async {
     final button = find.text(label);
     await tester.ensureVisible(button);
     await tester.tap(button);
-    await tester.pumpAndSettle();
+    await settle(tester);
   }
 
   Future<void> selectSpeed(
@@ -77,9 +96,9 @@ void main() {
     final selector = find.byKey(const ValueKey('speedSelector'));
     await tester.ensureVisible(selector);
     await tester.tap(selector);
-    await tester.pumpAndSettle();
+    await settle(tester);
     await tester.tap(find.text(label).last);
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     final dropdown = tester.widget<DropdownButton<double>>(selector);
     expect(dropdown.value, speed);
@@ -230,7 +249,7 @@ void main() {
         find.byKey(const ValueKey('lyricScrollView')),
         const Offset(0, -100),
       );
-      await tester.pumpAndSettle();
+      await runFor(tester);
       expect(player.isPlaying, isTrue);
       expect(
         tester.getTopLeft(find.byKey(const ValueKey('fixedChordHeader'))),
@@ -242,7 +261,7 @@ void main() {
       );
       expect(find.byKey(const ValueKey('followLyricsButton')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('followLyricsButton')));
-      await tester.pumpAndSettle();
+      await runFor(tester);
       expect(find.byKey(const ValueKey('followLyricsButton')), findsNothing);
       await tapControl(tester, 'Pause');
       final progressFinder = find.descendant(
@@ -260,7 +279,7 @@ void main() {
       final activeSheetWord = tester.widget<AnimatedDefaultTextStyle>(
         find.byKey(const ValueKey('sheetWordStyle1.5')),
       );
-      expect(activeSheetWord.style.fontWeight, FontWeight.w800);
+      expect(activeSheetWord.style.fontWeight, FontWeight.w600);
       await setPosition(tester, 2.5);
       expect(
         tester.widget<LinearProgressIndicator>(progressFinder).value,
@@ -269,7 +288,8 @@ void main() {
       final pastSheetWord = tester.widget<AnimatedDefaultTextStyle>(
         find.byKey(const ValueKey('sheetWordStyle1.5')),
       );
-      expect(activeSheetWord.style.color, isNot(pastSheetWord.style.color));
+      // A sung word stays lit for as long as its line is being sung.
+      expect(activeSheetWord.style.color, pastSheetWord.style.color);
       await setPosition(tester, 3);
       expect(tester.widget<LinearProgressIndicator>(progressFinder).value, 0);
       await setPosition(tester, 2);
@@ -422,7 +442,7 @@ void main() {
       await tapControl(tester, 'Play');
 
       player.emit(const Duration(seconds: 6));
-      await tester.pumpAndSettle();
+      await runFor(tester);
       expect(player.seekCalls.last, const Duration(seconds: 2));
       expect(player.isPlaying, isTrue);
       expectState(
@@ -452,7 +472,7 @@ void main() {
       expect(find.text('Paused'), findsOneWidget);
 
       player.complete();
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('Completed'), findsOneWidget);
       expect(find.byTooltip('Replay'), findsOneWidget);
       expectBarNavigation(tester, previousEnabled: true, nextEnabled: false);
@@ -495,7 +515,7 @@ void main() {
       ]) {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = size;
-        await tester.pumpAndSettle();
+        await settle(tester);
         expect(tester.takeException(), isNull);
         expect(find.byKey(const ValueKey('fixedChordHeader')), findsOneWidget);
         expect(find.byKey(const ValueKey('lyricScrollView')), findsOneWidget);

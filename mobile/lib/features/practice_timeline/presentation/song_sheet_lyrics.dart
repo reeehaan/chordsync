@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../design_system/chordsync_design_system.dart';
 import '../data/shared_timeline.dart';
 import 'chord_chart.dart';
+import 'follow_button.dart';
 import 'lyric_chord_marker_mapper.dart';
 import 'lyric_display_block.dart';
 import 'practice_stage_colors.dart';
@@ -13,10 +16,17 @@ class SongSheetLyrics extends StatefulWidget {
     super.key,
     required this.timeline,
     required this.playbackTime,
+    this.isPlaying = false,
+    this.speed = 1,
   });
 
   final SharedTimeline timeline;
   final double playbackTime;
+
+  /// While playing, the word sweep runs on its own frame clock between the
+  /// player's (coarse) position updates, so it moves smoothly.
+  final bool isPlaying;
+  final double speed;
 
   /// Chord chip lane, reserved on every word so words with and without a
   /// chord still sit on one shared baseline.
@@ -38,22 +48,76 @@ class SongSheetLyrics extends StatefulWidget {
   State<SongSheetLyrics> createState() => _SongSheetLyricsState();
 }
 
-class _SongSheetLyricsState extends State<SongSheetLyrics> {
+class _SongSheetLyricsState extends State<SongSheetLyrics>
+    with SingleTickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   late List<LyricDisplayBlock> _blocks;
   int? _focusedBlockIndex;
   bool _autoFollow = true;
+
+  /// The time the words are drawn at: the player's position, advanced every
+  /// frame while playing.
+  late final ValueNotifier<double> _clock = ValueNotifier(widget.playbackTime);
+  late final Ticker _ticker = createTicker(_onTick);
+  double _anchorTime = 0;
+  Duration _anchorElapsed = Duration.zero;
+  Duration _lastElapsed = Duration.zero;
+
+  /// Largest gap the clock will bridge without a fresh position, so a stalled
+  /// player cannot run the highlight away.
+  static const _maximumExtrapolation = 0.6;
+
+  /// A new position closer than this to the clock is ignored, so small
+  /// jitter in the player's reports does not make the sweep jump.
+  static const _resyncThreshold = 0.25;
 
   @override
   void initState() {
     super.initState();
     _resolveBlocks();
     _scheduleFollow(jump: true);
+    _syncClock();
+  }
+
+  void _onTick(Duration elapsed) {
+    _lastElapsed = elapsed;
+    final advanced =
+        (elapsed - _anchorElapsed).inMicroseconds /
+        Duration.microsecondsPerSecond *
+        widget.speed;
+    _clock.value = _anchorTime + advanced.clamp(0.0, _maximumExtrapolation);
+  }
+
+  void _anchorClock(double time) {
+    _anchorTime = time;
+    _anchorElapsed = _lastElapsed;
+    _clock.value = time;
+  }
+
+  void _syncClock() {
+    if (widget.isPlaying) {
+      _anchorClock(widget.playbackTime);
+      if (!_ticker.isActive) _ticker.start();
+    } else {
+      if (_ticker.isActive) _ticker.stop();
+      _lastElapsed = Duration.zero;
+      _anchorClock(widget.playbackTime);
+    }
   }
 
   @override
   void didUpdateWidget(covariant SongSheetLyrics oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.isPlaying != oldWidget.isPlaying ||
+        widget.speed != oldWidget.speed) {
+      _syncClock();
+    } else if (widget.isPlaying) {
+      if ((widget.playbackTime - _clock.value).abs() > _resyncThreshold) {
+        _anchorClock(widget.playbackTime);
+      }
+    } else {
+      _clock.value = widget.playbackTime;
+    }
     // Compare against the line the sheet last followed *before* regrouping:
     // with a capo set the timeline object changes on every build, and
     // regrouping refreshes the focus, which would hide every change.
@@ -118,6 +182,8 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
 
   @override
   void dispose() {
+    _ticker.dispose();
+    _clock.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -178,7 +244,7 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
                     return _FocusedLyricBlock(
                       key: ValueKey('lyricBlock$index'),
                       block: block,
-                      playbackTime: widget.playbackTime,
+                      clock: _clock,
                       isFocused: index == _focusedBlockIndex,
                     );
                   },
@@ -195,15 +261,9 @@ class _SongSheetLyricsState extends State<SongSheetLyrics> {
           Positioned(
             right: 12,
             bottom: 12,
-            child: FilledButton.tonal(
+            child: FollowButton(
               key: const ValueKey('followLyricsButton'),
               onPressed: _resumeFollow,
-              style: FilledButton.styleFrom(
-                shape: const StadiumBorder(),
-                minimumSize: const Size(0, 38),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-              ),
-              child: const Text('Follow'),
             ),
           ),
       ],
@@ -215,12 +275,12 @@ class _FocusedLyricBlock extends StatelessWidget {
   const _FocusedLyricBlock({
     super.key,
     required this.block,
-    required this.playbackTime,
+    required this.clock,
     required this.isFocused,
   });
 
   final LyricDisplayBlock block;
-  final double playbackTime;
+  final ValueListenable<double> clock;
   final bool isFocused;
 
   @override
@@ -228,33 +288,42 @@ class _FocusedLyricBlock extends StatelessWidget {
     return AnimatedOpacity(
       key: isFocused ? const ValueKey('currentLyricBlock') : null,
       opacity: isFocused ? 1 : 0.42,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        // A lyric line always stays on one row: an over-long line is scaled
-        // down a little rather than wrapping, which is what keeps every row
-        // the same height and the spacing between rows even.
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Row(
-            key: ValueKey('lyricRow${block.index}'),
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (final entry in block.words)
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: _LyricChordWord(
-                    key: ValueKey(
-                      'lyricWordCell${entry.segmentIndex}_${entry.wordIndex}',
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      child: AnimatedScale(
+        scale: isFocused ? 1 : 0.95,
+        alignment: Alignment.centerLeft,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutBack,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          // A lyric line always stays on one row: an over-long line is scaled
+          // down a little rather than wrapping, which is what keeps every row
+          // the same height and the spacing between rows even.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              key: ValueKey('lyricRow${block.index}'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (final entry in block.words)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: _LyricChordWord(
+                      key: ValueKey(
+                        'lyricWordCell${entry.segmentIndex}_${entry.wordIndex}',
+                      ),
+                      entry: entry,
+                      clock: clock,
+                      lineStart: block.start,
+                      lineEnd: block.end,
+                      wholeLine: block.highlightsWholeLine,
                     ),
-                    entry: entry,
-                    playbackTime: playbackTime,
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -271,18 +340,42 @@ class _LyricChordWord extends StatelessWidget {
   const _LyricChordWord({
     super.key,
     required this.entry,
-    required this.playbackTime,
+    required this.clock,
+    required this.lineStart,
+    required this.lineEnd,
+    required this.wholeLine,
   });
 
   final LyricChordWord entry;
-  final double playbackTime;
+  final ValueListenable<double> clock;
+
+  /// The line this word belongs to. The whole line is emphasised while it is
+  /// sung; emphasis never changes the width of a word, so the line does not
+  /// shift sideways as the song moves along it.
+  final double lineStart;
+  final double lineEnd;
+
+  /// Chinese, Japanese and Korean lines light all at once, with no sweep.
+  final bool wholeLine;
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: clock,
+      builder: (context, playbackTime, _) => _buildWord(context, playbackTime),
+    );
+  }
+
+  Widget _buildWord(BuildContext context, double playbackTime) {
     final textTheme = Theme.of(context).textTheme;
     final word = entry.word;
-    final isActive = word.start <= playbackTime && playbackTime < word.end;
-    final isPast = word.end <= playbackTime;
+    final inLine = lineStart <= playbackTime && playbackTime < lineEnd;
+    final isActive =
+        word.start <= playbackTime && playbackTime < word.end && !wholeLine;
+    final lineDone = lineEnd <= playbackTime;
+    // In the line being sung every word that has been sung stays lit, and the
+    // one being sung fills in; before and after the line it is dimmed.
+    final lit = inLine && (wholeLine || word.start <= playbackTime);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -323,29 +416,77 @@ class _LyricChordWord extends StatelessWidget {
             widthFactor: 1,
             child: AnimatedDefaultTextStyle(
               key: ValueKey('sheetWordStyle${word.start}'),
-              duration: const Duration(milliseconds: 180),
+              duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
               style: (textTheme.bodyLarge ?? const TextStyle()).copyWith(
-                color: isActive
+                color: lit
                     ? PracticeStageColors.amberBright
-                    : isPast
+                    : lineDone
                     ? PracticeStageColors.textFaint
                     : PracticeStageColors.textSecondary,
-                fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+                // One weight for every word: emphasising a word by making it
+                // bolder would widen it and push the line sideways.
+                fontWeight: FontWeight.w600,
                 fontSize: 19,
                 height: 1.25,
               ),
-              child: Text(
-                word.text,
-                key: ValueKey('sheetWord${word.start}'),
-                maxLines: 1,
-                softWrap: false,
-                textAlign: TextAlign.center,
+              child: _SweptText(
+                text: word.text,
+                textKey: ValueKey('sheetWord${word.start}'),
+                // Only the word being sung sweeps; a whole-line (Chinese,
+                // Japanese, Korean) word is lit with its line.
+                progress: isActive
+                    ? (playbackTime - word.start) / (word.end - word.start)
+                    : null,
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A word whose colour fills in from left to right as it is sung, the way
+/// Apple Music lights a word. With no [progress] it is plain text.
+class _SweptText extends StatelessWidget {
+  const _SweptText({
+    required this.text,
+    required this.textKey,
+    required this.progress,
+  });
+
+  final String text;
+  final Key textKey;
+  final double? progress;
+
+  /// How much of the word the soft leading edge covers.
+  static const _edge = 0.18;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Text(
+      text,
+      key: textKey,
+      maxLines: 1,
+      softWrap: false,
+      textAlign: TextAlign.center,
+    );
+    final fill = progress;
+    if (fill == null || !fill.isFinite) return label;
+    final filled = fill.clamp(0.0, 1.0);
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) => LinearGradient(
+        colors: const [
+          PracticeStageColors.amberBright,
+          PracticeStageColors.amberBright,
+          PracticeStageColors.textSecondary,
+          PracticeStageColors.textSecondary,
+        ],
+        stops: [0, filled, (filled + _edge).clamp(filled, 1.0), 1],
+      ).createShader(bounds),
+      child: label,
     );
   }
 }

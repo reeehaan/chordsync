@@ -1,13 +1,38 @@
 import 'lyric_chord_marker_mapper.dart';
 
 class LyricDisplayBlock {
-  const LyricDisplayBlock({required this.index, required this.words});
+  LyricDisplayBlock({required this.index, required this.words})
+    : highlightsWholeLine = LyricScript.isCjk(
+        words.map((entry) => entry.word.text).join(),
+      );
 
   final int index;
   final List<LyricChordWord> words;
 
+  /// Chinese, Japanese and Korean lyrics are lit a whole line at a time:
+  /// their words are not separated by spaces, so a single word is too small
+  /// to follow. Every other language is lit word by word.
+  final bool highlightsWholeLine;
+
   double get start => words.first.word.start;
   double get end => words.last.word.end;
+}
+
+abstract final class LyricScript {
+  // Han, kana, half-width kana and Hangul (BMP ranges only).
+  static final _cjk = RegExp(
+    r'[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\u31F0-\u31FF'
+    r'\uFF66-\uFF9F\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]',
+  );
+  static final _letter = RegExp(r'\p{L}', unicode: true);
+
+  /// True when at least half of the letters are Han, kana or Hangul, so a
+  /// name or loanword in an English line does not switch the whole line.
+  static bool isCjk(String text) {
+    final cjk = _cjk.allMatches(text).length;
+    if (cjk == 0) return false;
+    return cjk * 2 >= _letter.allMatches(text).length;
+  }
 }
 
 /// Turns timestamped words into short, phone-readable presentation blocks.
