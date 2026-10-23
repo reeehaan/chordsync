@@ -100,6 +100,18 @@ variable "alert_email" {
   sensitive   = true
 }
 
+variable "chord_extensions_enabled" {
+  description = <<-EOT
+    Show 7, maj7, m7, sus2 and sus4 chords where BTC's large model and the notes
+    in the instrumental audio agree (analysis/chords/extensions.py). Needs model
+    release 2026.10.3 or later. Off by default: with it false, analysis is exactly
+    what it was before. Switch it off again at any time with one apply, no image
+    change needed.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "warm_workers_enabled" {
   description = <<-EOT
     Start a worker as soon as an upload begins and keep it for the next song, so

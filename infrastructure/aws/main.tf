@@ -326,6 +326,9 @@ resource "aws_ecs_task_definition" "worker" {
       # lyrics at LRCLIB from the song's embedded tags. Kept in memory only.
       { name = "CHORDSYNC_LRCLIB_REFERENCE_ENABLED", value = "true" },
       { name = "CHORDSYNC_LRCLIB_USER_AGENT", value = "ChordSync/0.1 (https://github.com/reeehaan/chordsync)" },
+      # Upgrade plain chords to 7/maj7/m7/sus2/sus4 where two checks agree. The
+      # worker fetches BTC's large model on demand when this is true.
+      { name = "CHORDSYNC_CHORD_EXTENSIONS_ENABLED", value = tostring(var.chord_extensions_enabled) },
       # Warm workers: start early and wait for the song, then stay for the next
       # one. Both 0 is the original one-song-then-exit behaviour.
       { name = "CHORDSYNC_WORKER_INITIAL_WAIT_SECONDS", value = tostring(var.warm_workers_enabled ? var.worker_initial_wait_seconds : 0) },
