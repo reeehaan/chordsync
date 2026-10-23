@@ -41,7 +41,95 @@ Widget _beatStrip(int beats, double playbackTime) => MaterialApp(
   ),
 );
 
+Widget _step({
+  required String? previous,
+  required String current,
+  required String? next,
+  required List<String> progression,
+  required double start,
+}) => MaterialApp(
+  home: Scaffold(
+    body: ChordDiagramStrip(
+      previousChord: previous,
+      currentChord: current,
+      nextChord: next,
+      progression: progression,
+      chordProgress: 0,
+      chordStart: start,
+    ),
+  ),
+);
+
 void main() {
+  testWidgets('moving to the next chord glides the cards across', (
+    tester,
+  ) async {
+    Widget before() => _step(
+      previous: 'Em',
+      current: 'G',
+      next: 'D',
+      progression: const ['G', 'D', 'C', 'Am'],
+      start: 1,
+    );
+    Widget after() => _step(
+      previous: 'G',
+      current: 'D',
+      next: 'C',
+      progression: const ['D', 'C', 'Am', 'Bm'],
+      start: 2,
+    );
+    double currentX() =>
+        tester.getCenter(find.byKey(const ValueKey('currentChordValue'))).dx;
+
+    await tester.pumpWidget(before());
+    await tester.pumpAndSettle();
+    final beforeX = currentX();
+
+    await tester.pumpWidget(after());
+    await tester.pump();
+    // The old previous card is still there, fading out, and the new current
+    // card starts off to the right of where it ends up.
+    expect(find.byKey(const ValueKey('departingChordValue')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 100));
+    final midX = currentX();
+
+    await tester.pumpAndSettle();
+    final settledX = currentX();
+    expect(find.byKey(const ValueKey('departingChordValue')), findsNothing);
+    expect(midX, greaterThan(settledX));
+    // It lands where the previous current card was.
+    expect(settledX, closeTo(beforeX, 1));
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('currentChordValue'))).data,
+      'D',
+    );
+  });
+
+  testWidgets('a jump to a different chord does not glide', (tester) async {
+    await tester.pumpWidget(
+      _step(
+        previous: 'Em',
+        current: 'G',
+        next: 'D',
+        progression: const ['G', 'D', 'C', 'Am'],
+        start: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Seeking lands on a chord that is not the next one.
+    await tester.pumpWidget(
+      _step(
+        previous: 'C',
+        current: 'Am',
+        next: 'Bm',
+        progression: const ['Am', 'Bm', 'Gm', 'Em'],
+        start: 9,
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('departingChordValue')), findsNothing);
+  });
+
   testWidgets('a chord shows one segment per beat, filled as it plays', (
     tester,
   ) async {

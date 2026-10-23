@@ -45,12 +45,31 @@ class ChordDiagramStrip extends StatefulWidget {
   State<ChordDiagramStrip> createState() => _ChordDiagramStripState();
 }
 
-class _ChordDiagramStripState extends State<ChordDiagramStrip> {
+class _ChordDiagramStripState extends State<ChordDiagramStrip>
+    with SingleTickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   // The song-wide row shown before playing has its own scroll position, so
   // the two rows can cross-fade without sharing one controller.
   final ScrollController _songScrollController = ScrollController();
   bool _isExpanded = false;
+
+  /// Numbers the chords in the order they are played, so a card keeps its
+  /// identity when the strip moves on: the "next" card becomes the current one
+  /// instead of the cards being swapped in place.
+  int _occurrence = 0;
+
+  /// The glide to the next chord, from 0 (just changed) to 1 (settled).
+  late final AnimationController _slide = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 360),
+    value: 1,
+  );
+
+  /// The card that was "previous" before the last step, kept for the length
+  /// of the glide so it fades out instead of vanishing.
+  String? _departingChord;
+
+  static const _glideCurve = Curves.easeOutCubic;
 
   @override
   void initState() {
@@ -64,8 +83,33 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
     if (oldWidget.currentChord != widget.currentChord ||
         oldWidget.chordStart != widget.chordStart ||
         oldWidget.showAllChords != widget.showAllChords) {
+      _trackChordChange(oldWidget);
       _scheduleCenterActive();
     }
+  }
+
+  /// Moves on one chord: the cards glide one place to the left. Any other
+  /// change (a seek, a restart) gives every card a fresh identity instead.
+  void _trackChordChange(ChordDiagramStrip old) {
+    if (widget.showAllChords || old.showAllChords) return;
+    final stepsForward =
+        old.nextChord != null &&
+        widget.currentChord == old.nextChord &&
+        widget.previousChord == old.currentChord;
+    if (!stepsForward) {
+      _occurrence += 8;
+      _departingChord = null;
+      _slide.value = 1;
+      return;
+    }
+    _occurrence++;
+    // With no card before the old current one there is nothing to slide past;
+    // the scroll view's own centring handles that first step.
+    if (old.previousChord == null) return;
+    _departingChord = old.previousChord;
+    _slide.forward(from: 0).whenComplete(() {
+      if (mounted) setState(() => _departingChord = null);
+    });
   }
 
   void _scheduleCenterActive() {
@@ -106,24 +150,27 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
         _StripEntry(
           chord: previous,
           valueKey: const ValueKey('previousChordValue'),
+          slot: -1,
         ),
       _StripEntry(
         chord: widget.currentChord,
         valueKey: const ValueKey('currentChordValue'),
         isCurrent: true,
+        slot: 0,
       ),
       // The next slot always stays on screen; at the end of the song it
       // shows a dash rather than disappearing.
       _StripEntry(
         chord: following.isNotEmpty ? following[0] : '—',
         valueKey: const ValueKey('nextChordValue'),
-        slotKey: const ValueKey('nextChordPreview'),
         isPlaceholder: following.isEmpty,
+        slot: 1,
       ),
       if (following.length > 1)
         _StripEntry(
           chord: following[1],
           valueKey: const ValueKey('upcomingChordValue4'),
+          slot: 2,
         ),
     ];
     if (!widget.showAllChords) return entries;
@@ -154,9 +201,54 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
 
   @override
   void dispose() {
+    _slide.dispose();
     _scrollController.dispose();
     _songScrollController.dispose();
     super.dispose();
+  }
+
+  /// A card with the gap that follows it. Playing cards are keyed by which
+  /// chord they are in the song, so each keeps its state (and animates)
+  /// while its place in the row changes.
+  Widget _slotCard(_StripEntry entry) {
+    final slot = entry.slot;
+    final key = slot == null
+        ? ValueKey('songCard${entry.chord}')
+        : ValueKey('chordCard${_occurrence + slot}');
+    return Padding(
+      key: key,
+      padding: EdgeInsets.only(right: _cardGap),
+      child: _ChordCard(
+        entry: entry,
+        width: _cardWidth,
+        chordProgress: entry.isCurrent ? widget.chordProgress : null,
+        chordStart: entry.isCurrent ? widget.chordStart : null,
+        chordBeats: entry.isCurrent ? widget.chordBeats : const [],
+        playbackTime: widget.playbackTime,
+      ),
+    );
+  }
+
+  /// The old previous card, fading out as the row glides past it.
+  Widget _departingCard(String chord) {
+    return Padding(
+      key: ValueKey('chordCard${_occurrence - 2}'),
+      padding: EdgeInsets.only(right: _cardGap),
+      child: Opacity(
+        opacity: 1 - _glideCurve.transform(_slide.value),
+        child: _ChordCard(
+          entry: _StripEntry(
+            chord: chord,
+            valueKey: const ValueKey('departingChordValue'),
+          ),
+          width: _cardWidth,
+          chordProgress: null,
+          chordStart: null,
+          chordBeats: const [],
+          playbackTime: widget.playbackTime,
+        ),
+      ),
+    );
   }
 
   @override
@@ -203,28 +295,29 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var index = 0; index < entries.length; index++) ...[
-                      if (index > 0) SizedBox(width: _cardGap),
-                      _ChordCard(
-                        key: entries[index].slotKey,
-                        entry: entries[index],
-                        width: _cardWidth,
-                        chordProgress: entries[index].isCurrent
-                            ? widget.chordProgress
-                            : null,
-                        chordStart: entries[index].isCurrent
-                            ? widget.chordStart
-                            : null,
-                        chordBeats: entries[index].isCurrent
-                            ? widget.chordBeats
-                            : const [],
-                        playbackTime: widget.playbackTime,
-                      ),
+                child: AnimatedBuilder(
+                  animation: _slide,
+                  builder: (context, child) {
+                    // While gliding, the row starts where it was one card to
+                    // the right and settles into place, taking the old
+                    // previous card with it off the left edge.
+                    final glide = _glideCurve.transform(_slide.value);
+                    final shift = _departingChord == null
+                        ? 0.0
+                        : -(_cardWidth + _cardGap) * glide;
+                    return Transform.translate(
+                      offset: Offset(shift, 0),
+                      child: child,
+                    );
+                  },
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_departingChord case final departing?)
+                        _departingCard(departing),
+                      for (final entry in entries) _slotCard(entry),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -250,7 +343,7 @@ class _StripEntry {
   const _StripEntry({
     required this.chord,
     required this.valueKey,
-    this.slotKey,
+    this.slot,
     this.isCurrent = false,
     this.isPlaceholder = false,
     this.isStatic = false,
@@ -258,7 +351,10 @@ class _StripEntry {
 
   final String chord;
   final Key valueKey;
-  final Key? slotKey;
+
+  /// Place relative to the current chord (-1 previous, 0 current, 1 next, 2
+  /// after that), or null for the song-wide row shown before playing.
+  final int? slot;
   final bool isCurrent;
   final bool isPlaceholder;
 
@@ -268,7 +364,6 @@ class _StripEntry {
 
 class _ChordCard extends StatelessWidget {
   const _ChordCard({
-    super.key,
     required this.entry,
     required this.width,
     required this.chordProgress,
@@ -310,24 +405,32 @@ class _ChordCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            chordDisplayName(entry.chord),
-            key: entry.valueKey,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: isCurrent
-                ? textTheme.titleLarge?.copyWith(
-                    color: PracticeStageColors.amberBright,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                  )
-                : textTheme.titleMedium?.copyWith(
-                    color: entry.isStatic
-                        ? PracticeStageColors.textPrimary
-                        : PracticeStageColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    height: 1.1,
-                  ),
+          // Size and colour ease between "next" and "now" as the cards move.
+          TweenAnimationBuilder<TextStyle>(
+            tween: TextStyleTween(
+              end: isCurrent
+                  ? textTheme.titleLarge!.copyWith(
+                      color: PracticeStageColors.amberBright,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    )
+                  : textTheme.titleMedium!.copyWith(
+                      color: entry.isStatic
+                          ? PracticeStageColors.textPrimary
+                          : PracticeStageColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      height: 1.1,
+                    ),
+            ),
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            builder: (context, style, _) => Text(
+              chordDisplayName(entry.chord),
+              key: entry.valueKey,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
           ),
           const SizedBox(height: 6),
           Expanded(
@@ -336,10 +439,16 @@ class _ChordCard extends StatelessWidget {
                   ? const SizedBox.shrink()
                   : FittedBox(
                       fit: BoxFit.contain,
-                      child: ChordDiagram(
-                        chord: entry.chord,
-                        foregroundColor: foreground,
-                        accentColor: foreground,
+                      // The shape's colour eases between "next" and "now".
+                      child: TweenAnimationBuilder<Color?>(
+                        tween: ColorTween(end: foreground),
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, color, _) => ChordDiagram(
+                          chord: entry.chord,
+                          foregroundColor: color ?? foreground,
+                          accentColor: color ?? foreground,
+                        ),
                       ),
                     ),
             ),
