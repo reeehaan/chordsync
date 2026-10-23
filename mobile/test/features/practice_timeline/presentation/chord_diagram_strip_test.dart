@@ -63,13 +63,12 @@ void main() {
     expect(fill(0), 1);
     expect(fill(1), closeTo(0.5, 0.001));
     expect(fill(2), 0);
-    // The beat that opens the bar is taller than the others.
-    expect(
-      tester.getSize(find.byKey(const ValueKey('beatSegment0'))).height,
-      greaterThan(
-        tester.getSize(find.byKey(const ValueKey('beatSegment1'))).height,
-      ),
-    );
+    // Every segment is the same height, including the one that opens a bar.
+    final heights = {
+      for (var index = 0; index < 4; index++)
+        tester.getSize(find.byKey(ValueKey('beatSegment$index'))).height,
+    };
+    expect(heights, hasLength(1));
   });
 
   testWidgets('a very long chord keeps the plain progress bar', (tester) async {

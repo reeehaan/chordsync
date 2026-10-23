@@ -368,8 +368,7 @@ class _ChordCard extends StatelessWidget {
 }
 
 /// One segment per beat of the chord, so a player can count the strums: the
-/// beats already played are filled, the one playing fills as it goes, and a
-/// beat that opens a bar is a little taller.
+/// beats already played are filled, and the one playing fills as it goes.
 class _ChordBeatSegments extends StatelessWidget {
   const _ChordBeatSegments({
     super.key,
@@ -384,7 +383,6 @@ class _ChordBeatSegments extends StatelessWidget {
 
   static const _gap = 3.0;
   static const _height = 6.0;
-  static const _downbeatHeight = 9.0;
 
   @override
   Widget build(BuildContext context) {
@@ -393,16 +391,15 @@ class _ChordBeatSegments extends StatelessWidget {
     return Semantics(
       label: 'Beat ${playing + 1} of ${beats.length}',
       child: SizedBox(
-        height: _downbeatHeight,
+        height: _height,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             for (var index = 0; index < beats.length; index++) ...[
               if (index > 0) const SizedBox(width: _gap),
               Expanded(
                 child: _BeatSegment(
                   key: ValueKey('beatSegment$index'),
-                  height: beats[index].isDownbeat ? _downbeatHeight : _height,
+                  height: _height,
                   fill: beats[index].fillAt(playbackTime),
                   resetKey: chordStart,
                 ),
