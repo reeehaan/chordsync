@@ -56,6 +56,32 @@ def run_btc_analysis(
             )
 
 
+def run_chord_extensions(
+    input_path: Path,
+    stem_path: Path,
+    chords_path: Path,
+    large_checkpoint_path: Path,
+    source_path: Path,
+    output_path: Path,
+) -> None:
+    """Upgrade plain chords to 7, maj7, m7, sus2 or sus4 where the large BTC model
+    and the notes in the instrumental audio agree (see analysis.chords.extensions).
+    """
+    from analysis.chords.btc.btc_inference import predict
+    from analysis.chords.extensions import chroma_from_audio, extend_chords
+    from analysis.chords.models import ChordSegment
+
+    chords = [
+        ChordSegment(**item)
+        for item in json.loads(chords_path.read_text(encoding="utf-8"))
+    ]
+    large = predict(
+        input_path, large_checkpoint_path, source_path, large_vocabulary=True
+    )
+    extended = extend_chords(chords, large, chroma_from_audio(stem_path))
+    _write_json(output_path, [chord.model_dump() for chord in extended])
+
+
 def run_chordino_diagnostic_analysis(
     input_path: Path,
     output_path: Path,
@@ -173,6 +199,14 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     btc_parser.add_argument("--source", type=Path, required=True)
     btc_parser.add_argument("--uncertainty-output", type=Path)
 
+    extensions_parser = subparsers.add_parser("chord-extensions")
+    extensions_parser.add_argument("--input", type=Path, required=True)
+    extensions_parser.add_argument("--stem", type=Path, required=True)
+    extensions_parser.add_argument("--chords", type=Path, required=True)
+    extensions_parser.add_argument("--large-checkpoint", type=Path, required=True)
+    extensions_parser.add_argument("--source", type=Path, required=True)
+    extensions_parser.add_argument("--output", type=Path, required=True)
+
     chordino_diagnostic_parser = subparsers.add_parser("chordino-diagnostic")
     chordino_diagnostic_parser.add_argument("--input", type=Path, required=True)
     chordino_diagnostic_parser.add_argument("--output", type=Path, required=True)
@@ -208,6 +242,15 @@ def main(argv: list[str] | None = None) -> None:
             arguments.checkpoint,
             arguments.source,
             arguments.uncertainty_output,
+        )
+    elif arguments.stage == "chord-extensions":
+        run_chord_extensions(
+            arguments.input,
+            arguments.stem,
+            arguments.chords,
+            arguments.large_checkpoint,
+            arguments.source,
+            arguments.output,
         )
     elif arguments.stage == "chordino-diagnostic":
         run_chordino_diagnostic_analysis(

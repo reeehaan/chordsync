@@ -115,3 +115,72 @@ def test_btc_chords_process_exits_nonzero_when_checkpoint_is_missing(tmp_path):
 
     assert result.returncode != 0
     assert not output.exists()
+
+
+def test_chord_extensions_cli_upgrades_chords_and_uses_the_large_model(
+    monkeypatch, tmp_path
+):
+    import numpy as np
+
+    from analysis.chords import extensions
+    from analysis.chords.btc import btc_inference
+
+    audio = tmp_path / "normalized.wav"
+    stem = tmp_path / "no_vocals.wav"
+    chords = tmp_path / "chords.json"
+    large = tmp_path / "btc_model_large_voca.pt"
+    source = tmp_path / "upstream"
+    output = tmp_path / "extended.json"
+    chords.write_text(
+        json.dumps(
+            [
+                {"start": 0.0, "end": 4.0, "raw_label": "E:min",
+                 "normalized_label": "Em", "source": "btc"},
+                {"start": 4.0, "end": 8.0, "raw_label": "C:maj",
+                 "normalized_label": "C", "source": "btc"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    observed = {}
+
+    def fake_predict(audio_path, checkpoint_path, source_path, *, large_vocabulary):
+        observed["call"] = (audio_path, checkpoint_path, source_path, large_vocabulary)
+        return [
+            {"start": 0.0, "end": 4.0, "label": "E:min7"},
+            {"start": 4.0, "end": 8.0, "label": "C"},
+        ]
+
+    def fake_chroma(path):
+        observed["stem"] = path
+        times = np.arange(0.0, 8.0, 0.1)
+        notes = np.full(12, 0.05)
+        notes[[0, 7]] = [1.0, 0.7]
+        notes[3], notes[10] = 0.55, 0.3  # minor third and minor seventh above E
+        return extensions.Chroma(
+            values=np.tile(np.roll(notes, 4)[:, None], (1, len(times))), times=times
+        )
+
+    monkeypatch.setattr(btc_inference, "predict", fake_predict)
+    monkeypatch.setattr(extensions, "chroma_from_audio", fake_chroma)
+
+    pipeline_cli.main(
+        [
+            "chord-extensions",
+            "--input", str(audio),
+            "--stem", str(stem),
+            "--chords", str(chords),
+            "--large-checkpoint", str(large),
+            "--source", str(source),
+            "--output", str(output),
+        ]
+    )
+
+    # The large model runs on the full song, the notes are read from the stem.
+    assert observed["call"] == (audio, large, source, True)
+    assert observed["stem"] == stem
+    written = json.loads(output.read_text(encoding="utf-8"))
+    assert [chord["normalized_label"] for chord in written] == ["Em7", "C"]
+    assert [chord["raw_label"] for chord in written] == ["E:min", "C:maj"]
+    # The plain chords file is not modified in place.
+    assert json.loads(chords.read_text(encoding="utf-8"))[0]["normalized_label"] == "Em"
