@@ -195,6 +195,15 @@ data "aws_iam_policy_document" "api_lambda" {
   }
 
   statement {
+    # The shared library signs short-lived download links for a song's playback
+    # audio. A presigned GET carries this role's authority, so the role needs
+    # read access to the playback prefix and nothing else new.
+    sid       = "SignPlaybackAudioDownloads"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.artifacts.arn}/jobs/*/playback/*"]
+  }
+
+  statement {
     # Lets HeadObject answer 404 for a key that is really absent instead of an
     # ambiguous 403. Bucket-level resource (ListBucket never applies to objects),
     # limited to job source prefixes. UNVERIFIED against real S3: if the HEAD
@@ -235,10 +244,12 @@ data "aws_iam_policy_document" "api_lambda" {
   }
 
   statement {
-    # The repository uses GetItem and conditional PutItem only (no UpdateItem,
-    # no Scan).
+    # The repository uses GetItem and conditional PutItem (no UpdateItem), and
+    # Scan only to list finished songs for the shared library. The table holds
+    # a few hundred jobs at most; use an index on status if it ever grows far
+    # beyond that.
     sid       = "JobState"
-    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Scan"]
     resources = [aws_dynamodb_table.jobs.arn]
   }
 

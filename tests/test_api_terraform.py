@@ -109,19 +109,25 @@ def test_the_api_policy_is_exactly_the_intended_set():
         "s3:ListBucket",
         "ssm:GetParameter",
         "kms:Decrypt",  # only inside the optional customer-managed-key statement
-        "dynamodb:GetItem", "dynamodb:PutItem",
+        # Scan is read-only and only lists finished songs for the shared library.
+        "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Scan",
         "sqs:SendMessage",
         "lambda:InvokeFunction",
         "logs:CreateLogStream", "logs:PutLogEvents",
     }
     for forbidden in (
-        "s3:*", "ecs:", "iam:", "models/", "UpdateItem", "Scan", "lambda:*",
+        "s3:*", "ecs:", "iam:", "models/", "UpdateItem", "lambda:*",
         "ssm:*", "GetParametersByPath", "GetParameters\"", "secretsmanager", "kms:*",
     ):
         assert forbidden not in policy, forbidden
     assert 'resources = ["*"]' not in policy
     # source prefix: the object statement and the ListBucket prefix condition
     assert policy.count("jobs/*/source/*") == 2 and policy.count("jobs/*/results/*") == 1
+    # The shared library signs download links for playback audio, read-only and
+    # only under the playback prefix.
+    assert policy.count("jobs/*/playback/*") == 1
+    playback = _block(policy, 'sid       = "SignPlaybackAudioDownloads"')
+    assert 'actions   = ["s3:GetObject"]' in playback
     assert "resources = [local.dispatcher_arn]" in policy  # only the dispatcher
     assert re.search(
         r'dispatcher_arn = "arn:aws:lambda:\$\{var.aws_region\}:\$\{data.aws_caller_identity.current.account_id\}:function:\$\{local.dispatcher_name\}"',
