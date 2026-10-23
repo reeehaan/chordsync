@@ -1,5 +1,6 @@
 import 'package:chordsync/features/practice_timeline/data/playback_state.dart';
 import 'package:chordsync/features/practice_timeline/presentation/chord_diagram_strip.dart';
+import 'package:chordsync/features/practice_timeline/presentation/practice_stage_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -61,6 +62,67 @@ Widget _step({
 );
 
 void main() {
+  testWidgets('a chord turning current is orange at once, never grey', (
+    tester,
+  ) async {
+    Widget step(String? previous, String current, String next, double start) =>
+        MaterialApp(
+          home: Scaffold(
+            body: ChordDiagramStrip(
+              previousChord: previous,
+              currentChord: current,
+              nextChord: next,
+              progression: const ['G', 'D', 'C', 'Am'],
+              chordProgress: 0,
+              chordStart: start,
+            ),
+          ),
+        );
+    Color? nameColor(String key) =>
+        tester.widget<Text>(find.byKey(ValueKey(key))).style?.color;
+
+    await tester.pumpWidget(step('Em', 'G', 'D', 1));
+    await tester.pumpAndSettle();
+    expect(nameColor('nextChordValue'), PracticeStageColors.textSecondary);
+
+    await tester.pumpWidget(step('G', 'D', 'C', 2));
+    // Frame by frame through the glide, the name that became current has
+    // always been orange: no grey in between.
+    for (var frame = 0; frame < 12; frame++) {
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(
+        nameColor('currentChordValue'),
+        PracticeStageColors.amberBright,
+        reason: 'frame $frame',
+      );
+    }
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('unplayed beat segments are clearly visible', (tester) async {
+    await tester.pumpWidget(_beatStrip(4, 1.5));
+    await tester.pumpAndSettle();
+
+    final track = tester
+        .widgetList<ColoredBox>(
+          find.descendant(
+            of: find.byKey(const ValueKey('beatSegment3')),
+            matching: find.byType(ColoredBox),
+          ),
+        )
+        .map((box) => box.color);
+    expect(track, contains(PracticeStageColors.beatTrack));
+    // Darker than the faint card border, so it shows on the peach card.
+    expect(
+      PracticeStageColors.beatTrack.computeLuminance(),
+      lessThan(PracticeStageColors.border.computeLuminance() - 0.2),
+    );
+    expect(
+      PracticeStageColors.beatTrack.computeLuminance(),
+      greaterThan(PracticeStageColors.amberBright.computeLuminance()),
+    );
+  });
+
   testWidgets('moving to the next chord glides the cards across', (
     tester,
   ) async {

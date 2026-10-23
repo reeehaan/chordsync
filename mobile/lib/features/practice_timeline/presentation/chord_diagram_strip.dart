@@ -405,19 +405,17 @@ class _ChordCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Size and colour ease between "next" and "now" as the cards move.
+          // Size and weight ease between "next" and "now" as the cards move.
+          // The colour does not: fading it would pass through a muddy grey on
+          // the way to orange, so it changes at once.
           TweenAnimationBuilder<TextStyle>(
             tween: TextStyleTween(
               end: isCurrent
                   ? textTheme.titleLarge!.copyWith(
-                      color: PracticeStageColors.amberBright,
                       fontWeight: FontWeight.w800,
                       height: 1.1,
                     )
                   : textTheme.titleMedium!.copyWith(
-                      color: entry.isStatic
-                          ? PracticeStageColors.textPrimary
-                          : PracticeStageColors.textSecondary,
                       fontWeight: FontWeight.w600,
                       height: 1.1,
                     ),
@@ -429,7 +427,13 @@ class _ChordCard extends StatelessWidget {
               key: entry.valueKey,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: style,
+              style: style.copyWith(
+                color: isCurrent
+                    ? PracticeStageColors.amberBright
+                    : entry.isStatic
+                    ? PracticeStageColors.textPrimary
+                    : PracticeStageColors.textSecondary,
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -439,16 +443,10 @@ class _ChordCard extends StatelessWidget {
                   ? const SizedBox.shrink()
                   : FittedBox(
                       fit: BoxFit.contain,
-                      // The shape's colour eases between "next" and "now".
-                      child: TweenAnimationBuilder<Color?>(
-                        tween: ColorTween(end: foreground),
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, color, _) => ChordDiagram(
-                          chord: entry.chord,
-                          foregroundColor: color ?? foreground,
-                          accentColor: color ?? foreground,
-                        ),
+                      child: ChordDiagram(
+                        chord: entry.chord,
+                        foregroundColor: foreground,
+                        accentColor: foreground,
                       ),
                     ),
             ),
@@ -547,7 +545,7 @@ class _BeatSegment extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              const ColoredBox(color: PracticeStageColors.border),
+              const ColoredBox(color: PracticeStageColors.beatTrack),
               Align(
                 alignment: Alignment.centerLeft,
                 child: FractionallySizedBox(
@@ -592,7 +590,7 @@ class _ChordProgressBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: value,
             minHeight: 5,
-            backgroundColor: PracticeStageColors.border,
+            backgroundColor: PracticeStageColors.beatTrack,
             valueColor: const AlwaysStoppedAnimation(
               PracticeStageColors.amberBright,
             ),

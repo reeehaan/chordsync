@@ -14,6 +14,11 @@ abstract final class PracticeStageColors {
   static const textSecondary = ChordSyncColors.textSecondary;
   static const textFaint = ChordSyncColors.chipTextUpcoming;
 
+  /// The not-yet-played beat segments of the chord being played. Darker than
+  /// [border] so they stay visible on the pale-peach card, yet clearly
+  /// different from the burnt-sienna of a played beat.
+  static const beatTrack = Color(0xFF9E8D7C);
+
   /// Accent for labels and icons, and the colour of the word being sung.
   static const amber = ChordSyncColors.brand;
   static const amberBright = ChordSyncColors.brand;
