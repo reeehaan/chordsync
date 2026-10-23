@@ -157,6 +157,9 @@ def test_only_the_hosted_routes_are_exposed():
         "POST /analysis/jobs/{job_id}/cancel",
         "GET /analysis/jobs/{job_id}",
         "GET /analysis/jobs/{job_id}/result",
+        "GET /analysis/library",
+        "GET /analysis/library/{job_id}/result",
+        "GET /analysis/library/{job_id}/audio",
     }
     assert "$default" not in _list(API, "api_routes = [")  # no catch-all route
     assert "audio/upload" not in API  # the legacy multipart route never reaches Lambda

@@ -119,6 +119,10 @@ locals {
     "POST /analysis/jobs/{job_id}/cancel",
     "GET /analysis/jobs/{job_id}",
     "GET /analysis/jobs/{job_id}/result",
+    # The shared library: read-only, on the default throttle.
+    "GET /analysis/library",
+    "GET /analysis/library/{job_id}/result",
+    "GET /analysis/library/{job_id}/audio",
   ]
   api_write_routes = [
     "POST /analysis/jobs",
