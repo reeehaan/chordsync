@@ -33,7 +33,7 @@ void main() {
   testWidgets('unknown chord and N never invent a fingering', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(body: ChordDiagram(chord: 'Cmaj7')),
+        home: Scaffold(body: ChordDiagram(chord: 'Cdim7')),
       ),
     );
     expect(find.byKey(const ValueKey('unknownChordFallback')), findsOneWidget);

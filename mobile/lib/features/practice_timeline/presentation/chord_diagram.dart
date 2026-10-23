@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../design_system/chordsync_design_system.dart';
 
 /// Standard voicings only — open shapes plus canonical movable E-shape and
-/// A-shape barre chords for roots with no open-position fingering. Unknown
-/// labels never receive invented dots.
+/// A-shape barre chords for roots with no open-position fingering. Each root
+/// also has the easiest shape (frets 0 to 9) for the 7, maj7, m7, sus2 and sus4
+/// chords. Unknown labels never receive invented dots.
 class ChordDiagram extends StatelessWidget {
   const ChordDiagram({
     super.key,
@@ -46,7 +47,78 @@ class ChordDiagram extends StatelessWidget {
     'Cm': _ChordVoicing([-1, 3, 5, 5, 4, 3], baseFret: 3),
     'D#': _ChordVoicing([-1, 6, 8, 8, 8, 6], baseFret: 6),
     'D#m': _ChordVoicing([-1, 6, 8, 8, 7, 6], baseFret: 6),
+
+    // Dominant 7th: the easiest shape for each root, in frets 0 to 9.
+    'C7': _ChordVoicing([-1, 3, 2, 3, 1, 0]),
+    'C#7': _ChordVoicing([-1, 4, 6, 4, 6, 4], baseFret: 4),
+    'D7': _ChordVoicing([-1, -1, 0, 2, 1, 2]),
+    'D#7': _ChordVoicing([-1, -1, 1, 3, 2, 3]),
+    'E7': _ChordVoicing([0, 2, 0, 1, 0, 0]),
+    'F7': _ChordVoicing([-1, -1, 3, 5, 4, 5], baseFret: 3),
+    'F#7': _ChordVoicing([-1, -1, 4, 6, 5, 6], baseFret: 4),
+    'G7': _ChordVoicing([3, 2, 0, 0, 0, 1]),
+    'G#7': _ChordVoicing([-1, -1, 6, 8, 7, 8], baseFret: 6),
+    'A7': _ChordVoicing([-1, 0, 2, 0, 2, 0]),
+    'A#7': _ChordVoicing([-1, 1, 3, 1, 3, 1]),
+    'B7': _ChordVoicing([-1, 2, 1, 2, 0, 2]),
+    // Major 7th: the easiest shape for each root, in frets 0 to 9.
+    'Cmaj7': _ChordVoicing([-1, 3, 2, 0, 0, 0]),
+    'C#maj7': _ChordVoicing([-1, 4, 6, 5, 6, 4], baseFret: 4),
+    'Dmaj7': _ChordVoicing([-1, -1, 0, 2, 2, 2]),
+    'D#maj7': _ChordVoicing([-1, -1, 1, 3, 3, 3]),
+    'Emaj7': _ChordVoicing([0, 2, 1, 1, 0, 0]),
+    'Fmaj7': _ChordVoicing([-1, -1, 3, 2, 1, 0]),
+    'F#maj7': _ChordVoicing([-1, -1, 4, 6, 6, 6], baseFret: 4),
+    'Gmaj7': _ChordVoicing([3, 2, 0, 0, 0, 2]),
+    'G#maj7': _ChordVoicing([-1, -1, 6, 8, 8, 8], baseFret: 6),
+    'Amaj7': _ChordVoicing([-1, 0, 2, 1, 2, 0]),
+    'A#maj7': _ChordVoicing([-1, 1, 3, 2, 3, 1]),
+    'Bmaj7': _ChordVoicing([-1, 2, 4, 3, 4, 2], baseFret: 2),
+    // Minor 7th: the easiest shape for each root, in frets 0 to 9.
+    'Cm7': _ChordVoicing([-1, 3, 5, 3, 4, 3], baseFret: 3),
+    'C#m7': _ChordVoicing([-1, 4, 6, 4, 5, 4], baseFret: 4),
+    'Dm7': _ChordVoicing([-1, -1, 0, 2, 1, 1]),
+    'D#m7': _ChordVoicing([-1, -1, 1, 3, 2, 2]),
+    'Em7': _ChordVoicing([0, 2, 0, 0, 0, 0]),
+    'Fm7': _ChordVoicing([1, 3, 1, 1, 1, 1]),
+    'F#m7': _ChordVoicing([2, 4, 2, 2, 2, 2], baseFret: 2),
+    'Gm7': _ChordVoicing([3, 5, 3, 3, 3, 3], baseFret: 3),
+    'G#m7': _ChordVoicing([4, 6, 4, 4, 4, 4], baseFret: 4),
+    'Am7': _ChordVoicing([-1, 0, 2, 0, 1, 0]),
+    'A#m7': _ChordVoicing([-1, 1, 3, 1, 2, 1]),
+    'Bm7': _ChordVoicing([-1, 2, 0, 2, 0, 2]),
+    // Suspended 2nd: the easiest shape for each root, in frets 0 to 9.
+    'Csus2': _ChordVoicing([-1, 3, 5, 5, 3, 3], baseFret: 3),
+    'C#sus2': _ChordVoicing([-1, 4, 6, 6, 4, 4], baseFret: 4),
+    'Dsus2': _ChordVoicing([-1, -1, 0, 2, 3, 0]),
+    'D#sus2': _ChordVoicing([-1, -1, 1, 3, 4, 1]),
+    'Esus2': _ChordVoicing([0, 2, 4, 4, 0, 0]),
+    'Fsus2': _ChordVoicing([-1, -1, 3, 5, 6, 3], baseFret: 3),
+    'F#sus2': _ChordVoicing([-1, -1, 4, 6, 7, 4], baseFret: 4),
+    'Gsus2': _ChordVoicing([3, 0, 0, 0, 3, 3]),
+    'G#sus2': _ChordVoicing([-1, -1, 6, 8, 9, 6], baseFret: 6),
+    'Asus2': _ChordVoicing([-1, 0, 2, 2, 0, 0]),
+    'A#sus2': _ChordVoicing([-1, 1, 3, 3, 1, 1]),
+    'Bsus2': _ChordVoicing([-1, 2, 4, 4, 2, 2], baseFret: 2),
+    // Suspended 4th: the easiest shape for each root, in frets 0 to 9.
+    'Csus4': _ChordVoicing([-1, 3, 3, 0, 1, 1]),
+    'C#sus4': _ChordVoicing([-1, 4, 6, 6, 7, 4], baseFret: 4),
+    'Dsus4': _ChordVoicing([-1, -1, 0, 2, 3, 3]),
+    'D#sus4': _ChordVoicing([-1, -1, 1, 3, 4, 4]),
+    'Esus4': _ChordVoicing([0, 2, 2, 2, 0, 0]),
+    'Fsus4': _ChordVoicing([-1, -1, 3, 5, 6, 6], baseFret: 3),
+    'F#sus4': _ChordVoicing([-1, -1, 4, 6, 7, 7], baseFret: 4),
+    'Gsus4': _ChordVoicing([3, 3, 0, 0, 1, 3]),
+    'G#sus4': _ChordVoicing([-1, -1, 6, 8, 9, 9], baseFret: 6),
+    'Asus4': _ChordVoicing([-1, 0, 2, 2, 3, 0]),
+    'A#sus4': _ChordVoicing([-1, 1, 3, 3, 4, 1]),
+    'Bsus4': _ChordVoicing([-1, 2, 4, 4, 5, 2], baseFret: 2),
   };
+
+  /// The fret numbers of a chord's shape (low E to high e), or null when the
+  /// chord has none. For tests that check every shape against its chord.
+  @visibleForTesting
+  static List<int>? fretsFor(String chord) => _voicings[chord]?.frets;
 
   @override
   Widget build(BuildContext context) {

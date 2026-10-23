@@ -83,7 +83,13 @@ class ChordTransposition {
   }
 
   static int _score(List<String> chords, int fret) {
-    const easy = {'C', 'G', 'D', 'A', 'E', 'Am', 'Em', 'Dm'};
+    const easy = {
+      'C', 'G', 'D', 'A', 'E', 'Am', 'Em', 'Dm',
+      // Extension chords with an open-position shape.
+      'C7', 'D7', 'E7', 'G7', 'A7', 'B7', 'Cmaj7', 'Dmaj7', 'Emaj7', 'Fmaj7',
+      'Gmaj7', 'Amaj7', 'Am7', 'Dm7', 'Em7', 'Bm7', 'Asus2', 'Dsus2', 'Asus4',
+      'Dsus4', 'Esus4',
+    };
     var score = fret; // Prefer the lowest capo when shapes are equally easy.
     for (final chord in chords) {
       final displayed = forCapo(chord, fret);
