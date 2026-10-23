@@ -43,10 +43,14 @@ class LocalAnalyzedSessionLibrary implements AnalyzedSessionLibrary {
       final file = await _indexFile;
       if (!await file.exists()) return const [];
       final decoded = jsonDecode(await file.readAsString()) as List<dynamic>;
+      final documents = await documentsDirectory();
       final sessions = <AnalyzedPracticeSession>[];
       for (final value in decoded) {
         try {
-          final session = _sessionFromJson(value as Map<String, dynamic>);
+          final session = await _sessionFromJson(
+            value as Map<String, dynamic>,
+            documents,
+          );
           if (await session.audioFile.exists()) sessions.add(session);
         } on Object {
           // Preserve valid entries when one old local record is malformed.
@@ -71,18 +75,50 @@ class LocalAnalyzedSessionLibrary implements AnalyzedSessionLibrary {
         if (item.job.jobId != session.job.jobId) item,
     ];
     final file = await _indexFile;
+    final documents = await documentsDirectory();
     final temporary = File('${file.path}.tmp');
     await temporary.writeAsString(
-      jsonEncode(sessions.map(_sessionToJson).toList()),
+      jsonEncode(
+        sessions.map((session) => _sessionToJson(session, documents)).toList(),
+      ),
       flush: true,
     );
     await temporary.rename(file.path);
   }
 
-  AnalyzedPracticeSession _sessionFromJson(Map<String, dynamic> json) {
+  /// A path saved inside the documents folder is kept relative to it: iOS moves
+  /// the app's folder when the app is updated, so an absolute path goes stale.
+  static String _relativeToDocuments(String path, String documents) =>
+      p.isWithin(documents, path) ? p.relative(path, from: documents) : path;
+
+  /// Where a saved audio path points now. Relative paths and absolute paths
+  /// saved by older versions are both mapped into the current documents
+  /// folder.
+  static Future<String> resolveAudioPath(
+    String stored,
+    String documents,
+  ) async {
+    if (p.isRelative(stored)) {
+      final joined = p.normalize(p.join(documents, stored));
+      // A saved path must stay inside the documents folder.
+      return p.isWithin(documents, joined) ? joined : stored;
+    }
+    if (await File(stored).exists()) return stored;
+    final marker = '${p.separator}Documents${p.separator}';
+    final index = stored.lastIndexOf(marker);
+    if (index < 0) return stored;
+    return p.join(documents, stored.substring(index + marker.length));
+  }
+
+  Future<AnalyzedPracticeSession> _sessionFromJson(
+    Map<String, dynamic> json,
+    Directory documents,
+  ) async {
     return AnalyzedPracticeSession(
       title: json['title'] as String,
-      audioFile: File(json['audio_path'] as String),
+      audioFile: File(
+        await resolveAudioPath(json['audio_path'] as String, documents.path),
+      ),
       job: AnalysisJob.fromJson(json['job'] as Map<String, dynamic>),
       timeline: SharedTimeline.fromJson(
         json['timeline'] as Map<String, dynamic>,
@@ -90,9 +126,12 @@ class LocalAnalyzedSessionLibrary implements AnalyzedSessionLibrary {
     );
   }
 
-  Map<String, dynamic> _sessionToJson(AnalyzedPracticeSession session) => {
+  Map<String, dynamic> _sessionToJson(
+    AnalyzedPracticeSession session,
+    Directory documents,
+  ) => {
     'title': session.title,
-    'audio_path': session.audioFile.path,
+    'audio_path': _relativeToDocuments(session.audioFile.path, documents.path),
     'job': {
       'job_id': session.job.jobId,
       'status': session.job.status.name,

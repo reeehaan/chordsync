@@ -71,6 +71,60 @@ void main() {
     expect(await library.load(), isEmpty);
   });
 
+  test('finds saved songs after the app folder moves', () async {
+    // iOS gives the app a new folder path when it is updated.
+    final before = Directory.systemTemp.createTempSync('app-before-');
+    final audioDir = Directory('${before.path}/Documents/imported_audio')
+      ..createSync(recursive: true);
+    final song = File('${audioDir.path}/lemon.mp3')..writeAsBytesSync([1]);
+    final oldDocuments = Directory('${before.path}/Documents');
+    await LocalAnalyzedSessionLibrary(
+      documentsDirectory: () async => oldDocuments,
+    ).save(_session(song, jobId: 'job-one', title: 'Lemon'));
+
+    // The whole app folder is now somewhere else.
+    final after = Directory.systemTemp.createTempSync('app-after-');
+    Directory('${before.path}/Documents').renameSync('${after.path}/Documents');
+    final newDocuments = Directory('${after.path}/Documents');
+    final restored = await LocalAnalyzedSessionLibrary(
+      documentsDirectory: () async => newDocuments,
+    ).load();
+
+    expect(restored, hasLength(1));
+    expect(restored.single.title, 'Lemon');
+    expect(
+      restored.single.audioFile.path,
+      '${newDocuments.path}/imported_audio/lemon.mp3',
+    );
+    before.deleteSync(recursive: true);
+    after.deleteSync(recursive: true);
+  });
+
+  test('repairs an old entry that saved an absolute path', () async {
+    final stale =
+        '/var/mobile/Containers/Data/Application/OLD/Documents/'
+        'imported_audio/song.mp3';
+    final audioDir = Directory('${documents.path}/imported_audio')
+      ..createSync();
+    File('${audioDir.path}/song.mp3').writeAsBytesSync([1]);
+    await library.save(_session(audio, jobId: 'job-one', title: 'Old'));
+    final index = File('${documents.path}/analyzed_sessions/sessions.json');
+    await index.writeAsString(
+      (await index.readAsString()).replaceFirst(
+        '"audio_path":"song.mp3"',
+        '"audio_path":"$stale"',
+      ),
+    );
+
+    final restored = await library.load();
+
+    expect(restored, hasLength(1));
+    expect(
+      restored.single.audioFile.path,
+      '${documents.path}/imported_audio/song.mp3',
+    );
+  });
+
   test('does not overwrite a corrupted session index', () async {
     final index = File('${documents.path}/analyzed_sessions/sessions.json')
       ..createSync(recursive: true);
