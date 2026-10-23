@@ -6,6 +6,7 @@ import '../../practice_timeline/data/shared_timeline.dart';
 import 'analysis_client_errors.dart';
 import 'analysis_http_mapping.dart';
 import 'analysis_job.dart';
+import 'cloud_library_api.dart';
 import 'hosted_upload_models.dart';
 
 /// Returns the current bearer token, or null/empty if there is none.
@@ -25,7 +26,7 @@ abstract interface class HostedAnalysisApi {
   Future<AnalysisJob> cancelJob(String jobId);
 }
 
-class DioHostedAnalysisApi implements HostedAnalysisApi {
+class DioHostedAnalysisApi implements HostedAnalysisApi, CloudLibraryApi {
   /// [tokenProvider] is called for every request, so a refreshed token is
   /// picked up without rebuilding the client.
   DioHostedAnalysisApi({
@@ -122,6 +123,52 @@ class DioHostedAnalysisApi implements HostedAnalysisApi {
     return _parse(
       () => AnalysisJob.fromJson(analysisJsonMap(response.data)),
       'Malformed cancel response.',
+    );
+  }
+
+  @override
+  Future<List<CloudSong>> listSongs() async {
+    final response = await _send(
+      () async =>
+          _dio.get<Object?>('/analysis/library', options: await _authorized()),
+      malformed: 'Malformed song library response.',
+    );
+    return _parse(() {
+      final songs = analysisJsonMap(response.data)['songs'] as List<dynamic>;
+      return [
+        for (final song in songs)
+          CloudSong.fromJson(song as Map<String, dynamic>),
+      ];
+    }, 'Malformed song library response.');
+  }
+
+  @override
+  Future<SharedTimeline> getSongTimeline(String jobId) async {
+    final response = await _send(
+      () async => _dio.get<Object?>(
+        '/analysis/library/${Uri.encodeComponent(jobId)}/result',
+        options: await _authorized(),
+      ),
+      malformed: 'Malformed SharedTimeline response.',
+    );
+    return _parse(
+      () => SharedTimeline.fromJson(analysisJsonMap(response.data)),
+      'Malformed SharedTimeline response.',
+    );
+  }
+
+  @override
+  Future<CloudAudioLink> getSongAudioLink(String jobId) async {
+    final response = await _send(
+      () async => _dio.get<Object?>(
+        '/analysis/library/${Uri.encodeComponent(jobId)}/audio',
+        options: await _authorized(),
+      ),
+      malformed: 'Malformed song audio response.',
+    );
+    return _parse(
+      () => CloudAudioLink.fromJson(analysisJsonMap(response.data)),
+      'Malformed song audio response.',
     );
   }
 

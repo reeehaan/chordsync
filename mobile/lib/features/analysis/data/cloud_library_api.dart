@@ -1,0 +1,53 @@
+import '../../practice_timeline/data/shared_timeline.dart';
+
+/// One finished song in the shared library, as the API lists it.
+class CloudSong {
+  const CloudSong({
+    required this.jobId,
+    required this.title,
+    required this.createdAt,
+    this.durationSeconds,
+  });
+
+  factory CloudSong.fromJson(Map<String, dynamic> json) => CloudSong(
+    jobId: json['job_id'] as String,
+    title: json['title'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
+  );
+
+  final String jobId;
+  final String title;
+  final DateTime createdAt;
+  final double? durationSeconds;
+}
+
+/// A short-lived link to a song's audio. It carries its own permission, so it
+/// is fetched with a plain client and never with the app's bearer token.
+class CloudAudioLink {
+  const CloudAudioLink({
+    required this.url,
+    required this.expiresInSeconds,
+    this.fileType,
+  });
+
+  factory CloudAudioLink.fromJson(Map<String, dynamic> json) => CloudAudioLink(
+    url: json['url'] as String,
+    expiresInSeconds: (json['expires_in_seconds'] as num).toInt(),
+    fileType: json['file_type'] as String?,
+  );
+
+  final String url;
+  final int expiresInSeconds;
+  final String? fileType;
+}
+
+/// The shared library routes: songs analysed by any token holder.
+abstract interface class CloudLibraryApi {
+  /// Every finished song, newest first.
+  Future<List<CloudSong>> listSongs();
+
+  Future<SharedTimeline> getSongTimeline(String jobId);
+
+  Future<CloudAudioLink> getSongAudioLink(String jobId);
+}
