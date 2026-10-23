@@ -46,6 +46,27 @@ class AnalysisJobResponse(BaseModel):
     result_available: bool
 
 
+class LibrarySong(BaseModel):
+    """One finished song in the shared library."""
+
+    job_id: str
+    title: str
+    created_at: datetime
+    duration_seconds: float | None = None
+
+
+class LibraryResponse(BaseModel):
+    songs: list[LibrarySong]
+
+
+class LibraryAudioResponse(BaseModel):
+    """A short-lived link to the song's playback audio."""
+
+    url: str
+    expires_in_seconds: int
+    file_type: str | None = None
+
+
 class UploadInitiationRequest(BaseModel):
     """Hosted create: metadata only. Nothing here is trusted as validation."""
 

@@ -62,6 +62,32 @@ class DynamoDbCloudJobRepository:
                 break
         return jobs[:limit]
 
+    def list_completed(self, *, limit: int = 200) -> list[CloudJobRecord]:
+        # A scan: the table holds a few hundred jobs at most. Move this to an
+        # index on status if it ever grows well beyond that.
+        jobs: list[CloudJobRecord] = []
+        start_key = None
+        while True:
+            request: dict[str, Any] = {
+                "FilterExpression": "#status = :completed",
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {
+                    ":completed": CloudJobStatus.COMPLETED.value,
+                },
+            }
+            if start_key:
+                request["ExclusiveStartKey"] = start_key
+            try:
+                response = self._table.scan(**request)
+            except Exception as error:
+                raise translate_provider_error(error) from error
+            jobs.extend(_from_item(item) for item in response.get("Items", []))
+            start_key = response.get("LastEvaluatedKey")
+            if not start_key:
+                break
+        jobs.sort(key=lambda job: job.created_at, reverse=True)
+        return jobs[:limit]
+
     def save(
         self,
         job: CloudJobRecord,

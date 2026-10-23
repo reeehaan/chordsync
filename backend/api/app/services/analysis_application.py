@@ -4,6 +4,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import PurePosixPath
 from typing import BinaryIO, Callable, NoReturn, Protocol
 from uuid import uuid4
 
@@ -58,6 +59,7 @@ from backend.api.app.services.source_upload_store import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_UPLOAD_URL_TTL_SECONDS = 600
+LIBRARY_AUDIO_URL_TTL_SECONDS = 600
 # If a confirm dies mid-validation the job stays VALIDATING. After this many
 # seconds another confirm may take over (must exceed the Lambda timeout).
 VALIDATION_LEASE_SECONDS = 120
@@ -601,6 +603,9 @@ class CloudAnalysisApplication:
             raise JobCancelledError
         if job.status is not CloudJobStatus.COMPLETED:
             raise ResultNotReadyError
+        return self._read_timeline(job)
+
+    def _read_timeline(self, job: CloudJobRecord) -> SharedTimeline:
         if not job.timeline_object_key:
             raise ResultArtifactMissingError
         key = ArtifactKey(ArtifactRole.TIMELINE_RESULT, job.timeline_object_key)
@@ -616,6 +621,42 @@ class CloudAnalysisApplication:
             raise ResultArtifactUnavailableError from error
         except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, TypeError) as error:
             raise ResultArtifactCorruptError from error
+
+    # --- shared library ---
+    #
+    # There are no user accounts yet, so every finished song is visible to every
+    # holder of an app token: the library ignores which token created a job.
+    # Once users can sign in, these three methods are where to filter by user.
+
+    def library(self) -> list[CloudJobRecord]:
+        """Finished songs with a result, newest first."""
+        return [
+            job
+            for job in self._repository.list_completed()
+            if job.timeline_object_key and job.playback_object_key
+        ]
+
+    def library_result(self, job_id: str) -> SharedTimeline:
+        return self._read_timeline(self._finished(job_id))
+
+    def library_audio(self, job_id: str) -> tuple[str, int, str | None]:
+        """A short-lived download link for the song's playback audio."""
+        job = self._finished(job_id)
+        if not job.playback_object_key:
+            raise ResultArtifactMissingError
+        if self._uploads is None:
+            raise UploadNotConfiguredError
+        key = ArtifactKey(ArtifactRole.PLAYBACK_AUDIO, job.playback_object_key)
+        url = self._uploads.presign_get(
+            key, expires_in=LIBRARY_AUDIO_URL_TTL_SECONDS
+        )
+        return url, LIBRARY_AUDIO_URL_TTL_SECONDS, PurePosixPath(key.value).suffix.lstrip(".") or None
+
+    def _finished(self, job_id: str) -> CloudJobRecord:
+        job = self._repository.get(job_id)
+        if job is None or job.status is not CloudJobStatus.COMPLETED:
+            raise JobNotFoundError(job_id)
+        return job
 
 
 _CANCELLABLE = frozenset(

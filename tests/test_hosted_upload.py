@@ -712,7 +712,9 @@ def test_the_hosted_response_never_contains_the_secret_key(tmp_path, monkeypatch
 
 def test_the_store_has_no_listing_or_prefix_operation():
     public = {name for name in dir(S3SourceUploadStore) if not name.startswith("_")}
-    assert public == {"presign_put", "head", "open", "delete"}
+    # presign_get signs one download link for one exact key (the shared library).
+    assert public == {"presign_put", "presign_get", "head", "open", "delete"}
+    assert not [name for name in public if "list" in name or "prefix" in name]
 
 
 # --- configuration ---------------------------------------------------------------------

@@ -56,6 +56,8 @@ class SourceUploadStore(Protocol):
         expires_in: int,
     ) -> PresignedUpload: ...
 
+    def presign_get(self, key: ArtifactKey, *, expires_in: int) -> str: ...
+
     def head(self, key: ArtifactKey) -> SourceObjectInfo | None: ...
 
     def open(self, key: ArtifactKey) -> BinaryIO: ...
@@ -112,6 +114,18 @@ class S3SourceUploadStore:
                 "x-amz-tagging": UPLOAD_TAG,
             },
         )
+
+    def presign_get(self, key: ArtifactKey, *, expires_in: int) -> str:
+        """A link that lets the holder download this one object for a while."""
+        try:
+            return self._client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self._bucket, "Key": key.value},
+                ExpiresIn=expires_in,
+                HttpMethod="GET",
+            )
+        except Exception as error:
+            raise translate_provider_error(error) from error
 
     def head(self, key: ArtifactKey) -> SourceObjectInfo | None:
         try:
@@ -195,6 +209,12 @@ class InMemorySourceUploadStore:
                 "x-amz-tagging": UPLOAD_TAG,
             },
         )
+
+    def presign_get(self, key: ArtifactKey, *, expires_in: int) -> str:
+        self.presign_requests.append(
+            {"key": key.value, "operation": "get", "expires_in": expires_in}
+        )
+        return f"https://download.invalid/{key.value}?signature=test"
 
     def client_upload(
         self,

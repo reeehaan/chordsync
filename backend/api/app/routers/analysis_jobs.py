@@ -21,6 +21,9 @@ from backend.api.app.models.analysis_job import (
     AnalysisJobError,
     AnalysisJobErrorResponse,
     AnalysisJobResponse,
+    LibraryAudioResponse,
+    LibraryResponse,
+    LibrarySong,
     UploadInitiationRequest,
     UploadInitiationResponse,
 )
@@ -199,6 +202,11 @@ def get_hosted_analysis_application() -> CloudAnalysisApplication:
 # local mode without auth), so new routes are protected by default.
 router = APIRouter(
     prefix="/analysis/jobs", tags=["Analysis jobs"], dependencies=[Depends(get_principal)]
+)
+# The shared library: finished songs, visible to every app token (see
+# CloudAnalysisApplication.library). Hosted API only.
+library_router = APIRouter(
+    prefix="/analysis/library", tags=["Shared library"], dependencies=[Depends(get_principal)]
 )
 hosted_router = APIRouter(
     prefix="/analysis/jobs", tags=["Analysis jobs"], dependencies=[Depends(get_principal)]
@@ -481,3 +489,71 @@ _UNPROCESSABLE_CODES = {
     "unsupported_audio_format": "Supported audio formats are WAV, MP3, and M4A.",
     "invalid_upload": "The uploaded file does not match the upload request.",
 }
+
+
+# --- shared library ---
+
+_LIBRARY_ERRORS = {
+    404: {"model": AnalysisJobErrorResponse},
+    409: {"model": AnalysisJobErrorResponse},
+    503: {"model": AnalysisJobErrorResponse},
+}
+
+
+@library_router.get("", response_model=LibraryResponse, responses={503: {"model": AnalysisJobErrorResponse}})
+def list_library(
+    application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
+) -> LibraryResponse:
+    """Every finished song, newest first."""
+    return LibraryResponse(
+        songs=[
+            LibrarySong(
+                job_id=job.job_id,
+                title=job.title,
+                created_at=job.created_at,
+                duration_seconds=job.duration_seconds,
+            )
+            for job in application.library()
+        ]
+    )
+
+
+@library_router.get(
+    "/{job_id}/result", response_model=SharedTimeline, responses=_LIBRARY_ERRORS
+)
+def get_library_result(
+    job_id: str,
+    application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
+) -> SharedTimeline | Response:
+    """The song's timeline, with its lyrics."""
+    try:
+        return application.library_result(job_id)
+    except JobNotFoundError:
+        return error_response(404, "song_not_found", "Song was not found.")
+    except ResultArtifactMissingError:
+        return error_response(409, "result_artifact_missing", "Song result is unavailable.")
+    except ResultArtifactUnavailableError:
+        return error_response(
+            503, "service_unavailable", "Analysis service is temporarily unavailable."
+        )
+    except ResultArtifactCorruptError:
+        return error_response(500, "result_artifact_corrupt", "Song result is unavailable.")
+
+
+@library_router.get(
+    "/{job_id}/audio", response_model=LibraryAudioResponse, responses=_LIBRARY_ERRORS
+)
+def get_library_audio(
+    job_id: str,
+    application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
+) -> LibraryAudioResponse | Response:
+    """A short-lived link to download the song's audio."""
+    try:
+        url, expires_in, file_type = application.library_audio(job_id)
+    except JobNotFoundError:
+        return error_response(404, "song_not_found", "Song was not found.")
+    except ResultArtifactMissingError:
+        return error_response(409, "audio_unavailable", "Song audio is unavailable.")
+    except UploadNotConfiguredError:
+        return error_response(500, "audio_unavailable", "Song audio is unavailable.")
+    return LibraryAudioResponse(url=url, expires_in_seconds=expires_in, file_type=file_type)

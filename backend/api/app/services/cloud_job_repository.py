@@ -21,6 +21,10 @@ class CloudJobRepository(Protocol):
 
     def pending_dispatch(self, *, limit: int = 100) -> list[CloudJobRecord]: ...
 
+    def list_completed(self, *, limit: int = 200) -> list[CloudJobRecord]:
+        """Finished jobs, newest first, at most [limit]."""
+        ...
+
     def save(
         self,
         job: CloudJobRecord,
@@ -53,6 +57,16 @@ class InMemoryCloudJobRepository:
                 if job.dispatch_pending
                 and job.status is CloudJobStatus.QUEUED
             ]
+        return jobs[:limit]
+
+    def list_completed(self, *, limit: int = 200) -> list[CloudJobRecord]:
+        with self._lock:
+            jobs = [
+                deepcopy(job)
+                for job in self._jobs.values()
+                if job.status is CloudJobStatus.COMPLETED
+            ]
+        jobs.sort(key=lambda job: job.created_at, reverse=True)
         return jobs[:limit]
 
     def save(
@@ -116,6 +130,16 @@ class SqliteCloudJobRepository:
             ).fetchall()
         jobs = [CloudJobRecord.from_dict(json.loads(row[0])) for row in rows]
         return [job for job in jobs if job.dispatch_pending][:limit]
+
+    def list_completed(self, *, limit: int = 200) -> list[CloudJobRecord]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM analysis_jobs WHERE status = ?",
+                (CloudJobStatus.COMPLETED.value,),
+            ).fetchall()
+        jobs = [CloudJobRecord.from_dict(json.loads(row[0])) for row in rows]
+        jobs.sort(key=lambda job: job.created_at, reverse=True)
+        return jobs[:limit]
 
     def save(
         self,
