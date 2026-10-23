@@ -298,7 +298,14 @@ class AnalysisPipelineConfig:
                 os.getenv("CHORDSYNC_CHORD_EXTENSIONS_ENABLED", "").casefold()
                 in {"1", "true", "yes"}
             ),
-            btc_large_checkpoint=_optional_path("CHORDSYNC_BTC_LARGE_CHECKPOINT"),
+            # Beside the standard checkpoint unless told otherwise: that is where
+            # the worker installs it.
+            btc_large_checkpoint=_optional_path("CHORDSYNC_BTC_LARGE_CHECKPOINT")
+            or (
+                btc_checkpoint.with_name("btc_model_large_voca.pt")
+                if btc_checkpoint is not None
+                else None
+            ),
         )
 
 
@@ -635,17 +642,22 @@ class RealAnalysisProcessor:
         if (
             self._config.chord_estimator is not ChordEstimator.BTC
             or checkpoint is None
-            or not checkpoint.is_file()
             or self._config.btc_python is None
             or self._config.btc_source is None
             or not workspace.instrumental.is_file()
         ):
-            logger.warning(
-                "[job %s] chord extensions are on but not available; "
-                "using plain chords",
-                job_id,
-            )
-            return workspace.chords
+            return self._extensions_unavailable(job_id, workspace)
+        if not checkpoint.is_file() and self._model_installer is not None:
+            # On a worker the large model is fetched (and verified) the first
+            # time it is needed, like the multilingual aligner.
+            try:
+                self._model_installer(AssetRole.BTC_LARGE_CHECKPOINT)
+            except Exception:
+                logger.warning(
+                    "[job %s] the large BTC model could not be installed", job_id
+                )
+        if not checkpoint.is_file():
+            return self._extensions_unavailable(job_id, workspace)
         try:
             self._run_stage(
                 "chord extensions",
@@ -676,6 +688,14 @@ class RealAnalysisProcessor:
             )
             return workspace.chords
         return workspace.chords_with_extensions
+
+    @staticmethod
+    def _extensions_unavailable(job_id: str, workspace: JobWorkspace) -> Path:
+        logger.warning(
+            "[job %s] chord extensions are on but not available; using plain chords",
+            job_id,
+        )
+        return workspace.chords
 
     def _run_lyrics(
         self,

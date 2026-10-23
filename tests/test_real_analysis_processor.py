@@ -1986,3 +1986,76 @@ def test_extensions_without_the_large_model_use_plain_chords(
 
     assert "chord-extensions" not in [runner._stage(c.argv) for c in runner.calls]
     assert "not available" in caplog.text
+
+
+def test_the_large_model_is_fetched_when_missing_and_then_used(
+    processor_context, tmp_path, btc_files
+):
+    from backend.api.app.services.model_bootstrap import AssetRole
+
+    config, input_path = processor_context
+    config = _with_extensions(config, tmp_path, checkpoint_exists=False)
+    fetched = []
+
+    def installer(role):
+        fetched.append(role)
+        config.btc_large_checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        config.btc_large_checkpoint.write_bytes(b"large checkpoint")
+
+    runner = FakePipelineRunner()
+    RealAnalysisProcessor(config, runner, model_installer=installer).process(input_path)
+
+    assert fetched == [AssetRole.BTC_LARGE_CHECKPOINT]
+    assert "chord-extensions" in [runner._stage(c.argv) for c in runner.calls]
+    fuse = runner.calls[-1].argv
+    assert fuse[fuse.index("--chords") + 1].endswith("/chords_with_extensions.json")
+
+
+def test_the_large_model_is_not_fetched_when_it_is_already_there(
+    processor_context, tmp_path, btc_files
+):
+    config, input_path = processor_context
+    config = _with_extensions(config, tmp_path)
+    fetched = []
+
+    RealAnalysisProcessor(
+        config, FakePipelineRunner(), model_installer=fetched.append
+    ).process(input_path)
+
+    assert fetched == []
+
+
+def test_a_failed_model_fetch_keeps_the_plain_chords(
+    processor_context, tmp_path, btc_files, caplog
+):
+    config, input_path = processor_context
+    config = _with_extensions(config, tmp_path, checkpoint_exists=False)
+
+    def installer(role):
+        raise RuntimeError("private bucket detail must not be logged")
+
+    runner = FakePipelineRunner()
+    timeline = RealAnalysisProcessor(
+        config, runner, model_installer=installer
+    ).process(input_path)
+
+    assert timeline.model_dump(mode="json") == SYNTHETIC_TIMELINE
+    assert "chord-extensions" not in [runner._stage(c.argv) for c in runner.calls]
+    fuse = runner.calls[-1].argv
+    assert fuse[fuse.index("--chords") + 1].endswith("/chords.json")
+    assert "could not be installed" in caplog.text
+    assert "private bucket detail" not in caplog.text
+
+
+def test_local_config_finds_the_large_model_beside_the_standard_one(monkeypatch):
+    monkeypatch.setenv("CHORDSYNC_BTC_CHECKPOINT", "/opt/chordsync/models/btc/btc_model.pt")
+    monkeypatch.delenv("CHORDSYNC_BTC_LARGE_CHECKPOINT", raising=False)
+    monkeypatch.setenv("CHORDSYNC_CHORD_EXTENSIONS_ENABLED", "true")
+
+    config = AnalysisPipelineConfig.local()
+
+    assert config.chord_extensions_enabled is True
+    assert str(config.btc_large_checkpoint) == "/opt/chordsync/models/btc/btc_model_large_voca.pt"
+
+    monkeypatch.delenv("CHORDSYNC_CHORD_EXTENSIONS_ENABLED")
+    assert AnalysisPipelineConfig.local().chord_extensions_enabled is False
