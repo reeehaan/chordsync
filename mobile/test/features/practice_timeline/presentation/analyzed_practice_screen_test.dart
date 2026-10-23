@@ -95,7 +95,9 @@ void main() {
 
       final bottomBeforeSeek = scrollPosition.pixels;
       player.emit(const Duration(seconds: 157));
-      await tester.pumpAndSettle();
+      // The long title glides forever, so the screen never settles.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
       expect(_text(tester, 'currentChordValue'), 'G');
       expect(scrollPosition.pixels, bottomBeforeSeek);
       expect(tester.takeException(), isNull);

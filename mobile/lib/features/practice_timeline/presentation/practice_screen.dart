@@ -12,6 +12,7 @@ import '../application/screen_awake.dart';
 import '../data/chord_transposition.dart';
 import '../data/shared_timeline_asset_loader.dart';
 import '../data/shared_timeline.dart';
+import '../data/song_identity.dart';
 import 'capo_settings_sheet.dart';
 import 'chord_diagram_strip.dart';
 import 'music_only_views.dart';
@@ -224,6 +225,10 @@ class _PracticeScreenState extends State<PracticeScreen> {
 
     final state = controller.state;
     final timeline = _timeline!;
+    final analyzedTitle = widget.analyzedSession?.title;
+    final identity = analyzedTitle == null
+        ? null
+        : SongIdentity.fromFileName(analyzedTitle);
     final displayTimeline = ChordTransposition.timelineForCapo(
       timeline,
       _capoFret,
@@ -238,8 +243,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
       child: Column(
         children: [
           PracticeSheetHeader(
-            title: widget.analyzedSession?.title ?? 'Practice sheet',
-            subtitle: _headerSubtitle(),
+            title: identity?.title ?? 'Practice sheet',
+            subtitle: _headerSubtitle(identity?.artist),
             status: synchronizer.status,
             loopRange: _loopRangeLabel(synchronizer),
             isLooping: synchronizer.loop?.enabled == true,
@@ -342,10 +347,13 @@ class _PracticeScreenState extends State<PracticeScreen> {
     if (result != null && mounted) setState(() => _capoFret = result);
   }
 
-  String _headerSubtitle() {
+  /// The artist sits under the title and never scrolls, followed by the tempo.
+  String _headerSubtitle(String? artist) {
     final timeline = _timeline;
-    if (timeline == null) return '—';
-    return '${timeline.bpm.toStringAsFixed(0)} BPM · '
-        '${timeline.beatsPerBar}/4';
+    final tempo = timeline == null
+        ? '—'
+        : '${timeline.bpm.toStringAsFixed(0)} BPM · '
+              '${timeline.beatsPerBar}/4';
+    return artist == null ? tempo : '$artist · $tempo';
   }
 }

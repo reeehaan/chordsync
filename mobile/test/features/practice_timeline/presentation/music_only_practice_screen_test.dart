@@ -102,7 +102,10 @@ Future<void> _waitForLoad(WidgetTester tester) async {
 
 Future<void> _seek(WidgetTester tester, double seconds) async {
   tester.widget<Slider>(find.byType(Slider)).onChanged!(seconds);
-  await tester.pumpAndSettle();
+  // The long title glides forever, so the screen never settles: run for a
+  // fixed time instead.
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 2));
 }
 
 const _timeline = SharedTimeline(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../application/practice_playback_status.dart';
+import 'marquee_text.dart';
 import 'practice_stage_colors.dart';
 
 /// Song identity plus the A–B loop tools, styled as the pill row from the
@@ -53,11 +54,9 @@ class PracticeSheetHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
+                    MarqueeText(
                       title,
-                      key: const ValueKey('songSheetTitle'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      textKey: const ValueKey('songSheetTitle'),
                       style: textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                         height: 1.15,
