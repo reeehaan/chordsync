@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../../design_system/chordsync_design_system.dart';
 import '../data/shared_timeline.dart';
+import 'follow_button.dart';
 
 /// The song's chords bar by bar, shown when there are no lyrics to put them
 /// over. The bar being played is highlighted and the chart follows along.
@@ -132,14 +133,12 @@ class _ChordChartState extends State<ChordChart> {
           Positioned(
             right: 12,
             bottom: 12,
-            child: FilledButton.tonalIcon(
+            child: FollowButton(
               key: const ValueKey('followChordsButton'),
               onPressed: () {
                 setState(() => _autoFollow = true);
                 _scheduleFollow();
               },
-              icon: const Icon(Icons.my_location, size: 17),
-              label: const Text('Follow'),
             ),
           ),
       ],

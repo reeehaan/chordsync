@@ -128,6 +128,25 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('followChordsButton')), findsOneWidget);
+    // The same pill button as on the lyric sheet.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('followChordsButton')),
+        matching: find.byType(FilledButton),
+      ),
+      findsOneWidget,
+    );
+    final shape = tester
+        .widget<FilledButton>(
+          find.descendant(
+            of: find.byKey(const ValueKey('followChordsButton')),
+            matching: find.byType(FilledButton),
+          ),
+        )
+        .style
+        ?.shape
+        ?.resolve({});
+    expect(shape, isA<StadiumBorder>());
 
     await tester.tap(find.byKey(const ValueKey('followChordsButton')));
     await tester.pumpAndSettle();
