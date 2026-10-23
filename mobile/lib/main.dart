@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'design_system/chordsync_design_system.dart';
 import 'features/analysis/application/analysis_job_poller.dart';
@@ -16,7 +17,12 @@ import 'features/practice_timeline/application/practice_audio_player.dart';
 import 'features/practice_timeline/application/practice_session_factory.dart';
 import 'features/practice_timeline/presentation/practice_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // The app is portrait-only; turning the phone does not rotate it.
+  await SystemChrome.setPreferredOrientations(const [
+    DeviceOrientation.portraitUp,
+  ]);
   runApp(const MyApp());
 }
 
