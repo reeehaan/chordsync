@@ -6,6 +6,7 @@ import '../../../design_system/chordsync_design_system.dart';
 import '../../practice_timeline/application/practice_session_factory.dart';
 import '../../practice_timeline/presentation/practice_screen.dart';
 import '../application/analyzed_practice_session.dart';
+import '../application/cloud_library_controller.dart';
 import '../data/analyzed_session_library.dart';
 import 'analysis_journey.dart';
 import 'app_shell.dart';
@@ -23,7 +24,11 @@ class AudioImportScreen extends StatefulWidget {
     required this.fileSelector,
     this.practiceSessionFactory,
     this.sessionLibrary,
+    this.cloudLibrary,
   });
+
+  /// The shared library in the cloud, or null when the app has none.
+  final CloudLibraryController? cloudLibrary;
 
   final AudioImportController controller;
   final AudioFileSelector fileSelector;
@@ -45,6 +50,8 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
   void initState() {
     super.initState();
     widget.controller.addListener(_refresh);
+    // A song brought down from the cloud joins the saved songs.
+    widget.cloudLibrary?.onDownloaded = (_) => _loadSavedSessions();
     _loadSavedSessions();
   }
 
@@ -192,6 +199,7 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
           sessions: _savedSessions,
           onOpen: _openSavedPractice,
           onAddSong: () => setState(() => _selectedTab = 1),
+          cloud: widget.cloudLibrary,
         ),
       );
     }

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import 'design_system/chordsync_design_system.dart';
 import 'features/analysis/application/analysis_job_poller.dart';
+import 'features/analysis/application/cloud_library_controller.dart';
+import 'features/analysis/application/cloud_library_service.dart';
 import 'features/analysis/application/analysis_practice_coordinator.dart';
 import 'features/analysis/data/analysis_api_client.dart';
 import 'features/analysis/application/hosted_analysis_client.dart';
@@ -49,6 +51,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   AudioImportController? _importController;
   AnalyzedSessionLibrary? _sessionLibrary;
+  CloudLibraryController? _cloudLibrary;
 
   bool get _usesPracticeFixture =>
       widget.audioPlayer != null || widget.analyzedSession != null;
@@ -59,7 +62,24 @@ class _MyAppState extends State<MyApp> {
     if (!_usesPracticeFixture) {
       _sessionLibrary = LocalAnalyzedSessionLibrary();
       _importController = widget.importController ?? _createImportController();
+      _cloudLibrary = _createCloudLibrary();
     }
+  }
+
+  /// The shared library only exists on the hosted API; local development has
+  /// no cloud to ask.
+  CloudLibraryController? _createCloudLibrary() {
+    final config = AnalysisApiConfig.development;
+    if (!config.isHosted) return null;
+    return CloudLibraryController(
+      service: CloudLibraryService(
+        api: DioHostedAnalysisApi(
+          baseUrl: config.baseUrl,
+          tokenProvider: () => config.authToken,
+        ),
+        library: _sessionLibrary!,
+      ),
+    );
   }
 
   AudioImportController _createImportController() {
@@ -98,6 +118,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void dispose() {
     _importController?.dispose();
+    _cloudLibrary?.dispose();
     super.dispose();
   }
 
@@ -118,6 +139,7 @@ class _MyAppState extends State<MyApp> {
                   widget.fileSelector ?? const NativeAudioFileSelector(),
               practiceSessionFactory: widget.sessionFactory,
               sessionLibrary: _sessionLibrary,
+              cloudLibrary: _cloudLibrary,
             ),
     );
   }

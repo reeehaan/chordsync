@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../practice_timeline/data/song_identity.dart';
 import '../application/analyzed_practice_session.dart';
+import '../application/cloud_library_controller.dart';
+import '../data/cloud_library_api.dart';
 import '../data/embedded_cover_art.dart';
 import 'upload_theme.dart';
 
@@ -14,11 +16,16 @@ class LibraryHome extends StatefulWidget {
     required this.sessions,
     required this.onOpen,
     required this.onAddSong,
+    this.cloud,
   });
 
   final List<AnalyzedPracticeSession> sessions;
   final ValueChanged<AnalyzedPracticeSession> onOpen;
   final VoidCallback onAddSong;
+
+  /// The shared library in the cloud. Null when the app has no cloud to ask
+  /// (local development), and the section is then left out.
+  final CloudLibraryController? cloud;
 
   @override
   State<LibraryHome> createState() => _LibraryHomeState();
@@ -27,6 +34,15 @@ class LibraryHome extends StatefulWidget {
 class _LibraryHomeState extends State<LibraryHome> {
   final TextEditingController _search = TextEditingController();
   String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final cloud = widget.cloud;
+    if (cloud != null && cloud.status == CloudLibraryStatus.idle) {
+      cloud.refresh();
+    }
+  }
 
   @override
   void dispose() {
@@ -46,6 +62,30 @@ class _LibraryHomeState extends State<LibraryHome> {
       for (final session in widget.sessions)
         if (_containsAll(_haystack(session), words)) session,
     ];
+  }
+
+  List<String> get _words => _query
+      .toLowerCase()
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .toList();
+
+  /// Cloud songs not already on this phone that match the search.
+  List<CloudSong> _cloudMatches(CloudLibraryController cloud) {
+    final onPhone = {for (final s in widget.sessions) s.job.jobId};
+    final words = _words;
+    return [
+      for (final song in cloud.songs)
+        if (!onPhone.contains(song.jobId) &&
+            _containsAll(_cloudHaystack(song), words))
+          song,
+    ];
+  }
+
+  static String _cloudHaystack(CloudSong song) {
+    final identity = SongIdentity.fromFileName(song.title);
+    return '${identity.title} ${identity.artist ?? ''} ${song.title}'
+        .toLowerCase();
   }
 
   static bool _containsAll(String text, List<String> words) =>
@@ -168,6 +208,15 @@ class _LibraryHomeState extends State<LibraryHome> {
               ),
             ),
         ],
+        if (widget.cloud case final cloud?)
+          ListenableBuilder(
+            listenable: cloud,
+            builder: (context, _) => _CloudSection(
+              cloud: cloud,
+              songs: _cloudMatches(cloud),
+              searching: searching,
+            ),
+          ),
       ],
     );
   }
@@ -371,6 +420,171 @@ class _CoverTile extends StatelessWidget {
             color: Colors.white,
             fontWeight: FontWeight.w800,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The songs in the shared library that are not on this phone yet.
+class _CloudSection extends StatelessWidget {
+  const _CloudSection({
+    required this.cloud,
+    required this.songs,
+    required this.searching,
+  });
+
+  final CloudLibraryController cloud;
+  final List<CloudSong> songs;
+  final bool searching;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final muted = textTheme.bodyMedium?.copyWith(
+      color: UploadPalette.secondaryText,
+    );
+    final loading = cloud.status == CloudLibraryStatus.loading;
+    final failed = cloud.status == CloudLibraryStatus.failed;
+    return Padding(
+      key: const ValueKey('cloudSection'),
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('From the cloud', style: textTheme.titleLarge),
+              ),
+              if (loading)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                IconButton(
+                  key: const ValueKey('refreshCloudSongs'),
+                  tooltip: 'Refresh cloud songs',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.refresh),
+                  onPressed: cloud.refresh,
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (failed)
+            Padding(
+              key: const ValueKey('cloudFailed'),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'Could not reach the cloud library. Check your connection '
+                'and try again.',
+                style: muted,
+              ),
+            )
+          else if (!loading && songs.isEmpty)
+            Padding(
+              key: const ValueKey('cloudEmpty'),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                searching
+                    ? 'No cloud songs match your search.'
+                    : 'Every song in the cloud is already on this phone.',
+                style: muted,
+              ),
+            ),
+          for (final song in songs)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _CloudSongCard(song: song, cloud: cloud),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CloudSongCard extends StatelessWidget {
+  const _CloudSongCard({required this.song, required this.cloud});
+
+  final CloudSong song;
+  final CloudLibraryController cloud;
+
+  @override
+  Widget build(BuildContext context) {
+    final identity = SongIdentity.fromFileName(song.title);
+    final textTheme = Theme.of(context).textTheme;
+    final progress = cloud.progressOf(song.jobId);
+    final error = cloud.errorOf(song.jobId);
+    final seconds = song.durationSeconds;
+    return Card(
+      key: ValueKey('cloudSong-${song.jobId}'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            _CoverTile(future: Future.value(null), seed: identity.title),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    identity.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.titleMedium,
+                  ),
+                  if (identity.artist != null)
+                    Text(
+                      identity.artist!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: UploadPalette.secondaryText,
+                      ),
+                    ),
+                  if (seconds != null)
+                    Text(
+                      _SavedPracticeCardState._duration(seconds),
+                      style: textTheme.bodySmall?.copyWith(
+                        color: UploadPalette.secondaryText,
+                      ),
+                    ),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        error,
+                        key: ValueKey('cloudError-${song.jobId}'),
+                        style: textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (progress != null)
+              SizedBox(
+                key: ValueKey('cloudProgress-${song.jobId}'),
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  value: progress > 0 ? progress : null,
+                  strokeWidth: 3,
+                ),
+              )
+            else
+              FilledButton.tonal(
+                key: ValueKey('downloadCloudSong-${song.jobId}'),
+                onPressed: () => cloud.download(song),
+                child: Text(error == null ? 'Download' : 'Retry'),
+              ),
+          ],
         ),
       ),
     );
