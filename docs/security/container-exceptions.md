@@ -7,21 +7,25 @@ not claim that the CVE is fixed or absent from its source package.
 
 ## Scope and approval
 
-- Bound image: `worker-d9ef4a3-runtime2` (S6-T14C offline-lyrics image)
-- ECR digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`
-- ECR scan completed: 2026-10-13
-- ECR scan result: 1 CRITICAL, 17 HIGH, 17 MEDIUM, 4 LOW. The scanner no
+- Bound image: `worker-e974aff` (chord-extensions image)
+- ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- ECR scan completed: 2026-10-23
+- ECR scan result: 2 CRITICAL, 14 HIGH, 16 MEDIUM, 4 LOW, 1 UNDEFINED (the TIFF
+  and Brotli findings are the two CRITICAL; see the 2026-10-23 re-binding record).
+  Earlier scan result, kept for the record, for `worker-d9ef4a3-runtime2`: 1 CRITICAL, 17 HIGH, 17 MEDIUM, 4 LOW. The scanner no
   longer reports the two GnuTLS CVEs, but the installed GnuTLS package is
   unchanged and Debian still lists it as vulnerable, so both GnuTLS exceptions
   remain bound. See the 2026-10-13 re-binding record.
-- Previously bound images, superseded: `worker-f548bd0-runtime1`
+- Previously bound images, superseded: `worker-d9ef4a3-runtime2`
+  (`sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`), `worker-f548bd0-runtime1`
   (`sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c`) and `worker-24025ef0-guard2`
   (`sha256:9c027714e07bad4bb1916f364c04c5ea2ce8545d5be41babfecdcbcbd65f11c5`).
 - Owner: ChordSync project owner
 - Approval status: **APPROVED — TIME-LIMITED — BOUND TO IMAGE DIGEST**
 - Approval date: 2026-10-10
 - Recorded: 2026-10-10
-- Expires: 2026-11-09
+- Expires: 2026-11-09 (the TIFF and GnuTLS exceptions); 2026-11-22 for the Brotli
+  exception approved on 2026-10-23
 
 The immutable candidate image contains the explicit local-path guard, including
 the FFmpeg `subfile,,...,:...` defense-in-depth check. Exact-image container
@@ -53,9 +57,9 @@ or the worker becomes public or multi-user.
 ## CVE-2026-52490 — TIFF tiffcrop
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-d9ef4a3-runtime2`
-- Bound ECR digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`
-- Scan date: 2026-10-13 (re-bound; first assessed 2026-10-10)
+- Bound image: `worker-e974aff`
+- Bound ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- Scan date: 2026-10-23 (re-bound; first assessed 2026-10-10)
 - Source package: `tiff`
 - Installed binary package: `libtiff6:arm64 4.7.0-3+deb13u3`
 - Affected functionality: command processing in `tools/tiffcrop.c`
@@ -101,9 +105,9 @@ Authoritative status:
 ## CVE-2026-95210 — GnuTLS certificate validation
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-d9ef4a3-runtime2`
-- Bound ECR digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`
-- Scan date: 2026-10-13 (re-bound; first assessed 2026-10-10)
+- Bound image: `worker-e974aff`
+- Bound ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- Scan date: 2026-10-23 (re-bound; first assessed 2026-10-10)
 - Source package: `gnutls28`
 - Installed binary package: `libgnutls30t64:arm64 3.8.9-3+deb13u4`
 - Affected functionality: certificate validation in GnuTLS.
@@ -156,9 +160,9 @@ Authoritative status:
 ## CVE-2026-88647 — GnuTLS hostname verification
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-d9ef4a3-runtime2`
-- Bound ECR digest: `sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`
-- Scan date: 2026-10-13 (re-bound; first assessed 2026-10-10)
+- Bound image: `worker-e974aff`
+- Bound ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- Scan date: 2026-10-23 (re-bound; first assessed 2026-10-10)
 - Source package: `gnutls28`
 - Installed binary package: `libgnutls30t64:arm64 3.8.9-3+deb13u4`
 - Affected operation: `gnutls_x509_crt_check_hostname2()` can fall back to a
@@ -205,7 +209,99 @@ Authoritative status:
 Upstream behavior:
 <https://gitlab.com/gnutls/gnutls/-/issues/1802>
 
+## CVE-2026-111497 — Brotli decoder buffer overflow
+
+- Scanner severity: CRITICAL
+- Bound image: `worker-e974aff`
+- Bound ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- Scan date: 2026-10-23 (first assessed 2026-10-23)
+- Source package: `brotli`
+- Installed binary package: `libbrotli1:arm64 1.1.0-2+b7`
+- Affected functionality: the Brotli decoder (`c/dec/decode.c`), versions 1.0.3
+  through 1.2.0, on a crafted Brotli-compressed stream.
+- Runtime presence: **PRESENT** as a shared library. Only two installed packages
+  depend on it: `libfreetype6` (WOFF2 font decompression, loaded by FFmpeg
+  through `libass9` for subtitle rendering) and `libjxl0.11` (JPEG XL images).
+  `apt-cache rdepends --installed libbrotli1` lists exactly these two.
+- Runtime reachability: **NOT_APPLICABLE** based on current evidence. A Brotli
+  stream only reaches the decoder through WOFF2 fonts or JPEG XL image data, or
+  an HTTP response with `Content-Encoding: br`. ChordSync decodes audio only:
+  uploaded audio is converted to a worker-generated local `normalized.wav`, the
+  analysis steps read local WAV/audio paths, FFmpeg and ffprobe are restricted
+  to local filesystem paths (HTTP, HTTPS and every other protocol are rejected),
+  no subtitle or font rendering is requested, and the analysis subprocesses have
+  no usable network (`CHORDSYNC_STAGE_NETWORK=disabled`).
+- Attacker control: uploaded audio can reach supported audio decoders, but it
+  cannot make the worker request a WOFF2 font, a JPEG XL image or an
+  HTTP `br` response.
+- Supported fix availability: not established on 2026-10-23. The installed
+  version is inside the affected range. Check the Debian tracker below and
+  rebuild the image when a fixed trixie package is published.
+- Compensating controls: the container runs as a non-root user; one-shot
+  container per job; no network for the analysis steps; narrow task role
+  (read of `models/*` and its own job objects, job-state writes, queue); subprocess
+  arguments are fixed lists with no shell; only holders of the demo token can
+  upload audio.
+- Exception rationale: the scanner maps a source-package issue to a library that
+  is present only as a transitive dependency of the supported Debian FFmpeg
+  graph; the decoder is not on any ChordSync code path. The library cannot be
+  removed without departing from that graph.
+- Owner: ChordSync project owner
+- Approval status: **APPROVED — TIME-LIMITED — BOUND TO IMAGE DIGEST**
+- Approval date: 2026-10-23
+- Review triggers and expiration: the common triggers above, and any change that
+  renders subtitles or fonts, decodes JPEG XL or WOFF2 data, or accepts remote
+  media; 2026-11-22.
+
+Evidence commands:
+
+```text
+dpkg -l libbrotli1
+apt-cache rdepends --installed libbrotli1
+ldd /usr/bin/ffmpeg | grep -i brotli
+```
+
+Authoritative status:
+<https://nvd.nist.gov/vuln/detail/CVE-2026-111497>
+
 ## Re-binding record
+
+### 2026-10-23 — `worker-6d3b1b3` → `worker-e974aff` (chord extensions)
+
+The TIFF and GnuTLS exceptions were re-bound without any change to scope,
+rationale, approval date, or the 2026-11-09 expiry. One new exception was added
+for Brotli (CVE-2026-111497), approved 2026-10-23, expiring 2026-11-22.
+
+Gap in this record: the worker images deployed between 2026-10-13 and today (the
+last being `worker-6d3b1b3`) were never re-bound here, so the "previous" binding
+below is the last one recorded (`worker-d9ef4a3-runtime2`), not the image that
+was live. The scan comparison below is against the live image.
+
+- New digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34` (linux/arm64, user `chordsync`, 1.59 GB compressed)
+- Image changes: rebuilt from the committed code at `e974aff` with the same
+  Dockerfile and the same digest-pinned base images. The application layers add
+  the optional chord-extensions step (`analysis/chords/extensions.py`, the
+  `chord-extensions` pipeline command) and an optional on-demand model role. The
+  new step reads the worker-generated local `no_vocals.wav` with
+  librosa/soundfile and calls no FFmpeg or ffprobe.
+- Installed packages: `libgnutls30t64 3.8.9-3+deb13u4`, `libc6 2.41-12+deb13u4`,
+  `libtiff6 4.7.0-3+deb13u3` and `libfreetype6 2.13.3+dfsg-1+deb13u1` are
+  identical to the previous record. `tiff-tools`, `libtiffxx6` and `tiffcrop`
+  are still absent.
+- Scan evidence: ECR scan COMPLETE 2026-10-23: 2 CRITICAL (CVE-2026-52490 tiff,
+  CVE-2026-111497 brotli), 14 HIGH, 16 MEDIUM, 4 LOW, 1 UNDEFINED. The previous
+  live image `worker-6d3b1b3` (`sha256:c79e7b5fa4b0c2b017fe508cffcfba10a9f8e1063419de9f00dd28c49d938361`)
+  scans, with the same scanner, at 8 CRITICAL (CVE-2026-52490 and seven in the
+  `linux` kernel source package), 91 HIGH, 17 MEDIUM, 4 LOW, 499 UNDEFINED: the
+  new image has fewer open findings. The scanner still does not report the two
+  GnuTLS CRITICAL CVEs; as recorded on 2026-10-13 they remain bound because the
+  installed package is unchanged.
+- Exact-image validation (offline, `--network none`): the worker entry point and
+  pipeline CLI import; the chord-extensions step ran on a real song (Wonderwall)
+  on CPU and produced the same 175 chord labels as the same step run on a Mac,
+  with only labels changed and all times and raw labels untouched.
+- Deployment: approved by the project owner on 2026-10-23, after the owner was
+  shown this finding set.
 
 ### 2026-10-13 — `worker-f548bd0-runtime1` → `worker-d9ef4a3-runtime2`
 
