@@ -1,10 +1,14 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
+import '../../practice_timeline/data/song_identity.dart';
 import '../application/analyzed_practice_session.dart';
+import '../data/embedded_cover_art.dart';
 import 'upload_theme.dart';
 
 /// The "Your songs" tab listing previously analyzed practice sessions.
-class LibraryHome extends StatelessWidget {
+class LibraryHome extends StatefulWidget {
   const LibraryHome({
     super.key,
     required this.sessions,
@@ -17,7 +21,47 @@ class LibraryHome extends StatelessWidget {
   final VoidCallback onAddSong;
 
   @override
+  State<LibraryHome> createState() => _LibraryHomeState();
+}
+
+class _LibraryHomeState extends State<LibraryHome> {
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// Songs whose title or artist contains every word typed, in any order.
+  List<AnalyzedPracticeSession> get _matches {
+    final words = _query
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return widget.sessions;
+    return [
+      for (final session in widget.sessions)
+        if (_containsAll(_haystack(session), words)) session,
+    ];
+  }
+
+  static bool _containsAll(String text, List<String> words) =>
+      words.every(text.contains);
+
+  static String _haystack(AnalyzedPracticeSession session) {
+    final identity = SongIdentity.fromFileName(session.title);
+    return '${identity.title} ${identity.artist ?? ''} ${session.title}'
+        .toLowerCase();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final sessions = widget.sessions;
+    final matches = _matches;
+    final searching = _query.trim().isNotEmpty;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
       children: [
@@ -29,7 +73,32 @@ class LibraryHome extends StatelessWidget {
             context,
           ).textTheme.bodyLarge?.copyWith(color: UploadPalette.secondaryText),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 20),
+        if (sessions.isNotEmpty) ...[
+          TextField(
+            key: const ValueKey('songSearchField'),
+            controller: _search,
+            onChanged: (value) => setState(() => _query = value),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Search songs or artists',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: searching
+                  ? IconButton(
+                      key: const ValueKey('clearSongSearch'),
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _search.clear();
+                        setState(() => _query = '');
+                      },
+                    )
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 20),
+        ] else
+          const SizedBox(height: 8),
         if (sessions.isEmpty)
           Card(
             child: Padding(
@@ -49,7 +118,7 @@ class LibraryHome extends StatelessWidget {
                   ),
                   const SizedBox(height: 18),
                   FilledButton.icon(
-                    onPressed: onAddSong,
+                    onPressed: widget.onAddSong,
                     icon: const Icon(Icons.add),
                     label: const Text('Add a song'),
                   ),
@@ -67,7 +136,9 @@ class LibraryHome extends StatelessWidget {
                 ),
               ),
               Text(
-                '${sessions.length} saved',
+                searching
+                    ? '${matches.length} of ${sessions.length}'
+                    : '${sessions.length} saved',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: UploadPalette.secondaryText,
                 ),
@@ -75,12 +146,25 @@ class LibraryHome extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          for (final session in sessions)
+          if (matches.isEmpty)
+            Padding(
+              key: const ValueKey('noSongMatches'),
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'No songs match "${_query.trim()}".',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: UploadPalette.secondaryText,
+                ),
+              ),
+            ),
+          for (final session in matches)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _SavedPracticeCard(
+                key: ValueKey('card-${session.job.jobId}'),
                 session: session,
-                onOpen: () => onOpen(session),
+                onOpen: () => widget.onOpen(session),
               ),
             ),
         ],
@@ -89,51 +173,203 @@ class LibraryHome extends StatelessWidget {
   }
 }
 
-class _SavedPracticeCard extends StatelessWidget {
-  const _SavedPracticeCard({required this.session, required this.onOpen});
+class _SavedPracticeCard extends StatefulWidget {
+  const _SavedPracticeCard({
+    super.key,
+    required this.session,
+    required this.onOpen,
+  });
 
   final AnalyzedPracticeSession session;
   final VoidCallback onOpen;
 
   @override
+  State<_SavedPracticeCard> createState() => _SavedPracticeCardState();
+}
+
+class _SavedPracticeCardState extends State<_SavedPracticeCard> {
+  /// Covers already read this run, so scrolling back does not read the file
+  /// again.
+  static final Map<String, Future<Uint8List?>> _covers = {};
+
+  late final Future<Uint8List?> _cover = _covers.putIfAbsent(
+    widget.session.audioFile.path,
+    () => EmbeddedCoverArt.read(widget.session.audioFile),
+  );
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 230,
-      child: Card(
-        child: InkWell(
-          key: ValueKey('savedPractice-${session.job.jobId}'),
-          borderRadius: BorderRadius.circular(16),
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-            child: Row(
-              children: [
-                const CircleAvatar(child: Icon(Icons.music_note)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+    final session = widget.session;
+    final identity = SongIdentity.fromFileName(session.title);
+    final textTheme = Theme.of(context).textTheme;
+    final chords = _firstChords(session, 4);
+    return Card(
+      child: InkWell(
+        key: ValueKey('savedPractice-${session.job.jobId}'),
+        borderRadius: BorderRadius.circular(16),
+        onTap: widget.onOpen,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Row(
+            children: [
+              _CoverTile(future: _cover, seed: identity.title),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      identity.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.titleMedium,
+                    ),
+                    if (identity.artist != null)
                       Text(
-                        session.title,
+                        identity.artist!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${session.timeline.bpm.toStringAsFixed(0)} BPM · Practice',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        style: textTheme.bodyMedium?.copyWith(
                           color: UploadPalette.secondaryText,
                         ),
                       ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_duration(session.timeline.endTime)} · '
+                      '${session.timeline.bpm.toStringAsFixed(0)} BPM',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: UploadPalette.secondaryText,
+                      ),
+                    ),
+                    if (chords.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final chord in chords) _ChordChip(chord),
+                        ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-                const Icon(Icons.chevron_right),
-              ],
-            ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The first [limit] different chords in the order they are played.
+  static List<String> _firstChords(AnalyzedPracticeSession session, int limit) {
+    final seen = <String>[];
+    for (final bar in session.timeline.bars) {
+      for (final beat in bar.beats) {
+        if (beat.chord != 'N' && !seen.contains(beat.chord)) {
+          seen.add(beat.chord);
+          if (seen.length == limit) return seen;
+        }
+      }
+    }
+    return seen;
+  }
+
+  static String _duration(double seconds) {
+    final total = seconds.round();
+    final secs = (total % 60).toString().padLeft(2, '0');
+    return '${total ~/ 60}:$secs';
+  }
+}
+
+class _ChordChip extends StatelessWidget {
+  const _ChordChip(this.chord);
+
+  final String chord;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UploadPalette.background,
+        border: Border.all(color: UploadPalette.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        child: Text(
+          chord,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: UploadPalette.primaryText,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The song's embedded cover art, or a coloured tile with its first letter
+/// when it has none.
+class _CoverTile extends StatelessWidget {
+  const _CoverTile({required this.future, required this.seed});
+
+  final Future<Uint8List?> future;
+  final String seed;
+
+  static const size = 64.0;
+
+  // Warm tones from the Golden Hour theme, so a missing cover still fits.
+  static const _tones = [
+    Color(0xFFA8502A),
+    Color(0xFFD98A33),
+    Color(0xFF6E5A4B),
+    Color(0xFF8C6A3F),
+    Color(0xFFB4663A),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: FutureBuilder<Uint8List?>(
+          future: future,
+          builder: (context, snapshot) {
+            final bytes = snapshot.data;
+            if (bytes == null) return _fallback(context);
+            return Image.memory(
+              bytes,
+              key: const ValueKey('coverArt'),
+              fit: BoxFit.cover,
+              cacheWidth: (size * 3).round(),
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stack) => _fallback(context),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _fallback(BuildContext context) {
+    final letter = seed.trim().isEmpty
+        ? '♪'
+        : String.fromCharCode(seed.trim().runes.first).toUpperCase();
+    final tone =
+        _tones[seed.codeUnits.fold(0, (a, b) => a + b) % _tones.length];
+    return ColoredBox(
+      key: const ValueKey('coverFallback'),
+      color: tone,
+      child: Center(
+        child: Text(
+          letter,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
