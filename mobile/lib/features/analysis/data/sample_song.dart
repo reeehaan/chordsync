@@ -10,9 +10,10 @@ import '../application/analyzed_practice_session.dart';
 import 'analysis_job.dart';
 import 'analyzed_session_library.dart';
 
-/// A short built-in song that plays through the 7, maj7, m7, sus2 and sus4
-/// chord shapes, so they can be tried on a phone without analysing anything.
-/// It is only offered in builds that ask for it, and it is never saved.
+/// A built-in song that plays every chord shape the app can draw (all 12 major
+/// and minor chords and the 60 beginner 7, maj7, m7, sus2 and sus4 shapes), so
+/// they can be tried on a phone without analysing anything. It is only offered
+/// in builds that ask for it, and it is never saved.
 class SampleSong {
   SampleSong({
     this.documentsDirectory = getApplicationDocumentsDirectory,
@@ -20,7 +21,7 @@ class SampleSong {
   }) : _bundle = bundle ?? rootBundle;
 
   static const jobId = 'sample-extended-chords';
-  static const title = 'Extended chords sample';
+  static const title = 'All chord shapes';
   static const audioAsset = 'assets/practice_audio/extended_chords_sample.wav';
   static const timelineAsset =
       'assets/practice_timeline/extended_chords_sample.json';

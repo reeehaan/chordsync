@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bpm": 80.0,
+  "bpm": 100.0,
   "beats_per_bar": 4,
   "beat_source": "sample",
   "lyric_source": "sample",
@@ -8,248 +8,1302 @@
     {
       "bar_number": 1,
       "start_time": 0.0,
-      "end_time": 3.0,
+      "end_time": 2.4,
       "beats": [
         {
           "time": 0.0,
           "beat_number": 1,
           "is_downbeat": true,
-          "chord": "Em7"
+          "chord": "C"
         },
         {
-          "time": 0.75,
+          "time": 0.6,
           "beat_number": 2,
           "is_downbeat": false,
-          "chord": "Em7"
+          "chord": "C"
         },
         {
-          "time": 1.5,
+          "time": 1.2,
           "beat_number": 3,
           "is_downbeat": false,
-          "chord": "G"
+          "chord": "C#"
         },
         {
-          "time": 2.25,
+          "time": 1.8,
           "beat_number": 4,
           "is_downbeat": false,
-          "chord": "G"
+          "chord": "C#"
         }
       ]
     },
     {
       "bar_number": 2,
-      "start_time": 3.0,
-      "end_time": 6.0,
+      "start_time": 2.4,
+      "end_time": 4.8,
       "beats": [
         {
-          "time": 3.0,
+          "time": 2.4,
           "beat_number": 1,
           "is_downbeat": true,
-          "chord": "Cmaj7"
+          "chord": "D"
         },
         {
-          "time": 3.75,
+          "time": 3.0,
           "beat_number": 2,
           "is_downbeat": false,
-          "chord": "Cmaj7"
+          "chord": "D"
         },
         {
-          "time": 4.5,
+          "time": 3.6,
           "beat_number": 3,
           "is_downbeat": false,
-          "chord": "Dsus4"
+          "chord": "D#"
         },
         {
-          "time": 5.25,
+          "time": 4.2,
           "beat_number": 4,
           "is_downbeat": false,
-          "chord": "Dsus4"
+          "chord": "D#"
         }
       ]
     },
     {
       "bar_number": 3,
-      "start_time": 6.0,
-      "end_time": 9.0,
+      "start_time": 4.8,
+      "end_time": 7.2,
       "beats": [
         {
-          "time": 6.0,
+          "time": 4.8,
           "beat_number": 1,
           "is_downbeat": true,
-          "chord": "Em7"
+          "chord": "E"
         },
         {
-          "time": 6.75,
+          "time": 5.4,
           "beat_number": 2,
           "is_downbeat": false,
-          "chord": "Em7"
+          "chord": "E"
         },
         {
-          "time": 7.5,
+          "time": 6.0,
           "beat_number": 3,
           "is_downbeat": false,
-          "chord": "A7"
+          "chord": "F"
         },
         {
-          "time": 8.25,
+          "time": 6.6,
           "beat_number": 4,
           "is_downbeat": false,
-          "chord": "A7"
+          "chord": "F"
         }
       ]
     },
     {
       "bar_number": 4,
-      "start_time": 9.0,
-      "end_time": 12.0,
+      "start_time": 7.2,
+      "end_time": 9.6,
       "beats": [
         {
-          "time": 9.0,
+          "time": 7.2,
           "beat_number": 1,
           "is_downbeat": true,
-          "chord": "Dmaj7"
+          "chord": "F#"
         },
         {
-          "time": 9.75,
+          "time": 7.8,
           "beat_number": 2,
           "is_downbeat": false,
-          "chord": "Dmaj7"
+          "chord": "F#"
         },
         {
-          "time": 10.5,
+          "time": 8.4,
           "beat_number": 3,
           "is_downbeat": false,
-          "chord": "Bm7"
+          "chord": "G"
         },
         {
-          "time": 11.25,
+          "time": 9.0,
           "beat_number": 4,
           "is_downbeat": false,
-          "chord": "Bm7"
+          "chord": "G"
         }
       ]
     },
     {
       "bar_number": 5,
-      "start_time": 12.0,
-      "end_time": 15.0,
+      "start_time": 9.6,
+      "end_time": 12.0,
       "beats": [
         {
-          "time": 12.0,
+          "time": 9.6,
           "beat_number": 1,
           "is_downbeat": true,
-          "chord": "Asus2"
+          "chord": "G#"
         },
         {
-          "time": 12.75,
+          "time": 10.2,
           "beat_number": 2,
           "is_downbeat": false,
-          "chord": "Asus2"
+          "chord": "G#"
         },
         {
-          "time": 13.5,
+          "time": 10.8,
           "beat_number": 3,
           "is_downbeat": false,
-          "chord": "Asus4"
+          "chord": "A"
         },
         {
-          "time": 14.25,
+          "time": 11.4,
           "beat_number": 4,
           "is_downbeat": false,
-          "chord": "Asus4"
+          "chord": "A"
         }
       ]
     },
     {
       "bar_number": 6,
-      "start_time": 15.0,
-      "end_time": 18.0,
+      "start_time": 12.0,
+      "end_time": 14.4,
       "beats": [
         {
-          "time": 15.0,
+          "time": 12.0,
           "beat_number": 1,
           "is_downbeat": true,
-          "chord": "Gmaj7"
+          "chord": "A#"
         },
         {
-          "time": 15.75,
+          "time": 12.6,
           "beat_number": 2,
           "is_downbeat": false,
-          "chord": "Gmaj7"
+          "chord": "A#"
         },
         {
-          "time": 16.5,
+          "time": 13.2,
           "beat_number": 3,
           "is_downbeat": false,
-          "chord": "C7"
+          "chord": "B"
         },
         {
-          "time": 17.25,
+          "time": 13.8,
           "beat_number": 4,
           "is_downbeat": false,
-          "chord": "C7"
+          "chord": "B"
         }
       ]
     },
     {
       "bar_number": 7,
-      "start_time": 18.0,
-      "end_time": 21.0,
+      "start_time": 14.4,
+      "end_time": 16.8,
       "beats": [
         {
-          "time": 18.0,
+          "time": 14.4,
           "beat_number": 1,
           "is_downbeat": true,
-          "chord": "Fmaj7"
+          "chord": "Cm"
         },
         {
-          "time": 18.75,
+          "time": 15.0,
           "beat_number": 2,
           "is_downbeat": false,
-          "chord": "Fmaj7"
+          "chord": "Cm"
         },
         {
-          "time": 19.5,
+          "time": 15.6,
           "beat_number": 3,
           "is_downbeat": false,
-          "chord": "Dm7"
+          "chord": "C#m"
         },
         {
-          "time": 20.25,
+          "time": 16.2,
           "beat_number": 4,
           "is_downbeat": false,
-          "chord": "Dm7"
+          "chord": "C#m"
         }
       ]
     },
     {
       "bar_number": 8,
-      "start_time": 21.0,
+      "start_time": 16.8,
+      "end_time": 19.2,
+      "beats": [
+        {
+          "time": 16.8,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Dm"
+        },
+        {
+          "time": 17.4,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Dm"
+        },
+        {
+          "time": 18.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "D#m"
+        },
+        {
+          "time": 18.6,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "D#m"
+        }
+      ]
+    },
+    {
+      "bar_number": 9,
+      "start_time": 19.2,
+      "end_time": 21.6,
+      "beats": [
+        {
+          "time": 19.2,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Em"
+        },
+        {
+          "time": 19.8,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Em"
+        },
+        {
+          "time": 20.4,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Fm"
+        },
+        {
+          "time": 21.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Fm"
+        }
+      ]
+    },
+    {
+      "bar_number": 10,
+      "start_time": 21.6,
       "end_time": 24.0,
       "beats": [
         {
-          "time": 21.0,
+          "time": 21.6,
           "beat_number": 1,
           "is_downbeat": true,
-          "chord": "G7"
+          "chord": "F#m"
         },
         {
-          "time": 21.75,
+          "time": 22.2,
           "beat_number": 2,
           "is_downbeat": false,
+          "chord": "F#m"
+        },
+        {
+          "time": 22.8,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Gm"
+        },
+        {
+          "time": 23.4,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Gm"
+        }
+      ]
+    },
+    {
+      "bar_number": 11,
+      "start_time": 24.0,
+      "end_time": 26.4,
+      "beats": [
+        {
+          "time": 24.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "G#m"
+        },
+        {
+          "time": 24.6,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G#m"
+        },
+        {
+          "time": 25.2,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Am"
+        },
+        {
+          "time": 25.8,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Am"
+        }
+      ]
+    },
+    {
+      "bar_number": 12,
+      "start_time": 26.4,
+      "end_time": 28.8,
+      "beats": [
+        {
+          "time": 26.4,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "A#m"
+        },
+        {
+          "time": 27.0,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "A#m"
+        },
+        {
+          "time": 27.6,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Bm"
+        },
+        {
+          "time": 28.2,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Bm"
+        }
+      ]
+    },
+    {
+      "bar_number": 13,
+      "start_time": 28.8,
+      "end_time": 31.2,
+      "beats": [
+        {
+          "time": 28.8,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "C7"
+        },
+        {
+          "time": 29.4,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "C7"
+        },
+        {
+          "time": 30.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "C#7"
+        },
+        {
+          "time": 30.6,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "C#7"
+        }
+      ]
+    },
+    {
+      "bar_number": 14,
+      "start_time": 31.2,
+      "end_time": 33.6,
+      "beats": [
+        {
+          "time": 31.2,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "D7"
+        },
+        {
+          "time": 31.8,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "D7"
+        },
+        {
+          "time": 32.4,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "D#7"
+        },
+        {
+          "time": 33.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "D#7"
+        }
+      ]
+    },
+    {
+      "bar_number": 15,
+      "start_time": 33.6,
+      "end_time": 36.0,
+      "beats": [
+        {
+          "time": 33.6,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "E7"
+        },
+        {
+          "time": 34.2,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "E7"
+        },
+        {
+          "time": 34.8,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "F7"
+        },
+        {
+          "time": 35.4,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "F7"
+        }
+      ]
+    },
+    {
+      "bar_number": 16,
+      "start_time": 36.0,
+      "end_time": 38.4,
+      "beats": [
+        {
+          "time": 36.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "F#7"
+        },
+        {
+          "time": 36.6,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "F#7"
+        },
+        {
+          "time": 37.2,
+          "beat_number": 3,
+          "is_downbeat": false,
           "chord": "G7"
         },
         {
-          "time": 22.5,
+          "time": 37.8,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "G7"
+        }
+      ]
+    },
+    {
+      "bar_number": 17,
+      "start_time": 38.4,
+      "end_time": 40.8,
+      "beats": [
+        {
+          "time": 38.4,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "G#7"
+        },
+        {
+          "time": 39.0,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G#7"
+        },
+        {
+          "time": 39.6,
           "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "A7"
+        },
+        {
+          "time": 40.2,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "A7"
+        }
+      ]
+    },
+    {
+      "bar_number": 18,
+      "start_time": 40.8,
+      "end_time": 43.2,
+      "beats": [
+        {
+          "time": 40.8,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "A#7"
+        },
+        {
+          "time": 41.4,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "A#7"
+        },
+        {
+          "time": 42.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "B7"
+        },
+        {
+          "time": 42.6,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "B7"
+        }
+      ]
+    },
+    {
+      "bar_number": 19,
+      "start_time": 43.2,
+      "end_time": 45.6,
+      "beats": [
+        {
+          "time": 43.2,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Cmaj7"
+        },
+        {
+          "time": 43.8,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Cmaj7"
+        },
+        {
+          "time": 44.4,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "C#maj7"
+        },
+        {
+          "time": 45.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "C#maj7"
+        }
+      ]
+    },
+    {
+      "bar_number": 20,
+      "start_time": 45.6,
+      "end_time": 48.0,
+      "beats": [
+        {
+          "time": 45.6,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Dmaj7"
+        },
+        {
+          "time": 46.2,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Dmaj7"
+        },
+        {
+          "time": 46.8,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "D#maj7"
+        },
+        {
+          "time": 47.4,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "D#maj7"
+        }
+      ]
+    },
+    {
+      "bar_number": 21,
+      "start_time": 48.0,
+      "end_time": 50.4,
+      "beats": [
+        {
+          "time": 48.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Emaj7"
+        },
+        {
+          "time": 48.6,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Emaj7"
+        },
+        {
+          "time": 49.2,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Fmaj7"
+        },
+        {
+          "time": 49.8,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Fmaj7"
+        }
+      ]
+    },
+    {
+      "bar_number": 22,
+      "start_time": 50.4,
+      "end_time": 52.8,
+      "beats": [
+        {
+          "time": 50.4,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "F#maj7"
+        },
+        {
+          "time": 51.0,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "F#maj7"
+        },
+        {
+          "time": 51.6,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Gmaj7"
+        },
+        {
+          "time": 52.2,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Gmaj7"
+        }
+      ]
+    },
+    {
+      "bar_number": 23,
+      "start_time": 52.8,
+      "end_time": 55.2,
+      "beats": [
+        {
+          "time": 52.8,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "G#maj7"
+        },
+        {
+          "time": 53.4,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G#maj7"
+        },
+        {
+          "time": 54.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Amaj7"
+        },
+        {
+          "time": 54.6,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Amaj7"
+        }
+      ]
+    },
+    {
+      "bar_number": 24,
+      "start_time": 55.2,
+      "end_time": 57.6,
+      "beats": [
+        {
+          "time": 55.2,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "A#maj7"
+        },
+        {
+          "time": 55.8,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "A#maj7"
+        },
+        {
+          "time": 56.4,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Bmaj7"
+        },
+        {
+          "time": 57.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Bmaj7"
+        }
+      ]
+    },
+    {
+      "bar_number": 25,
+      "start_time": 57.6,
+      "end_time": 60.0,
+      "beats": [
+        {
+          "time": 57.6,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Cm7"
+        },
+        {
+          "time": 58.2,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Cm7"
+        },
+        {
+          "time": 58.8,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "C#m7"
+        },
+        {
+          "time": 59.4,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "C#m7"
+        }
+      ]
+    },
+    {
+      "bar_number": 26,
+      "start_time": 60.0,
+      "end_time": 62.4,
+      "beats": [
+        {
+          "time": 60.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Dm7"
+        },
+        {
+          "time": 60.6,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Dm7"
+        },
+        {
+          "time": 61.2,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "D#m7"
+        },
+        {
+          "time": 61.8,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "D#m7"
+        }
+      ]
+    },
+    {
+      "bar_number": 27,
+      "start_time": 62.4,
+      "end_time": 64.8,
+      "beats": [
+        {
+          "time": 62.4,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Em7"
+        },
+        {
+          "time": 63.0,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Em7"
+        },
+        {
+          "time": 63.6,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Fm7"
+        },
+        {
+          "time": 64.2,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Fm7"
+        }
+      ]
+    },
+    {
+      "bar_number": 28,
+      "start_time": 64.8,
+      "end_time": 67.2,
+      "beats": [
+        {
+          "time": 64.8,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "F#m7"
+        },
+        {
+          "time": 65.4,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "F#m7"
+        },
+        {
+          "time": 66.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Gm7"
+        },
+        {
+          "time": 66.6,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Gm7"
+        }
+      ]
+    },
+    {
+      "bar_number": 29,
+      "start_time": 67.2,
+      "end_time": 69.6,
+      "beats": [
+        {
+          "time": 67.2,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "G#m7"
+        },
+        {
+          "time": 67.8,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G#m7"
+        },
+        {
+          "time": 68.4,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Am7"
+        },
+        {
+          "time": 69.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Am7"
+        }
+      ]
+    },
+    {
+      "bar_number": 30,
+      "start_time": 69.6,
+      "end_time": 72.0,
+      "beats": [
+        {
+          "time": 69.6,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "A#m7"
+        },
+        {
+          "time": 70.2,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "A#m7"
+        },
+        {
+          "time": 70.8,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Bm7"
+        },
+        {
+          "time": 71.4,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Bm7"
+        }
+      ]
+    },
+    {
+      "bar_number": 31,
+      "start_time": 72.0,
+      "end_time": 74.4,
+      "beats": [
+        {
+          "time": 72.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Csus2"
+        },
+        {
+          "time": 72.6,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Csus2"
+        },
+        {
+          "time": 73.2,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "C#sus2"
+        },
+        {
+          "time": 73.8,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "C#sus2"
+        }
+      ]
+    },
+    {
+      "bar_number": 32,
+      "start_time": 74.4,
+      "end_time": 76.8,
+      "beats": [
+        {
+          "time": 74.4,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Dsus2"
+        },
+        {
+          "time": 75.0,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Dsus2"
+        },
+        {
+          "time": 75.6,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "D#sus2"
+        },
+        {
+          "time": 76.2,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "D#sus2"
+        }
+      ]
+    },
+    {
+      "bar_number": 33,
+      "start_time": 76.8,
+      "end_time": 79.2,
+      "beats": [
+        {
+          "time": 76.8,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Esus2"
+        },
+        {
+          "time": 77.4,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Esus2"
+        },
+        {
+          "time": 78.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Fsus2"
+        },
+        {
+          "time": 78.6,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Fsus2"
+        }
+      ]
+    },
+    {
+      "bar_number": 34,
+      "start_time": 79.2,
+      "end_time": 81.6,
+      "beats": [
+        {
+          "time": 79.2,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "F#sus2"
+        },
+        {
+          "time": 79.8,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "F#sus2"
+        },
+        {
+          "time": 80.4,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Gsus2"
+        },
+        {
+          "time": 81.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Gsus2"
+        }
+      ]
+    },
+    {
+      "bar_number": 35,
+      "start_time": 81.6,
+      "end_time": 84.0,
+      "beats": [
+        {
+          "time": 81.6,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "G#sus2"
+        },
+        {
+          "time": 82.2,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G#sus2"
+        },
+        {
+          "time": 82.8,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Asus2"
+        },
+        {
+          "time": 83.4,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Asus2"
+        }
+      ]
+    },
+    {
+      "bar_number": 36,
+      "start_time": 84.0,
+      "end_time": 86.4,
+      "beats": [
+        {
+          "time": 84.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "A#sus2"
+        },
+        {
+          "time": 84.6,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "A#sus2"
+        },
+        {
+          "time": 85.2,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Bsus2"
+        },
+        {
+          "time": 85.8,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Bsus2"
+        }
+      ]
+    },
+    {
+      "bar_number": 37,
+      "start_time": 86.4,
+      "end_time": 88.8,
+      "beats": [
+        {
+          "time": 86.4,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Csus4"
+        },
+        {
+          "time": 87.0,
+          "beat_number": 2,
           "is_downbeat": false,
           "chord": "Csus4"
         },
         {
-          "time": 23.25,
+          "time": 87.6,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "C#sus4"
+        },
+        {
+          "time": 88.2,
           "beat_number": 4,
           "is_downbeat": false,
-          "chord": "Csus4"
+          "chord": "C#sus4"
+        }
+      ]
+    },
+    {
+      "bar_number": 38,
+      "start_time": 88.8,
+      "end_time": 91.2,
+      "beats": [
+        {
+          "time": 88.8,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Dsus4"
+        },
+        {
+          "time": 89.4,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Dsus4"
+        },
+        {
+          "time": 90.0,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "D#sus4"
+        },
+        {
+          "time": 90.6,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "D#sus4"
+        }
+      ]
+    },
+    {
+      "bar_number": 39,
+      "start_time": 91.2,
+      "end_time": 93.6,
+      "beats": [
+        {
+          "time": 91.2,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Esus4"
+        },
+        {
+          "time": 91.8,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Esus4"
+        },
+        {
+          "time": 92.4,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Fsus4"
+        },
+        {
+          "time": 93.0,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Fsus4"
+        }
+      ]
+    },
+    {
+      "bar_number": 40,
+      "start_time": 93.6,
+      "end_time": 96.0,
+      "beats": [
+        {
+          "time": 93.6,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "F#sus4"
+        },
+        {
+          "time": 94.2,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "F#sus4"
+        },
+        {
+          "time": 94.8,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Gsus4"
+        },
+        {
+          "time": 95.4,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Gsus4"
+        }
+      ]
+    },
+    {
+      "bar_number": 41,
+      "start_time": 96.0,
+      "end_time": 98.4,
+      "beats": [
+        {
+          "time": 96.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "G#sus4"
+        },
+        {
+          "time": 96.6,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G#sus4"
+        },
+        {
+          "time": 97.2,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Asus4"
+        },
+        {
+          "time": 97.8,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Asus4"
+        }
+      ]
+    },
+    {
+      "bar_number": 42,
+      "start_time": 98.4,
+      "end_time": 100.8,
+      "beats": [
+        {
+          "time": 98.4,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "A#sus4"
+        },
+        {
+          "time": 99.0,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "A#sus4"
+        },
+        {
+          "time": 99.6,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Bsus4"
+        },
+        {
+          "time": 100.2,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Bsus4"
         }
       ]
     }
@@ -257,137 +1311,715 @@
   "lyrics": [
     {
       "start": 0.05,
-      "end": 2.9,
-      "text": "Strum along",
+      "end": 2.3,
+      "text": "C C#",
       "words": [
         {
           "start": 0.05,
-          "end": 1.4,
-          "text": "Strum"
+          "end": 1.1,
+          "text": "C"
         },
         {
-          "start": 1.55,
-          "end": 2.9,
-          "text": "along"
+          "start": 1.25,
+          "end": 2.3,
+          "text": "C#"
         }
       ]
     },
     {
-      "start": 3.05,
-      "end": 5.9,
-      "text": "to every",
+      "start": 2.45,
+      "end": 4.7,
+      "text": "D D#",
       "words": [
         {
-          "start": 3.05,
-          "end": 4.4,
-          "text": "to"
+          "start": 2.45,
+          "end": 3.5,
+          "text": "D"
         },
         {
-          "start": 4.55,
+          "start": 3.65,
+          "end": 4.7,
+          "text": "D#"
+        }
+      ]
+    },
+    {
+      "start": 4.85,
+      "end": 7.1,
+      "text": "E F",
+      "words": [
+        {
+          "start": 4.85,
           "end": 5.9,
-          "text": "every"
-        }
-      ]
-    },
-    {
-      "start": 6.05,
-      "end": 8.9,
-      "text": "new shape",
-      "words": [
+          "text": "E"
+        },
         {
           "start": 6.05,
-          "end": 7.4,
-          "text": "new"
-        },
-        {
-          "start": 7.55,
-          "end": 8.9,
-          "text": "shape"
+          "end": 7.1,
+          "text": "F"
         }
       ]
     },
     {
-      "start": 9.05,
-      "end": 11.9,
-      "text": "you can",
+      "start": 7.25,
+      "end": 9.5,
+      "text": "F# G",
       "words": [
         {
-          "start": 9.05,
-          "end": 10.4,
-          "text": "you"
+          "start": 7.25,
+          "end": 8.3,
+          "text": "F#"
         },
         {
-          "start": 10.55,
+          "start": 8.45,
+          "end": 9.5,
+          "text": "G"
+        }
+      ]
+    },
+    {
+      "start": 9.65,
+      "end": 11.9,
+      "text": "G# A",
+      "words": [
+        {
+          "start": 9.65,
+          "end": 10.7,
+          "text": "G#"
+        },
+        {
+          "start": 10.85,
           "end": 11.9,
-          "text": "can"
+          "text": "A"
         }
       ]
     },
     {
       "start": 12.05,
-      "end": 14.9,
-      "text": "play it",
+      "end": 14.3,
+      "text": "A# B",
       "words": [
         {
           "start": 12.05,
-          "end": 13.4,
-          "text": "play"
+          "end": 13.1,
+          "text": "A#"
         },
         {
-          "start": 13.55,
-          "end": 14.9,
-          "text": "it"
+          "start": 13.25,
+          "end": 14.3,
+          "text": "B"
         }
       ]
     },
     {
-      "start": 15.05,
-      "end": 17.9,
-      "text": "slow then",
+      "start": 14.45,
+      "end": 16.7,
+      "text": "Cm C#m",
       "words": [
         {
-          "start": 15.05,
-          "end": 16.4,
-          "text": "slow"
+          "start": 14.45,
+          "end": 15.5,
+          "text": "Cm"
         },
         {
-          "start": 16.55,
+          "start": 15.65,
+          "end": 16.7,
+          "text": "C#m"
+        }
+      ]
+    },
+    {
+      "start": 16.85,
+      "end": 19.1,
+      "text": "Dm D#m",
+      "words": [
+        {
+          "start": 16.85,
           "end": 17.9,
-          "text": "then"
-        }
-      ]
-    },
-    {
-      "start": 18.05,
-      "end": 20.9,
-      "text": "pick up",
-      "words": [
+          "text": "Dm"
+        },
         {
           "start": 18.05,
-          "end": 19.4,
-          "text": "pick"
-        },
-        {
-          "start": 19.55,
-          "end": 20.9,
-          "text": "up"
+          "end": 19.1,
+          "text": "D#m"
         }
       ]
     },
     {
-      "start": 21.05,
-      "end": 23.9,
-      "text": "speed now",
+      "start": 19.25,
+      "end": 21.5,
+      "text": "Em Fm",
       "words": [
         {
-          "start": 21.05,
-          "end": 22.4,
-          "text": "speed"
+          "start": 19.25,
+          "end": 20.3,
+          "text": "Em"
         },
         {
-          "start": 22.55,
+          "start": 20.45,
+          "end": 21.5,
+          "text": "Fm"
+        }
+      ]
+    },
+    {
+      "start": 21.65,
+      "end": 23.9,
+      "text": "F#m Gm",
+      "words": [
+        {
+          "start": 21.65,
+          "end": 22.7,
+          "text": "F#m"
+        },
+        {
+          "start": 22.85,
           "end": 23.9,
-          "text": "now"
+          "text": "Gm"
+        }
+      ]
+    },
+    {
+      "start": 24.05,
+      "end": 26.3,
+      "text": "G#m Am",
+      "words": [
+        {
+          "start": 24.05,
+          "end": 25.1,
+          "text": "G#m"
+        },
+        {
+          "start": 25.25,
+          "end": 26.3,
+          "text": "Am"
+        }
+      ]
+    },
+    {
+      "start": 26.45,
+      "end": 28.7,
+      "text": "A#m Bm",
+      "words": [
+        {
+          "start": 26.45,
+          "end": 27.5,
+          "text": "A#m"
+        },
+        {
+          "start": 27.65,
+          "end": 28.7,
+          "text": "Bm"
+        }
+      ]
+    },
+    {
+      "start": 28.85,
+      "end": 31.1,
+      "text": "C7 C#7",
+      "words": [
+        {
+          "start": 28.85,
+          "end": 29.9,
+          "text": "C7"
+        },
+        {
+          "start": 30.05,
+          "end": 31.1,
+          "text": "C#7"
+        }
+      ]
+    },
+    {
+      "start": 31.25,
+      "end": 33.5,
+      "text": "D7 D#7",
+      "words": [
+        {
+          "start": 31.25,
+          "end": 32.3,
+          "text": "D7"
+        },
+        {
+          "start": 32.45,
+          "end": 33.5,
+          "text": "D#7"
+        }
+      ]
+    },
+    {
+      "start": 33.65,
+      "end": 35.9,
+      "text": "E7 F7",
+      "words": [
+        {
+          "start": 33.65,
+          "end": 34.7,
+          "text": "E7"
+        },
+        {
+          "start": 34.85,
+          "end": 35.9,
+          "text": "F7"
+        }
+      ]
+    },
+    {
+      "start": 36.05,
+      "end": 38.3,
+      "text": "F#7 G7",
+      "words": [
+        {
+          "start": 36.05,
+          "end": 37.1,
+          "text": "F#7"
+        },
+        {
+          "start": 37.25,
+          "end": 38.3,
+          "text": "G7"
+        }
+      ]
+    },
+    {
+      "start": 38.45,
+      "end": 40.7,
+      "text": "G#7 A7",
+      "words": [
+        {
+          "start": 38.45,
+          "end": 39.5,
+          "text": "G#7"
+        },
+        {
+          "start": 39.65,
+          "end": 40.7,
+          "text": "A7"
+        }
+      ]
+    },
+    {
+      "start": 40.85,
+      "end": 43.1,
+      "text": "A#7 B7",
+      "words": [
+        {
+          "start": 40.85,
+          "end": 41.9,
+          "text": "A#7"
+        },
+        {
+          "start": 42.05,
+          "end": 43.1,
+          "text": "B7"
+        }
+      ]
+    },
+    {
+      "start": 43.25,
+      "end": 45.5,
+      "text": "Cmaj7 C#maj7",
+      "words": [
+        {
+          "start": 43.25,
+          "end": 44.3,
+          "text": "Cmaj7"
+        },
+        {
+          "start": 44.45,
+          "end": 45.5,
+          "text": "C#maj7"
+        }
+      ]
+    },
+    {
+      "start": 45.65,
+      "end": 47.9,
+      "text": "Dmaj7 D#maj7",
+      "words": [
+        {
+          "start": 45.65,
+          "end": 46.7,
+          "text": "Dmaj7"
+        },
+        {
+          "start": 46.85,
+          "end": 47.9,
+          "text": "D#maj7"
+        }
+      ]
+    },
+    {
+      "start": 48.05,
+      "end": 50.3,
+      "text": "Emaj7 Fmaj7",
+      "words": [
+        {
+          "start": 48.05,
+          "end": 49.1,
+          "text": "Emaj7"
+        },
+        {
+          "start": 49.25,
+          "end": 50.3,
+          "text": "Fmaj7"
+        }
+      ]
+    },
+    {
+      "start": 50.45,
+      "end": 52.7,
+      "text": "F#maj7 Gmaj7",
+      "words": [
+        {
+          "start": 50.45,
+          "end": 51.5,
+          "text": "F#maj7"
+        },
+        {
+          "start": 51.65,
+          "end": 52.7,
+          "text": "Gmaj7"
+        }
+      ]
+    },
+    {
+      "start": 52.85,
+      "end": 55.1,
+      "text": "G#maj7 Amaj7",
+      "words": [
+        {
+          "start": 52.85,
+          "end": 53.9,
+          "text": "G#maj7"
+        },
+        {
+          "start": 54.05,
+          "end": 55.1,
+          "text": "Amaj7"
+        }
+      ]
+    },
+    {
+      "start": 55.25,
+      "end": 57.5,
+      "text": "A#maj7 Bmaj7",
+      "words": [
+        {
+          "start": 55.25,
+          "end": 56.3,
+          "text": "A#maj7"
+        },
+        {
+          "start": 56.45,
+          "end": 57.5,
+          "text": "Bmaj7"
+        }
+      ]
+    },
+    {
+      "start": 57.65,
+      "end": 59.9,
+      "text": "Cm7 C#m7",
+      "words": [
+        {
+          "start": 57.65,
+          "end": 58.7,
+          "text": "Cm7"
+        },
+        {
+          "start": 58.85,
+          "end": 59.9,
+          "text": "C#m7"
+        }
+      ]
+    },
+    {
+      "start": 60.05,
+      "end": 62.3,
+      "text": "Dm7 D#m7",
+      "words": [
+        {
+          "start": 60.05,
+          "end": 61.1,
+          "text": "Dm7"
+        },
+        {
+          "start": 61.25,
+          "end": 62.3,
+          "text": "D#m7"
+        }
+      ]
+    },
+    {
+      "start": 62.45,
+      "end": 64.7,
+      "text": "Em7 Fm7",
+      "words": [
+        {
+          "start": 62.45,
+          "end": 63.5,
+          "text": "Em7"
+        },
+        {
+          "start": 63.65,
+          "end": 64.7,
+          "text": "Fm7"
+        }
+      ]
+    },
+    {
+      "start": 64.85,
+      "end": 67.1,
+      "text": "F#m7 Gm7",
+      "words": [
+        {
+          "start": 64.85,
+          "end": 65.9,
+          "text": "F#m7"
+        },
+        {
+          "start": 66.05,
+          "end": 67.1,
+          "text": "Gm7"
+        }
+      ]
+    },
+    {
+      "start": 67.25,
+      "end": 69.5,
+      "text": "G#m7 Am7",
+      "words": [
+        {
+          "start": 67.25,
+          "end": 68.3,
+          "text": "G#m7"
+        },
+        {
+          "start": 68.45,
+          "end": 69.5,
+          "text": "Am7"
+        }
+      ]
+    },
+    {
+      "start": 69.65,
+      "end": 71.9,
+      "text": "A#m7 Bm7",
+      "words": [
+        {
+          "start": 69.65,
+          "end": 70.7,
+          "text": "A#m7"
+        },
+        {
+          "start": 70.85,
+          "end": 71.9,
+          "text": "Bm7"
+        }
+      ]
+    },
+    {
+      "start": 72.05,
+      "end": 74.3,
+      "text": "Csus2 C#sus2",
+      "words": [
+        {
+          "start": 72.05,
+          "end": 73.1,
+          "text": "Csus2"
+        },
+        {
+          "start": 73.25,
+          "end": 74.3,
+          "text": "C#sus2"
+        }
+      ]
+    },
+    {
+      "start": 74.45,
+      "end": 76.7,
+      "text": "Dsus2 D#sus2",
+      "words": [
+        {
+          "start": 74.45,
+          "end": 75.5,
+          "text": "Dsus2"
+        },
+        {
+          "start": 75.65,
+          "end": 76.7,
+          "text": "D#sus2"
+        }
+      ]
+    },
+    {
+      "start": 76.85,
+      "end": 79.1,
+      "text": "Esus2 Fsus2",
+      "words": [
+        {
+          "start": 76.85,
+          "end": 77.9,
+          "text": "Esus2"
+        },
+        {
+          "start": 78.05,
+          "end": 79.1,
+          "text": "Fsus2"
+        }
+      ]
+    },
+    {
+      "start": 79.25,
+      "end": 81.5,
+      "text": "F#sus2 Gsus2",
+      "words": [
+        {
+          "start": 79.25,
+          "end": 80.3,
+          "text": "F#sus2"
+        },
+        {
+          "start": 80.45,
+          "end": 81.5,
+          "text": "Gsus2"
+        }
+      ]
+    },
+    {
+      "start": 81.65,
+      "end": 83.9,
+      "text": "G#sus2 Asus2",
+      "words": [
+        {
+          "start": 81.65,
+          "end": 82.7,
+          "text": "G#sus2"
+        },
+        {
+          "start": 82.85,
+          "end": 83.9,
+          "text": "Asus2"
+        }
+      ]
+    },
+    {
+      "start": 84.05,
+      "end": 86.3,
+      "text": "A#sus2 Bsus2",
+      "words": [
+        {
+          "start": 84.05,
+          "end": 85.1,
+          "text": "A#sus2"
+        },
+        {
+          "start": 85.25,
+          "end": 86.3,
+          "text": "Bsus2"
+        }
+      ]
+    },
+    {
+      "start": 86.45,
+      "end": 88.7,
+      "text": "Csus4 C#sus4",
+      "words": [
+        {
+          "start": 86.45,
+          "end": 87.5,
+          "text": "Csus4"
+        },
+        {
+          "start": 87.65,
+          "end": 88.7,
+          "text": "C#sus4"
+        }
+      ]
+    },
+    {
+      "start": 88.85,
+      "end": 91.1,
+      "text": "Dsus4 D#sus4",
+      "words": [
+        {
+          "start": 88.85,
+          "end": 89.9,
+          "text": "Dsus4"
+        },
+        {
+          "start": 90.05,
+          "end": 91.1,
+          "text": "D#sus4"
+        }
+      ]
+    },
+    {
+      "start": 91.25,
+      "end": 93.5,
+      "text": "Esus4 Fsus4",
+      "words": [
+        {
+          "start": 91.25,
+          "end": 92.3,
+          "text": "Esus4"
+        },
+        {
+          "start": 92.45,
+          "end": 93.5,
+          "text": "Fsus4"
+        }
+      ]
+    },
+    {
+      "start": 93.65,
+      "end": 95.9,
+      "text": "F#sus4 Gsus4",
+      "words": [
+        {
+          "start": 93.65,
+          "end": 94.7,
+          "text": "F#sus4"
+        },
+        {
+          "start": 94.85,
+          "end": 95.9,
+          "text": "Gsus4"
+        }
+      ]
+    },
+    {
+      "start": 96.05,
+      "end": 98.3,
+      "text": "G#sus4 Asus4",
+      "words": [
+        {
+          "start": 96.05,
+          "end": 97.1,
+          "text": "G#sus4"
+        },
+        {
+          "start": 97.25,
+          "end": 98.3,
+          "text": "Asus4"
+        }
+      ]
+    },
+    {
+      "start": 98.45,
+      "end": 100.7,
+      "text": "A#sus4 Bsus4",
+      "words": [
+        {
+          "start": 98.45,
+          "end": 99.5,
+          "text": "A#sus4"
+        },
+        {
+          "start": 99.65,
+          "end": 100.7,
+          "text": "Bsus4"
         }
       ]
     }

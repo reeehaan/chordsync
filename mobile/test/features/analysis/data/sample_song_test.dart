@@ -38,6 +38,40 @@ void main() {
 
   SampleSong sample() => SampleSong(documentsDirectory: () async => documents);
 
+  test('the sample plays all 84 chords the app can draw', () async {
+    final timeline = SharedTimeline.fromJson(
+      jsonDecode(await rootBundle.loadString(SampleSong.timelineAsset))
+          as Map<String, dynamic>,
+    );
+    final played = [
+      for (final bar in timeline.bars)
+        for (final beat in bar.beats) beat.chord,
+    ];
+    const roots = [
+      'C',
+      'C#',
+      'D',
+      'D#',
+      'E',
+      'F',
+      'F#',
+      'G',
+      'G#',
+      'A',
+      'A#',
+      'B',
+    ];
+    const suffixes = ['', 'm', '7', 'maj7', 'm7', 'sus2', 'sus4'];
+
+    for (final root in roots) {
+      for (final suffix in suffixes) {
+        expect(played, contains('$root$suffix'), reason: '$root$suffix');
+      }
+    }
+    // Each is held for a couple of beats, in the order: plain, then each type.
+    expect(played.toSet().length, 84);
+  });
+
   test('every chord in the sample has a drawn shape', () async {
     final timeline = SharedTimeline.fromJson(
       jsonDecode(await rootBundle.loadString(SampleSong.timelineAsset))
@@ -48,7 +82,7 @@ void main() {
         for (final beat in bar.beats) beat.chord,
     };
 
-    expect(chords.length, greaterThan(10));
+    expect(chords.length, 84);
     for (final chord in chords) {
       expect(ChordDiagram.fretsFor(chord), isNotNull, reason: chord);
     }
