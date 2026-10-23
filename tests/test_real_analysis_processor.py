@@ -179,6 +179,22 @@ class FakePipelineRunner:
             vocals_path = output_dir / model_name / input_path.stem / "vocals.wav"
             vocals_path.parent.mkdir(parents=True, exist_ok=True)
             vocals_path.write_bytes(b"RIFF synthetic vocals audio")
+            (vocals_path.parent / "no_vocals.wav").write_bytes(
+                b"RIFF synthetic instrumental audio"
+            )
+        elif stage == "chord-extensions":
+            self._write_json(
+                Path(argv[argv.index("--output") + 1]),
+                [
+                    {
+                        "start": 0.0,
+                        "end": 1.0,
+                        "raw_label": "C",
+                        "normalized_label": "Cmaj7",
+                        "source": "btc",
+                    }
+                ],
+            )
         elif stage == "lyrics":
             output_directory = Path(argv[argv.index("--output_dir") + 1])
             input_path = Path(argv[1])
@@ -1850,3 +1866,123 @@ def test_hindi_lyrics_stay_in_devanagari_when_the_switch_is_off(
     assert runner.fusion_whisperx_payload["segments"][0]["text"].strip() == (
         "दिल का दरिया बह ही गया"
     )
+
+
+# --- chord extensions (7, maj7, m7, sus2, sus4), off by default -------------------
+
+
+def _with_extensions(config, tmp_path, *, checkpoint_exists=True):
+    checkpoint = tmp_path / "models" / "btc_model_large_voca.pt"
+    if checkpoint_exists:
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.write_bytes(b"large checkpoint")
+    return AnalysisPipelineConfig(
+        **{
+            **config.__dict__,
+            "chord_estimator": ChordEstimator.BTC,
+            "btc_python": Path("/env/btc/python"),
+            "btc_checkpoint": Path("/models/btc_model.pt"),
+            "btc_source": Path("/external/BTC-ISMIR19"),
+            "chord_extensions_enabled": True,
+            "btc_large_checkpoint": checkpoint,
+            "chord_extensions_timeout": 77,
+        }
+    )
+
+
+@pytest.fixture
+def btc_files(monkeypatch):
+    # The estimator check wants real files; the fake runner never reads them.
+    monkeypatch.setattr(
+        "backend.api.app.services.real_analysis_processor."
+        "RealAnalysisProcessor._require_configured_chord_estimator",
+        lambda self: None,
+    )
+
+
+def test_extensions_stage_runs_after_separation_and_feeds_fusion(
+    processor_context, tmp_path, btc_files
+):
+    config, input_path = processor_context
+    config = _with_extensions(config, tmp_path)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(config, runner).process(input_path)
+
+    assert [runner._stage(call.argv) for call in runner.calls] == [
+        "preprocess", "btc-chords", "beats", "separate",
+        "chord-extensions", "lyrics", "fuse",
+    ]
+    call = runner.calls[4]
+    argv = call.argv
+    assert argv[0] == "/env/btc/python"
+    assert argv[argv.index("--large-checkpoint") + 1] == str(config.btc_large_checkpoint)
+    assert argv[argv.index("--source") + 1] == "/external/BTC-ISMIR19"
+    assert argv[argv.index("--stem") + 1].endswith("/no_vocals.wav")
+    assert argv[argv.index("--chords") + 1].endswith("/chords.json")
+    assert call.timeout == 77
+    # The extended chords, not the plain ones, are what gets published.
+    fuse = runner.calls[-1].argv
+    assert fuse[fuse.index("--chords") + 1].endswith("/chords_with_extensions.json")
+
+
+def test_extensions_are_off_unless_switched_on(processor_context, tmp_path, btc_files):
+    config, input_path = processor_context
+    config = AnalysisPipelineConfig(
+        **{**_with_extensions(config, tmp_path).__dict__, "chord_extensions_enabled": False}
+    )
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(config, runner).process(input_path)
+
+    stages = [runner._stage(call.argv) for call in runner.calls]
+    assert "chord-extensions" not in stages
+    fuse = runner.calls[-1].argv
+    assert fuse[fuse.index("--chords") + 1].endswith("/chords.json")
+
+
+def test_a_failing_extensions_stage_keeps_the_plain_chords(
+    processor_context, tmp_path, btc_files, caplog
+):
+    config, input_path = processor_context
+    config = _with_extensions(config, tmp_path)
+    runner = FakePipelineRunner(failing_stage="chord-extensions")
+
+    timeline = RealAnalysisProcessor(config, runner).process(input_path)
+
+    assert timeline.model_dump(mode="json") == SYNTHETIC_TIMELINE
+    fuse = runner.calls[-1].argv
+    assert fuse[fuse.index("--chords") + 1].endswith("/chords.json")
+    assert "chord extensions failed" in caplog.text
+    assert "private failure" not in caplog.text.split("chord extensions failed")[-1]
+
+
+@pytest.mark.parametrize("stage_problem", ["timeout", "missing", "malformed"])
+def test_extensions_stage_problems_never_fail_the_song(
+    processor_context, tmp_path, btc_files, stage_problem
+):
+    config, input_path = processor_context
+    config = _with_extensions(config, tmp_path)
+    runner = FakePipelineRunner(**{f"{stage_problem}_stage": "chord-extensions"})
+
+    try:
+        timeline = RealAnalysisProcessor(config, runner).process(input_path)
+    except AnalysisStageTimeout:
+        pytest.fail("a slow extensions stage must not fail the analysis")
+
+    assert timeline.model_dump(mode="json") == SYNTHETIC_TIMELINE
+    fuse = runner.calls[-1].argv
+    assert fuse[fuse.index("--chords") + 1].endswith("/chords.json")
+
+
+def test_extensions_without_the_large_model_use_plain_chords(
+    processor_context, tmp_path, btc_files, caplog
+):
+    config, input_path = processor_context
+    config = _with_extensions(config, tmp_path, checkpoint_exists=False)
+    runner = FakePipelineRunner()
+
+    RealAnalysisProcessor(config, runner).process(input_path)
+
+    assert "chord-extensions" not in [runner._stage(c.argv) for c in runner.calls]
+    assert "not available" in caplog.text

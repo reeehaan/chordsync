@@ -206,6 +206,12 @@ class AnalysisPipelineConfig:
     lrclib_timeout: float = DEFAULT_TIMEOUT_SECONDS
     lrclib_user_agent: str = DEFAULT_USER_AGENT
     stage_network_disabled: bool = False
+    # Show 7, maj7, m7, sus2 and sus4 chords where BTC's large model and the
+    # notes in the instrumental audio agree. Off by default. Needs the large
+    # BTC checkpoint (btc_model_large_voca.pt); without it chords stay plain.
+    chord_extensions_enabled: bool = False
+    btc_large_checkpoint: Path | None = None
+    chord_extensions_timeout: float = 300.0
 
     @classmethod
     def local(cls) -> "AnalysisPipelineConfig":
@@ -288,6 +294,11 @@ class AnalysisPipelineConfig:
             stage_network_disabled=(
                 os.getenv("CHORDSYNC_STAGE_NETWORK", "").casefold() == "disabled"
             ),
+            chord_extensions_enabled=(
+                os.getenv("CHORDSYNC_CHORD_EXTENSIONS_ENABLED", "").casefold()
+                in {"1", "true", "yes"}
+            ),
+            btc_large_checkpoint=_optional_path("CHORDSYNC_BTC_LARGE_CHECKPOINT"),
         )
 
 
@@ -305,6 +316,20 @@ class JobWorkspace:
     @property
     def chords(self) -> Path:
         return self.root / "chords.json"
+
+    @property
+    def chords_with_extensions(self) -> Path:
+        return self.root / "chords_with_extensions.json"
+
+    @property
+    def instrumental(self) -> Path:
+        """The song with the vocals taken out (made by the separation stage)."""
+        return (
+            self.separation_directory
+            / self.demucs_model
+            / self.normalized_audio.stem
+            / "no_vocals.wav"
+        )
 
     @property
     def btc_uncertainty(self) -> Path:
@@ -411,6 +436,7 @@ class RealAnalysisProcessor:
         self._run_beats(workspace)
         practice_regions = self._run_practice_regions(workspace, job_id)
         self._run_separation(workspace)
+        fusion_chords = self._run_chord_extensions(workspace, job_id)
         if reference is None:
             # LRCLIB errors come and go. Several minutes have passed, so try once
             # more before falling back to speech recognition.
@@ -430,7 +456,7 @@ class RealAnalysisProcessor:
                 job_id,
             )
             self._run_fusion_stage(
-                workspace.chords,
+                fusion_chords,
                 workspace.beats,
                 lyrics.whisperx_path,
                 workspace.timeline,
@@ -596,6 +622,60 @@ class RealAnalysisProcessor:
             workspace.vocals,
             json_output=False,
         )
+
+    def _run_chord_extensions(self, workspace: JobWorkspace, job_id: str) -> Path:
+        """The chords file to publish: with 7th/sus chords added where trusted.
+
+        Optional in every way. When switched off, not configured or failing, the
+        plain chords are used, so a song never fails because of this step.
+        """
+        if not self._config.chord_extensions_enabled:
+            return workspace.chords
+        checkpoint = self._config.btc_large_checkpoint
+        if (
+            self._config.chord_estimator is not ChordEstimator.BTC
+            or checkpoint is None
+            or not checkpoint.is_file()
+            or self._config.btc_python is None
+            or self._config.btc_source is None
+            or not workspace.instrumental.is_file()
+        ):
+            logger.warning(
+                "[job %s] chord extensions are on but not available; "
+                "using plain chords",
+                job_id,
+            )
+            return workspace.chords
+        try:
+            self._run_stage(
+                "chord extensions",
+                [
+                    str(self._config.btc_python),
+                    "-m",
+                    self._config.stage_module,
+                    "chord-extensions",
+                    "--input",
+                    str(workspace.normalized_audio),
+                    "--stem",
+                    str(workspace.instrumental),
+                    "--chords",
+                    str(workspace.chords),
+                    "--large-checkpoint",
+                    str(checkpoint),
+                    "--source",
+                    str(self._config.btc_source),
+                    "--output",
+                    str(workspace.chords_with_extensions),
+                ],
+                self._config.chord_extensions_timeout,
+                workspace.chords_with_extensions,
+            )
+        except AnalysisPipelineError:
+            logger.warning(
+                "[job %s] chord extensions failed; using plain chords", job_id
+            )
+            return workspace.chords
+        return workspace.chords_with_extensions
 
     def _run_lyrics(
         self,
