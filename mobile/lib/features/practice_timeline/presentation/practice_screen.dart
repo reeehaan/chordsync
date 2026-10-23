@@ -8,6 +8,7 @@ import '../application/practice_playback_controller.dart';
 import '../application/practice_playback_status.dart';
 import '../application/practice_playback_synchronizer.dart';
 import '../application/practice_session_factory.dart';
+import '../application/screen_awake.dart';
 import '../data/chord_transposition.dart';
 import '../data/shared_timeline_asset_loader.dart';
 import '../data/shared_timeline.dart';
@@ -26,6 +27,7 @@ class PracticeScreen extends StatefulWidget {
     this.audioPlayer,
     this.analyzedSession,
     this.sessionFactory,
+    this.screenAwake = const WakelockScreenAwake(),
   }) : assert(
          audioPlayer == null || analyzedSession == null,
          'Provide either a fixture audio player or an analyzed session.',
@@ -34,6 +36,7 @@ class PracticeScreen extends StatefulWidget {
   final PracticeAudioPlayer? audioPlayer;
   final AnalyzedPracticeSession? analyzedSession;
   final PracticeSessionFactory? sessionFactory;
+  final ScreenAwake screenAwake;
 
   @override
   State<PracticeScreen> createState() => _PracticeScreenState();
@@ -49,6 +52,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   bool _isLoaded = false;
   Object? _loadError;
   int _capoFret = 0;
+  bool _screenKeptAwake = false;
 
   @override
   void initState() {
@@ -126,7 +130,17 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   void _refreshFromAudio() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    _updateScreenAwake();
+    setState(() {});
+  }
+
+  /// The screen stays lit while the song plays; paused, it may dim as usual.
+  void _updateScreenAwake() {
+    final playing = _synchronizer?.status == PracticePlaybackStatus.playing;
+    if (playing == _screenKeptAwake) return;
+    _screenKeptAwake = playing;
+    unawaited(widget.screenAwake.setAwake(playing));
   }
 
   Future<void> _runAudioAction(Future<void> Function() action) async {
@@ -169,6 +183,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
 
   @override
   void dispose() {
+    if (_screenKeptAwake) unawaited(widget.screenAwake.setAwake(false));
     final preparedSession = _preparedSession;
     if (preparedSession != null) {
       unawaited(preparedSession.dispose());
