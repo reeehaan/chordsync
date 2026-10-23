@@ -11,6 +11,7 @@ from backend.api.app import analysis_worker_consumer as worker_cli
 from backend.api.app.services.model_bootstrap import (
     ALIGNMENT_EN_CHECKPOINT,
     ALIGNMENT_MMS_CHECKPOINT,
+    BTC_LARGE_CHECKPOINT,
     DEMUCS_HTDEMUCS_CHECKPOINT,
     AssetRole,
     ModelBootstrap,
@@ -37,6 +38,7 @@ SYNTHETIC_FILES = {
     AssetRole.ALIGNMENT_EN: [(ALIGNMENT_EN_CHECKPOINT, b"synthetic-alignment")],
     AssetRole.DEMUCS_HTDEMUCS: [(DEMUCS_HTDEMUCS_CHECKPOINT, b"synthetic-demucs")],
     AssetRole.ALIGNMENT_MMS: [(ALIGNMENT_MMS_CHECKPOINT, b"synthetic-mms")],
+    AssetRole.BTC_LARGE_CHECKPOINT: [(BTC_LARGE_CHECKPOINT, b"synthetic-btc-large")],
 }
 
 
@@ -197,7 +199,7 @@ def test_bootstrap_installs_and_verifies_synthetic_assets(tmp_path):
 
     report = _bootstrap(tmp_path, s3).run()
 
-    assert report.files_installed == 6  # the on-demand aligner is not fetched
+    assert report.files_installed == 6  # the on-demand models are not fetched
     assert (tmp_path / "models/btc/btc_model.pt").read_bytes() == b"synthetic-btc-checkpoint"
     assert (tmp_path / "models/btc/source/btc_model.py").exists()
     hub = tmp_path / "cache/huggingface/hub/models--Systran--faster-whisper-small"
@@ -206,6 +208,7 @@ def test_bootstrap_installs_and_verifies_synthetic_assets(tmp_path):
     assert (checkpoints / ALIGNMENT_EN_CHECKPOINT).exists()
     assert (checkpoints / DEMUCS_HTDEMUCS_CHECKPOINT).exists()
     assert not (checkpoints / ALIGNMENT_MMS_CHECKPOINT).exists()
+    assert not (tmp_path / "models/btc" / BTC_LARGE_CHECKPOINT).exists()
     assert not list(tmp_path.rglob("*.partial"))
 
     second = _bootstrap(tmp_path, s3).run()
@@ -417,6 +420,102 @@ def test_other_required_assets_are_still_required():
             json.dumps(_manifest(s3, tamper=drop_asr)).encode(),
             expected_release_id=RELEASE,
         )
+
+
+# --- the optional large BTC model (release 2026.10.3) -------------------------------
+
+
+def test_a_release_without_the_large_btc_model_is_still_valid():
+    s3 = FakeS3()
+
+    def without_large(manifest):
+        manifest["assets"] = [
+            a for a in manifest["assets"] if a["role"] != "btc_large_checkpoint"
+        ]
+
+    manifest = parse_manifest(
+        json.dumps(_manifest(s3, tamper=without_large)).encode(),
+        expected_release_id=RELEASE,
+    )
+
+    assert AssetRole.BTC_LARGE_CHECKPOINT not in {a.role for a in manifest.assets}
+
+
+def test_the_large_btc_model_is_fetched_only_on_demand_beside_the_standard_one(
+    tmp_path,
+):
+    s3 = FakeS3()
+    _manifest(s3)
+    installed = tmp_path / "models/btc" / BTC_LARGE_CHECKPOINT
+
+    _bootstrap(tmp_path, s3).run()
+    assert not installed.exists()  # startup never pulls it
+
+    report = _bootstrap(tmp_path, s3).install_role(AssetRole.BTC_LARGE_CHECKPOINT)
+
+    assert installed.read_bytes() == b"synthetic-btc-large"
+    assert report.files_installed == 1
+    # The standard checkpoint next to it is untouched.
+    assert (tmp_path / "models/btc/btc_model.pt").read_bytes() == b"synthetic-btc-checkpoint"
+    again = _bootstrap(tmp_path, s3).install_role(AssetRole.BTC_LARGE_CHECKPOINT)
+    assert again.files_installed == 0 and again.files_already_present == 1
+
+
+def test_a_tampered_large_btc_model_is_refused_and_never_left_in_place(tmp_path):
+    s3 = FakeS3()
+    _manifest(s3)
+    key = f"models/test/{AssetRole.BTC_LARGE_CHECKPOINT.value}/{BTC_LARGE_CHECKPOINT}"
+    s3.objects[key] = b"tampered"
+
+    with pytest.raises(ModelBootstrapError):
+        _bootstrap(tmp_path, s3).install_role(AssetRole.BTC_LARGE_CHECKPOINT)
+
+    assert not (tmp_path / "models/btc" / BTC_LARGE_CHECKPOINT).exists()
+
+
+def test_a_release_with_no_large_btc_model_cannot_install_it():
+    # (nothing to fetch: the error says so instead of silently succeeding)
+    s3 = FakeS3()
+
+    def without_large(manifest):
+        manifest["assets"] = [
+            a for a in manifest["assets"] if a["role"] != "btc_large_checkpoint"
+        ]
+
+    _manifest(s3, tamper=without_large)
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as directory:
+        with pytest.raises(ModelBootstrapError, match="no btc_large_checkpoint asset"):
+            _bootstrap(Path(directory), s3).install_role(AssetRole.BTC_LARGE_CHECKPOINT)
+
+
+# --- the committed releases ------------------------------------------------------------
+
+
+def _release(release_id):
+    from pathlib import Path
+
+    path = Path(__file__).parent.parent / "infrastructure/models/releases" / release_id
+    content = (path / "manifest.json").read_bytes()
+    return parse_manifest(content, expected_release_id=release_id), json.loads(content)
+
+
+def test_release_2026_10_3_only_adds_the_optional_large_btc_model():
+    _, before = _release("2026.10.2")
+    manifest, after = _release("2026.10.3")
+
+    # Everything a worker installs at startup is byte-for-byte what it was.
+    assert after["assets"][: len(before["assets"])] == before["assets"]
+    (added,) = after["assets"][len(before["assets"]):]
+    assert added["role"] == "btc_large_checkpoint"
+    assert added["required"] is False
+    assert added["license_status"] == "approved"
+    (file,) = added["files"]
+    assert file["destination"] == BTC_LARGE_CHECKPOINT
+    assert file["artifact_key"].endswith(f"/{file['sha256']}/{BTC_LARGE_CHECKPOINT}")
+    assert manifest.release_id == "2026.10.3"
 
 
 # --- the worker's on-demand installer ------------------------------------------------

@@ -37,6 +37,8 @@ ALIGNMENT_EN_CHECKPOINT = "wav2vec2_fairseq_base_ls960_asr_ls960.pth"
 DEMUCS_HTDEMUCS_CHECKPOINT = "955717e8-8726e21a.th"
 # torchaudio.pipelines.MMS_FA looks for this exact file name in the torch hub cache.
 ALIGNMENT_MMS_CHECKPOINT = "model.pt"
+# BTC's 170-chord model, installed beside the standard checkpoint.
+BTC_LARGE_CHECKPOINT = "btc_model_large_voca.pt"
 
 
 class ModelBootstrapError(RuntimeError):
@@ -52,12 +54,15 @@ class AssetRole(str, Enum):
     # Multilingual forced aligner, added in release 2026.10.2. Optional, so older
     # releases (and workers that do not use it) keep working.
     ALIGNMENT_MMS = "alignment_mms"
+    # BTC's large-vocabulary model, added in release 2026.10.3. Optional: only
+    # the chord-extensions step uses it, and older releases do not have it.
+    BTC_LARGE_CHECKPOINT = "btc_large_checkpoint"
 
 
-REQUIRED_ROLES = frozenset(AssetRole) - {AssetRole.ALIGNMENT_MMS}
+ON_DEMAND_ROLES = frozenset({AssetRole.ALIGNMENT_MMS, AssetRole.BTC_LARGE_CHECKPOINT})
+REQUIRED_ROLES = frozenset(AssetRole) - ON_DEMAND_ROLES
 # Large and used by only some songs: not installed at startup, but fetched (and
 # verified the same way) when a song actually needs it.
-ON_DEMAND_ROLES = frozenset({AssetRole.ALIGNMENT_MMS})
 
 
 class LicenseStatus(str, Enum):
@@ -143,6 +148,9 @@ def approved_destinations(
         ),
         AssetRole.ALIGNMENT_MMS: ApprovedDestination(
             torch_checkpoints, frozenset({ALIGNMENT_MMS_CHECKPOINT})
+        ),
+        AssetRole.BTC_LARGE_CHECKPOINT: ApprovedDestination(
+            btc_checkpoint.parent, frozenset({BTC_LARGE_CHECKPOINT})
         ),
     }
 
