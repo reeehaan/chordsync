@@ -101,6 +101,57 @@ void main() {
     expect(find.text('3 saved'), findsOneWidget);
   });
 
+  testWidgets('tapping outside the search box puts the keyboard away', (
+    tester,
+  ) async {
+    await pumpLibrary(tester);
+    final field = find.byKey(const ValueKey('songSearchField'));
+
+    await tester.tap(field);
+    await tester.pump();
+    expect(tester.testTextInput.isVisible, isTrue);
+
+    // A tap on the page itself, not on any control.
+    await tester.tap(find.text('Your songs'));
+    await tester.pump();
+    expect(tester.testTextInput.isVisible, isFalse);
+    expect(
+      FocusManager.instance.primaryFocus?.context?.widget,
+      isNot(isA<EditableText>()),
+    );
+  });
+
+  testWidgets('the search key and scrolling the list also close it', (
+    tester,
+  ) async {
+    await pumpLibrary(tester);
+    final field = find.byKey(const ValueKey('songSearchField'));
+
+    await tester.tap(field);
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    expect(tester.testTextInput.isVisible, isFalse);
+
+    await tester.tap(field);
+    await tester.pump();
+    expect(tester.testTextInput.isVisible, isTrue);
+    await tester.drag(find.byType(ListView), const Offset(0, -120));
+    await tester.pump();
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
+
+  testWidgets('a tap on a song card still opens it', (tester) async {
+    await pumpLibrary(tester);
+    await tester.tap(find.byKey(const ValueKey('songSearchField')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('savedPractice-tum')));
+    await tester.pump();
+
+    expect(opened?.job.jobId, 'tum');
+  });
+
   testWidgets('no search box before there is a song', (tester) async {
     sessions = [];
     await pumpLibrary(tester);

@@ -88,6 +88,8 @@ class _LibraryHomeState extends State<LibraryHome> {
         .toLowerCase();
   }
 
+  void _dismissKeyboard() => FocusManager.instance.primaryFocus?.unfocus();
+
   static bool _containsAll(String text, List<String> words) =>
       words.every(text.contains);
 
@@ -102,122 +104,130 @@ class _LibraryHomeState extends State<LibraryHome> {
     final sessions = widget.sessions;
     final matches = _matches;
     final searching = _query.trim().isNotEmpty;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
-      children: [
-        Text('Your songs', style: Theme.of(context).textTheme.displayMedium),
-        const SizedBox(height: 8),
-        Text(
-          'Pick up where you left off.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyLarge?.copyWith(color: UploadPalette.secondaryText),
-        ),
-        const SizedBox(height: 20),
-        if (sessions.isNotEmpty) ...[
-          TextField(
-            key: const ValueKey('songSearchField'),
-            controller: _search,
-            onChanged: (value) => setState(() => _query = value),
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: 'Search songs or artists',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: searching
-                  ? IconButton(
-                      key: const ValueKey('clearSongSearch'),
-                      tooltip: 'Clear search',
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _search.clear();
-                        setState(() => _query = '');
-                      },
-                    )
-                  : null,
-            ),
+    // Tapping anywhere that is not a control, or scrolling the list, puts the
+    // keyboard away; so does the search key.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: _dismissKeyboard,
+      child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
+        children: [
+          Text('Your songs', style: Theme.of(context).textTheme.displayMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Pick up where you left off.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: UploadPalette.secondaryText),
           ),
           const SizedBox(height: 20),
-        ] else
-          const SizedBox(height: 8),
-        if (sessions.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const Icon(Icons.library_music_outlined, size: 42),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No analyzed songs yet',
+          if (sessions.isNotEmpty) ...[
+            TextField(
+              key: const ValueKey('songSearchField'),
+              controller: _search,
+              onChanged: (value) => setState(() => _query = value),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _dismissKeyboard(),
+              decoration: InputDecoration(
+                hintText: 'Search songs or artists',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: searching
+                    ? IconButton(
+                        key: const ValueKey('clearSongSearch'),
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _search.clear();
+                          setState(() => _query = '');
+                        },
+                      )
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 20),
+          ] else
+            const SizedBox(height: 8),
+          if (sessions.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    const Icon(Icons.library_music_outlined, size: 42),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No analyzed songs yet',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Add an audio file to create your first practice sheet.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: widget.onAddSong,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add a song'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Previously analyzed',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Add an audio file to create your first practice sheet.',
-                    textAlign: TextAlign.center,
+                ),
+                Text(
+                  searching
+                      ? '${matches.length} of ${sessions.length}'
+                      : '${sessions.length} saved',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: UploadPalette.secondaryText,
                   ),
-                  const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed: widget.onAddSong,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add a song'),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          )
-        else ...[
-          Row(
-            children: [
-              Expanded(
+            const SizedBox(height: 12),
+            if (matches.isEmpty)
+              Padding(
+                key: const ValueKey('noSongMatches'),
+                padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Text(
-                  'Previously analyzed',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  'No songs match "${_query.trim()}".',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: UploadPalette.secondaryText,
+                  ),
                 ),
               ),
-              Text(
-                searching
-                    ? '${matches.length} of ${sessions.length}'
-                    : '${sessions.length} saved',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: UploadPalette.secondaryText,
+            for (final session in matches)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _SavedPracticeCard(
+                  key: ValueKey('card-${session.job.jobId}'),
+                  session: session,
+                  onOpen: () => widget.onOpen(session),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (matches.isEmpty)
-            Padding(
-              key: const ValueKey('noSongMatches'),
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Text(
-                'No songs match "${_query.trim()}".',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: UploadPalette.secondaryText,
-                ),
-              ),
-            ),
-          for (final session in matches)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _SavedPracticeCard(
-                key: ValueKey('card-${session.job.jobId}'),
-                session: session,
-                onOpen: () => widget.onOpen(session),
+          ],
+          if (widget.cloud case final cloud?)
+            ListenableBuilder(
+              listenable: cloud,
+              builder: (context, _) => _CloudSection(
+                cloud: cloud,
+                songs: _cloudMatches(cloud),
+                searching: searching,
               ),
             ),
         ],
-        if (widget.cloud case final cloud?)
-          ListenableBuilder(
-            listenable: cloud,
-            builder: (context, _) => _CloudSection(
-              cloud: cloud,
-              songs: _cloudMatches(cloud),
-              searching: searching,
-            ),
-          ),
-      ],
+      ),
     );
   }
 }
