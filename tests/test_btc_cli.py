@@ -122,8 +122,9 @@ def test_chord_extensions_cli_upgrades_chords_and_uses_the_large_model(
 ):
     import numpy as np
 
+    import types
+
     from analysis.chords import extensions
-    from analysis.chords.btc import btc_inference
 
     audio = tmp_path / "normalized.wav"
     stem = tmp_path / "no_vocals.wav"
@@ -161,7 +162,11 @@ def test_chord_extensions_cli_upgrades_chords_and_uses_the_large_model(
             values=np.tile(np.roll(notes, 4)[:, None], (1, len(times))), times=times
         )
 
-    monkeypatch.setattr(btc_inference, "predict", fake_predict)
+    # A stand-in module: the real BTC code is never imported here (other tests
+    # check that the API process does not load it).
+    fake_inference = types.ModuleType("analysis.chords.btc.btc_inference")
+    fake_inference.predict = fake_predict
+    monkeypatch.setitem(sys.modules, "analysis.chords.btc.btc_inference", fake_inference)
     monkeypatch.setattr(extensions, "chroma_from_audio", fake_chroma)
 
     pipeline_cli.main(

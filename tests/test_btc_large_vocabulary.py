@@ -1,44 +1,55 @@
 """The 170-chord BTC model, on the repo's synthetic triad fixture.
 
-Skipped unless torch and the upstream BTC checkout with both checkpoints are
-available (the BTC environment on a developer machine or the worker image).
+The model runs in a separate process with the BTC environment's Python, so these
+tests never load torch into the test process (other tests check that it is not
+loaded). Skipped unless CHORDSYNC_BTC_PYTHON, CHORDSYNC_BTC_SOURCE and both
+checkpoints are available (a developer machine or the worker image).
 """
 
+import json
 import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
 
+REPO = Path(__file__).parent.parent
 FIXTURE = Path(__file__).parent / "fixtures" / "audio" / "synthetic_c_am_f_g.wav"
 
+_SCRIPT = """
+import json, sys
+from pathlib import Path
+from analysis.chords.btc import btc_inference
+audio, checkpoint, source, large = sys.argv[1:5]
+labels = [p["label"] for p in btc_inference.predict(
+    Path(audio), Path(checkpoint), Path(source), large_vocabulary=(large == "1"))]
+print(json.dumps(labels))
+"""
 
-def _btc_source():
+
+def _labels(checkpoint_name: str, *, large: bool) -> list[str]:
+    python = os.getenv("CHORDSYNC_BTC_PYTHON")
     source = os.getenv("CHORDSYNC_BTC_SOURCE")
-    if not source:
-        pytest.skip("CHORDSYNC_BTC_SOURCE is not set")
-    path = Path(source)
-    if not (path / "test" / "btc_model_large_voca.pt").is_file():
-        pytest.skip("the large-vocabulary checkpoint is not available")
-    return path
+    if not python or not source or not Path(python).is_file():
+        pytest.skip("the BTC environment is not configured")
+    checkpoint = Path(source) / "test" / checkpoint_name
+    if not checkpoint.is_file() or not FIXTURE.is_file():
+        pytest.skip(f"{checkpoint_name} or the synthetic fixture is not available")
+    result = subprocess.run(
+        [python, "-c", _SCRIPT, str(FIXTURE), str(checkpoint), source, "1" if large else "0"],
+        cwd=REPO,
+        env={**os.environ, "PYTHONPATH": str(REPO)},
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stderr[-500:]
+    return json.loads(result.stdout.strip().splitlines()[-1])
 
 
 def test_large_model_labels_plain_triads_with_the_large_vocabulary():
-    pytest.importorskip("torch")
-    source = _btc_source()
-    if not FIXTURE.is_file():
-        pytest.skip("synthetic chord fixture is missing")
-    from analysis.chords.btc import btc_inference
-
-    labels = [
-        item["label"]
-        for item in btc_inference.predict(
-            FIXTURE,
-            source / "test" / "btc_model_large_voca.pt",
-            source,
-            large_vocabulary=True,
-        )
-    ]
+    labels = _labels("btc_model_large_voca.pt", large=True)
 
     # Large-vocabulary labels: a major triad is the bare root, others "root:type".
     # (On pure sine tones the large model is less sure than the standard one, so
@@ -49,17 +60,7 @@ def test_large_model_labels_plain_triads_with_the_large_vocabulary():
 
 
 def test_the_standard_model_is_unchanged_by_the_large_option():
-    pytest.importorskip("torch")
-    source = _btc_source()
-    if not FIXTURE.is_file():
-        pytest.skip("synthetic chord fixture is missing")
-    from analysis.chords.btc import btc_inference
+    labels = set(_labels("btc_model.pt", large=False))
 
-    labels = {
-        item["label"]
-        for item in btc_inference.predict(FIXTURE, source / "test" / "btc_model.pt", source)
-    }
-
-    assert labels <= {f"{root}{q}" for root in
-        ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
-        for q in (":maj", ":min")} | {"N"}
+    roots = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+    assert labels <= {f"{root}{quality}" for root in roots for quality in (":maj", ":min")} | {"N"}
