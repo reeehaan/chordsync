@@ -1,0 +1,396 @@
+{
+  "schema_version": 1,
+  "bpm": 80.0,
+  "beats_per_bar": 4,
+  "beat_source": "sample",
+  "lyric_source": "sample",
+  "bars": [
+    {
+      "bar_number": 1,
+      "start_time": 0.0,
+      "end_time": 3.0,
+      "beats": [
+        {
+          "time": 0.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Em7"
+        },
+        {
+          "time": 0.75,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Em7"
+        },
+        {
+          "time": 1.5,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "G"
+        },
+        {
+          "time": 2.25,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "G"
+        }
+      ]
+    },
+    {
+      "bar_number": 2,
+      "start_time": 3.0,
+      "end_time": 6.0,
+      "beats": [
+        {
+          "time": 3.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Cmaj7"
+        },
+        {
+          "time": 3.75,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Cmaj7"
+        },
+        {
+          "time": 4.5,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Dsus4"
+        },
+        {
+          "time": 5.25,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Dsus4"
+        }
+      ]
+    },
+    {
+      "bar_number": 3,
+      "start_time": 6.0,
+      "end_time": 9.0,
+      "beats": [
+        {
+          "time": 6.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Em7"
+        },
+        {
+          "time": 6.75,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Em7"
+        },
+        {
+          "time": 7.5,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "A7"
+        },
+        {
+          "time": 8.25,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "A7"
+        }
+      ]
+    },
+    {
+      "bar_number": 4,
+      "start_time": 9.0,
+      "end_time": 12.0,
+      "beats": [
+        {
+          "time": 9.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Dmaj7"
+        },
+        {
+          "time": 9.75,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Dmaj7"
+        },
+        {
+          "time": 10.5,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Bm7"
+        },
+        {
+          "time": 11.25,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Bm7"
+        }
+      ]
+    },
+    {
+      "bar_number": 5,
+      "start_time": 12.0,
+      "end_time": 15.0,
+      "beats": [
+        {
+          "time": 12.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Asus2"
+        },
+        {
+          "time": 12.75,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Asus2"
+        },
+        {
+          "time": 13.5,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Asus4"
+        },
+        {
+          "time": 14.25,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Asus4"
+        }
+      ]
+    },
+    {
+      "bar_number": 6,
+      "start_time": 15.0,
+      "end_time": 18.0,
+      "beats": [
+        {
+          "time": 15.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Gmaj7"
+        },
+        {
+          "time": 15.75,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Gmaj7"
+        },
+        {
+          "time": 16.5,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "C7"
+        },
+        {
+          "time": 17.25,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "C7"
+        }
+      ]
+    },
+    {
+      "bar_number": 7,
+      "start_time": 18.0,
+      "end_time": 21.0,
+      "beats": [
+        {
+          "time": 18.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "Fmaj7"
+        },
+        {
+          "time": 18.75,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "Fmaj7"
+        },
+        {
+          "time": 19.5,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Dm7"
+        },
+        {
+          "time": 20.25,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Dm7"
+        }
+      ]
+    },
+    {
+      "bar_number": 8,
+      "start_time": 21.0,
+      "end_time": 24.0,
+      "beats": [
+        {
+          "time": 21.0,
+          "beat_number": 1,
+          "is_downbeat": true,
+          "chord": "G7"
+        },
+        {
+          "time": 21.75,
+          "beat_number": 2,
+          "is_downbeat": false,
+          "chord": "G7"
+        },
+        {
+          "time": 22.5,
+          "beat_number": 3,
+          "is_downbeat": false,
+          "chord": "Csus4"
+        },
+        {
+          "time": 23.25,
+          "beat_number": 4,
+          "is_downbeat": false,
+          "chord": "Csus4"
+        }
+      ]
+    }
+  ],
+  "lyrics": [
+    {
+      "start": 0.05,
+      "end": 2.9,
+      "text": "Strum along",
+      "words": [
+        {
+          "start": 0.05,
+          "end": 1.4,
+          "text": "Strum"
+        },
+        {
+          "start": 1.55,
+          "end": 2.9,
+          "text": "along"
+        }
+      ]
+    },
+    {
+      "start": 3.05,
+      "end": 5.9,
+      "text": "to every",
+      "words": [
+        {
+          "start": 3.05,
+          "end": 4.4,
+          "text": "to"
+        },
+        {
+          "start": 4.55,
+          "end": 5.9,
+          "text": "every"
+        }
+      ]
+    },
+    {
+      "start": 6.05,
+      "end": 8.9,
+      "text": "new shape",
+      "words": [
+        {
+          "start": 6.05,
+          "end": 7.4,
+          "text": "new"
+        },
+        {
+          "start": 7.55,
+          "end": 8.9,
+          "text": "shape"
+        }
+      ]
+    },
+    {
+      "start": 9.05,
+      "end": 11.9,
+      "text": "you can",
+      "words": [
+        {
+          "start": 9.05,
+          "end": 10.4,
+          "text": "you"
+        },
+        {
+          "start": 10.55,
+          "end": 11.9,
+          "text": "can"
+        }
+      ]
+    },
+    {
+      "start": 12.05,
+      "end": 14.9,
+      "text": "play it",
+      "words": [
+        {
+          "start": 12.05,
+          "end": 13.4,
+          "text": "play"
+        },
+        {
+          "start": 13.55,
+          "end": 14.9,
+          "text": "it"
+        }
+      ]
+    },
+    {
+      "start": 15.05,
+      "end": 17.9,
+      "text": "slow then",
+      "words": [
+        {
+          "start": 15.05,
+          "end": 16.4,
+          "text": "slow"
+        },
+        {
+          "start": 16.55,
+          "end": 17.9,
+          "text": "then"
+        }
+      ]
+    },
+    {
+      "start": 18.05,
+      "end": 20.9,
+      "text": "pick up",
+      "words": [
+        {
+          "start": 18.05,
+          "end": 19.4,
+          "text": "pick"
+        },
+        {
+          "start": 19.55,
+          "end": 20.9,
+          "text": "up"
+        }
+      ]
+    },
+    {
+      "start": 21.05,
+      "end": 23.9,
+      "text": "speed now",
+      "words": [
+        {
+          "start": 21.05,
+          "end": 22.4,
+          "text": "speed"
+        },
+        {
+          "start": 22.55,
+          "end": 23.9,
+          "text": "now"
+        }
+      ]
+    }
+  ],
+  "practice_regions": []
+}

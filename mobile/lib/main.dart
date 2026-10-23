@@ -12,6 +12,7 @@ import 'features/analysis/data/analysis_api_config.dart';
 import 'features/analysis/data/hosted_analysis_api.dart';
 import 'features/analysis/data/presigned_uploader.dart';
 import 'features/analysis/data/analyzed_session_library.dart';
+import 'features/analysis/data/sample_song.dart';
 import 'features/analysis/presentation/audio_file_selector.dart';
 import 'features/analysis/presentation/audio_import_controller.dart';
 import 'features/analysis/presentation/audio_import_screen.dart';
@@ -60,7 +61,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     if (!_usesPracticeFixture) {
-      _sessionLibrary = LocalAnalyzedSessionLibrary();
+      _sessionLibrary = _withSample(LocalAnalyzedSessionLibrary());
       _importController = widget.importController ?? _createImportController();
       _cloudLibrary = _createCloudLibrary();
     }
@@ -81,6 +82,17 @@ class _MyAppState extends State<MyApp> {
       ),
     );
   }
+
+  /// Builds that pass `--dart-define=CHORDSYNC_SHOW_CHORD_SAMPLE=true` also list
+  /// a built-in song that plays through the 7th and sus chord shapes.
+  static const _showChordSample = bool.fromEnvironment(
+    'CHORDSYNC_SHOW_CHORD_SAMPLE',
+  );
+
+  AnalyzedSessionLibrary _withSample(AnalyzedSessionLibrary library) =>
+      _showChordSample
+      ? SampleAugmentedLibrary(library, SampleSong())
+      : library;
 
   AudioImportController _createImportController() {
     final config = AnalysisApiConfig.development;

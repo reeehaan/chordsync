@@ -69,6 +69,8 @@ flutter:
   assets:
     - assets/practice_audio/synthetic_practice.wav
     - assets/practice_timeline/synthetic_shared_timeline.json
+    - assets/practice_audio/extended_chords_sample.wav
+    - assets/practice_timeline/extended_chords_sample.json
     - assets/icons/source_providers/
 
   # Golden Hour theme fonts (SIL Open Font License; texts beside the files).
