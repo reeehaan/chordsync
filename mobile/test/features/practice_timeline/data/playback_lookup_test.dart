@@ -153,12 +153,19 @@ void main() {
       expect(midway.currentChordStart, 0);
       expect(midway.currentChordEnd, 2);
       expect(midway.chordProgress, 0.5);
+      // One beat event (at 0 s) lasts until the next chord begins (at 2 s).
+      expect(midway.chordBeats.map((beat) => beat.start), [0]);
+      expect(midway.chordBeats.map((beat) => beat.end), [2]);
+      expect(midway.chordBeats.first.isDownbeat, isTrue);
+      expect(midway.chordBeats.first.fillAt(1), 0.5);
+      expect(midway.chordBeats.first.fillAt(3), 1);
 
       final lastChord = PlaybackLookup.playbackState(timeline, 3);
       expect(lastChord.currentChordEnd, timeline.endTime);
 
       final beforeStart = PlaybackLookup.playbackState(timeline, -1);
       expect(beforeStart.chordProgress, isNull);
+      expect(beforeStart.chordBeats, isEmpty);
     },
   );
 

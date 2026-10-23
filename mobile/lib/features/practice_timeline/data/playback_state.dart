@@ -1,3 +1,23 @@
+/// One beat of the chord being played: when it starts and ends, and whether it
+/// opens a bar.
+class ChordBeat {
+  const ChordBeat({
+    required this.start,
+    required this.end,
+    required this.isDownbeat,
+  });
+
+  final double start;
+  final double end;
+  final bool isDownbeat;
+
+  /// How much of this beat has been played at [time], from 0 to 1.
+  double fillAt(double time) {
+    if (end <= start) return time >= start ? 1 : 0;
+    return ((time - start) / (end - start)).clamp(0.0, 1.0);
+  }
+}
+
 class PlaybackState {
   const PlaybackState({
     required this.playbackTime,
@@ -19,6 +39,7 @@ class PlaybackState {
     this.musicOnlyEnd,
     this.currentBeatStart,
     this.nextBeatStart,
+    this.chordBeats = const [],
   });
 
   final double playbackTime;
@@ -40,6 +61,9 @@ class PlaybackState {
   final double? musicOnlyEnd;
   final double? currentBeatStart;
   final double? nextBeatStart;
+
+  /// The beats of the chord being played, in order. Empty when there is none.
+  final List<ChordBeat> chordBeats;
 
   String get currentChord => chord;
   String? get activeLyricWord => lyricWord;

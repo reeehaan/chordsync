@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/playback_state.dart';
 import 'chord_diagram.dart';
 import 'practice_stage_colors.dart';
 
@@ -17,6 +18,8 @@ class ChordDiagramStrip extends StatefulWidget {
     required this.chordProgress,
     required this.chordStart,
     this.showAllChords = false,
+    this.chordBeats = const [],
+    this.playbackTime = 0,
   });
 
   final String? previousChord;
@@ -26,6 +29,14 @@ class ChordDiagramStrip extends StatefulWidget {
   final double? chordProgress;
   final double? chordStart;
   final bool showAllChords;
+
+  /// The beats of the current chord. When given (and few enough to read), the
+  /// card shows one segment per beat instead of a plain progress bar.
+  final List<ChordBeat> chordBeats;
+  final double playbackTime;
+
+  /// Longest chord shown as beat segments; a longer one keeps the bar.
+  static const maximumBeatSegments = 8;
 
   static const compactHeight = 150.0;
   static const expandedHeight = 176.0;
@@ -207,6 +218,10 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip> {
                         chordStart: entries[index].isCurrent
                             ? widget.chordStart
                             : null,
+                        chordBeats: entries[index].isCurrent
+                            ? widget.chordBeats
+                            : const [],
+                        playbackTime: widget.playbackTime,
                       ),
                     ],
                   ],
@@ -258,12 +273,16 @@ class _ChordCard extends StatelessWidget {
     required this.width,
     required this.chordProgress,
     required this.chordStart,
+    required this.chordBeats,
+    required this.playbackTime,
   });
 
   final _StripEntry entry;
   final double width;
   final double? chordProgress;
   final double? chordStart;
+  final List<ChordBeat> chordBeats;
+  final double playbackTime;
 
   @override
   Widget build(BuildContext context) {
@@ -327,13 +346,115 @@ class _ChordCard extends StatelessWidget {
           ),
           if (isCurrent) ...[
             const SizedBox(height: 6),
-            _ChordProgressBar(
-              key: const ValueKey('chordProgressBar'),
-              progress: chordProgress,
-              chordStart: chordStart,
-            ),
+            if (chordBeats.isNotEmpty &&
+                chordBeats.length <= ChordDiagramStrip.maximumBeatSegments)
+              _ChordBeatSegments(
+                key: const ValueKey('chordBeatSegments'),
+                beats: chordBeats,
+                playbackTime: playbackTime,
+                chordStart: chordStart,
+              )
+            else
+              _ChordProgressBar(
+                key: const ValueKey('chordProgressBar'),
+                progress: chordProgress,
+                chordStart: chordStart,
+              ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// One segment per beat of the chord, so a player can count the strums: the
+/// beats already played are filled, the one playing fills as it goes, and a
+/// beat that opens a bar is a little taller.
+class _ChordBeatSegments extends StatelessWidget {
+  const _ChordBeatSegments({
+    super.key,
+    required this.beats,
+    required this.playbackTime,
+    required this.chordStart,
+  });
+
+  final List<ChordBeat> beats;
+  final double playbackTime;
+  final double? chordStart;
+
+  static const _gap = 3.0;
+  static const _height = 6.0;
+  static const _downbeatHeight = 9.0;
+
+  @override
+  Widget build(BuildContext context) {
+    var playing = beats.lastIndexWhere((beat) => beat.start <= playbackTime);
+    if (playing < 0) playing = 0;
+    return Semantics(
+      label: 'Beat ${playing + 1} of ${beats.length}',
+      child: SizedBox(
+        height: _downbeatHeight,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var index = 0; index < beats.length; index++) ...[
+              if (index > 0) const SizedBox(width: _gap),
+              Expanded(
+                child: _BeatSegment(
+                  key: ValueKey('beatSegment$index'),
+                  height: beats[index].isDownbeat ? _downbeatHeight : _height,
+                  fill: beats[index].fillAt(playbackTime),
+                  resetKey: chordStart,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BeatSegment extends StatelessWidget {
+  const _BeatSegment({
+    super.key,
+    required this.height,
+    required this.fill,
+    required this.resetKey,
+  });
+
+  final double height;
+  final double fill;
+  final double? resetKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(resetKey),
+      tween: Tween(end: fill),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.linear,
+      builder: (context, value, child) => ClipRRect(
+        borderRadius: BorderRadius.circular(height / 2),
+        child: SizedBox(
+          height: height,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: PracticeStageColors.border),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: value,
+                  heightFactor: 1,
+                  child: const ColoredBox(
+                    color: PracticeStageColors.amberBright,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

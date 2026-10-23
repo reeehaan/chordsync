@@ -39,6 +39,10 @@ class PracticeScreen extends StatefulWidget {
   final PracticeSessionFactory? sessionFactory;
   final ScreenAwake screenAwake;
 
+  /// Shows the chord's length as one segment per beat. Turn this off to go
+  /// back to the plain progress bar.
+  static const showBeatSegments = true;
+
   @override
   State<PracticeScreen> createState() => _PracticeScreenState();
 }
@@ -291,6 +295,10 @@ class _PracticeScreenState extends State<PracticeScreen> {
                         .toList(),
               chordProgress: state.chordProgress,
               chordStart: state.currentChordStart,
+              chordBeats: PracticeScreen.showBeatSegments
+                  ? state.chordBeats
+                  : const [],
+              playbackTime: state.playbackTime,
               showAllChords: isBeforePlayback,
             ),
           // No rule between the chords and the lyrics, just a little air.

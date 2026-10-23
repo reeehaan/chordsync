@@ -264,34 +264,38 @@ void main() {
       await runFor(tester);
       expect(find.byKey(const ValueKey('followLyricsButton')), findsNothing);
       await tapControl(tester, 'Pause');
-      final progressFinder = find.descendant(
-        of: find.byKey(const ValueKey('chordProgressBar')),
-        matching: find.byType(LinearProgressIndicator),
-      );
-      final progressAnimation = tester.widget<TweenAnimationBuilder<double>>(
+      // This chord lasts one beat, so it shows one segment that fills as it
+      // plays.
+      final segment = find.byKey(const ValueKey('beatSegment0'));
+      double segmentFill() => tester
+          .widget<FractionallySizedBox>(
+            find.descendant(
+              of: segment,
+              matching: find.byType(FractionallySizedBox),
+            ),
+          )
+          .widthFactor!;
+      final segmentAnimation = tester.widget<TweenAnimationBuilder<double>>(
         find.descendant(
-          of: find.byKey(const ValueKey('chordProgressBar')),
+          of: segment,
           matching: find.byType(TweenAnimationBuilder<double>),
         ),
       );
-      expect(progressAnimation.duration, const Duration(milliseconds: 180));
-      expect(tester.widget<LinearProgressIndicator>(progressFinder).value, 0);
+      expect(segmentAnimation.duration, const Duration(milliseconds: 180));
+      expect(segmentFill(), 0);
       final activeSheetWord = tester.widget<AnimatedDefaultTextStyle>(
         find.byKey(const ValueKey('sheetWordStyle1.5')),
       );
       expect(activeSheetWord.style.fontWeight, FontWeight.w600);
       await setPosition(tester, 2.5);
-      expect(
-        tester.widget<LinearProgressIndicator>(progressFinder).value,
-        closeTo(0.5, 0.001),
-      );
+      expect(segmentFill(), closeTo(0.5, 0.001));
       final pastSheetWord = tester.widget<AnimatedDefaultTextStyle>(
         find.byKey(const ValueKey('sheetWordStyle1.5')),
       );
       // A sung word stays lit for as long as its line is being sung.
       expect(activeSheetWord.style.color, pastSheetWord.style.color);
       await setPosition(tester, 3);
-      expect(tester.widget<LinearProgressIndicator>(progressFinder).value, 0);
+      expect(segmentFill(), 0);
       await setPosition(tester, 2);
       expectState(
         chord: 'G',

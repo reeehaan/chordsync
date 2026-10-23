@@ -1,3 +1,4 @@
+import 'package:chordsync/features/practice_timeline/data/playback_state.dart';
 import 'package:chordsync/features/practice_timeline/presentation/chord_diagram_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +19,67 @@ Widget _strip({required bool beforePlay}) => MaterialApp(
   ),
 );
 
+Widget _beatStrip(int beats, double playbackTime) => MaterialApp(
+  home: Scaffold(
+    body: ChordDiagramStrip(
+      previousChord: null,
+      currentChord: 'Em',
+      nextChord: 'G',
+      progression: const ['Em', 'G', 'D'],
+      chordProgress: 0.3,
+      chordStart: 0,
+      chordBeats: [
+        for (var beat = 0; beat < beats; beat++)
+          ChordBeat(
+            start: beat.toDouble(),
+            end: beat + 1.0,
+            isDownbeat: beat == 0,
+          ),
+      ],
+      playbackTime: playbackTime,
+    ),
+  ),
+);
+
 void main() {
+  testWidgets('a chord shows one segment per beat, filled as it plays', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_beatStrip(4, 1.5));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chordBeatSegments')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chordProgressBar')), findsNothing);
+    double fill(int index) => tester
+        .widget<FractionallySizedBox>(
+          find.descendant(
+            of: find.byKey(ValueKey('beatSegment$index')),
+            matching: find.byType(FractionallySizedBox),
+          ),
+        )
+        .widthFactor!;
+    expect(find.byKey(const ValueKey('beatSegment3')), findsOneWidget);
+    expect(find.byKey(const ValueKey('beatSegment4')), findsNothing);
+    expect(fill(0), 1);
+    expect(fill(1), closeTo(0.5, 0.001));
+    expect(fill(2), 0);
+    // The beat that opens the bar is taller than the others.
+    expect(
+      tester.getSize(find.byKey(const ValueKey('beatSegment0'))).height,
+      greaterThan(
+        tester.getSize(find.byKey(const ValueKey('beatSegment1'))).height,
+      ),
+    );
+  });
+
+  testWidgets('a very long chord keeps the plain progress bar', (tester) async {
+    await tester.pumpWidget(_beatStrip(12, 1.5));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chordBeatSegments')), findsNothing);
+    expect(find.byKey(const ValueKey('chordProgressBar')), findsOneWidget);
+  });
+
   testWidgets('before playing every chord of the song shows once, in order', (
     tester,
   ) async {

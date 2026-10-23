@@ -80,7 +80,7 @@ void main() {
       expect(find.byKey(const ValueKey('musicOnlyLyrics')), findsNothing);
       expect(find.text('NO CHORD TO PLAY'), findsNothing);
       expect(find.byType(ChordDiagram), findsWidgets);
-      expect(find.byKey(const ValueKey('chordProgressBar')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chordBeatSegments')), findsOneWidget);
       expect(find.byKey(const ValueKey('sheetWord4.0')), findsOneWidget);
       expect(
         tester

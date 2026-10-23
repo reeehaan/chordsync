@@ -238,6 +238,32 @@ class PlaybackLookup {
     return nextWord;
   }
 
+  /// The beats from [chordStart] up to [chordEnd], each ending where the next
+  /// begins (the last one at [chordEnd]).
+  static List<ChordBeat> chordBeats(
+    SharedTimeline timeline,
+    double? chordStart,
+    double? chordEnd,
+  ) {
+    if (chordStart == null || chordEnd == null) return const [];
+    const tolerance = 1e-6;
+    final beats = <TimelineEvent>[
+      for (final bar in timeline.bars)
+        for (final beat in bar.beats)
+          if (beat.time >= chordStart - tolerance &&
+              beat.time < chordEnd - tolerance)
+            beat,
+    ];
+    return [
+      for (var index = 0; index < beats.length; index++)
+        ChordBeat(
+          start: beats[index].time,
+          end: index + 1 < beats.length ? beats[index + 1].time : chordEnd,
+          isDownbeat: beats[index].isDownbeat,
+        ),
+    ];
+  }
+
   static PlaybackState playbackState(
     SharedTimeline timeline,
     double playbackTime,
@@ -257,6 +283,7 @@ class PlaybackLookup {
 
     return PlaybackState(
       playbackTime: playbackTime,
+      chordBeats: chordBeats(timeline, chordStart, chordEnd),
       chord: beat?.chord ?? 'N',
       currentBarNumber: bar?.barNumber,
       beatNumber: beat?.beatNumber,
