@@ -69,6 +69,11 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
   }
 
   void _selectTab(int index) {
+    // Only one song is analyzed at a time, so the Add song tab shows how the
+    // current one is going.
+    if (index == 1 && widget.controller.isActive) {
+      widget.controller.bringToFront();
+    }
     setState(() => _selectedTab = index);
   }
 
@@ -80,6 +85,12 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
         session.job.jobId != _loadedReadyJobId) {
       _loadedReadyJobId = session.job.jobId;
       _loadSavedSessions();
+    }
+    // Someone who left the progress screen is doing something else: the
+    // banner offers the finished song instead of opening it over their work.
+    if (widget.controller.inBackground) {
+      setState(() {});
+      return;
     }
     if (widget.controller.phase == AudioImportPhase.ready &&
         session != null &&
@@ -184,12 +195,16 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    if (controller.isActive) {
+    if (controller.isActive && !controller.inBackground) {
       return Scaffold(
         body: SafeArea(
           child: AnalysisJourney(
             controller: controller,
             onCancel: controller.cancel,
+            onBack: () {
+              setState(() => _selectedTab = 0);
+              controller.sendToBackground();
+            },
           ),
         ),
       );

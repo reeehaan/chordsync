@@ -43,6 +43,7 @@ class AudioImportController extends ChangeNotifier {
   AnalyzedPracticeSession? _session;
   AnalysisPollingCancellationToken? _cancellation;
   bool _active = false;
+  bool _inBackground = false;
   bool _disposed = false;
   int _attempt = 0;
 
@@ -61,6 +62,33 @@ class AudioImportController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   AnalyzedPracticeSession? get session => _session;
   bool get isActive => _active;
+
+  /// True once the person has left the progress screen while the song is still
+  /// being analyzed (or has just finished): the app shows a banner instead.
+  bool get inBackground => _inBackground;
+
+  /// Which of the four steps the analysis is in, counting from 1.
+  int get stepNumber => switch (_phase) {
+    AudioImportPhase.queued => 2,
+    AudioImportPhase.processing => 3,
+    AudioImportPhase.preparing || AudioImportPhase.ready => 4,
+    _ => 1,
+  };
+
+  static const stepCount = 4;
+
+  void sendToBackground() {
+    if (!_active || _inBackground) return;
+    _inBackground = true;
+    _notify();
+  }
+
+  void bringToFront() {
+    if (!_inBackground) return;
+    _inBackground = false;
+    _notify();
+  }
+
   bool get isDisposed => _disposed;
   bool get canAnalyze =>
       !_active &&
@@ -119,6 +147,7 @@ class AudioImportController extends ChangeNotifier {
     final cancellation = AnalysisPollingCancellationToken();
     _cancellation = cancellation;
     _active = true;
+    _inBackground = false;
     _session = null;
     _errorMessage = null;
     _uploadProgress = null;
@@ -184,6 +213,7 @@ class AudioImportController extends ChangeNotifier {
     if (!_active) return;
     _cancellation?.cancel();
     _active = false;
+    _inBackground = false;
     _attempt += 1;
     _phase = AudioImportPhase.cancelled;
     _uploadProgress = null;
@@ -192,6 +222,7 @@ class AudioImportController extends ChangeNotifier {
 
   void reset() {
     if (_active) return;
+    _inBackground = false;
     _selectedFile = null;
     _displayName = null;
     _title = '';

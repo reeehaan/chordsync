@@ -13,7 +13,9 @@ import 'features/analysis/data/hosted_analysis_api.dart';
 import 'features/analysis/data/presigned_uploader.dart';
 import 'features/analysis/data/analyzed_session_library.dart';
 import 'features/analysis/data/sample_song.dart';
+import 'features/analysis/presentation/analysis_progress_banner.dart';
 import 'features/analysis/presentation/audio_file_selector.dart';
+import 'features/analysis/presentation/page_route_tracker.dart';
 import 'features/analysis/presentation/audio_import_controller.dart';
 import 'features/analysis/presentation/audio_import_screen.dart';
 import 'features/practice_timeline/application/practice_audio_player.dart';
@@ -127,6 +129,21 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  final _routes = PageRouteTracker();
+
+  void _playFinished(AnalyzedPracticeSession session) {
+    _importController?.reset();
+    _navigatorKey.currentState?.push<void>(
+      MaterialPageRoute(
+        builder: (_) => PracticeScreen(
+          analyzedSession: session,
+          sessionFactory: widget.sessionFactory,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _importController?.dispose();
@@ -137,17 +154,37 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
+      navigatorObservers: [_routes],
       title: 'ChordSync',
       theme: ChordSyncTheme.light(),
       // Follow the person's text size setting (Dynamic Type), up to a size the
       // fixed-height rows (lyrics, chord cards) can still hold.
       builder: (context, child) {
         final media = MediaQuery.of(context);
+        final importController = _importController;
         return MediaQuery(
           data: media.copyWith(
             textScaler: media.textScaler.clamp(maxScaleFactor: 1.3),
           ),
-          child: child!,
+          // The banner floats above every screen, so a song being analyzed
+          // stays in view wherever the person goes.
+          child: Stack(
+            children: [
+              child!,
+              if (importController != null)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: AnalysisProgressBanner(
+                    controller: importController,
+                    atHome: _routes.atHome,
+                    onPlay: _playFinished,
+                  ),
+                ),
+            ],
+          ),
         );
       },
       home: _usesPracticeFixture

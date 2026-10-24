@@ -8,11 +8,13 @@ import 'package:chordsync/features/analysis/data/analysis_api_client.dart';
 import 'package:chordsync/features/analysis/data/analysis_client_errors.dart';
 import 'package:chordsync/features/analysis/data/analysis_job.dart';
 import 'package:chordsync/features/analysis/data/analyzed_session_library.dart';
+import 'package:chordsync/features/analysis/presentation/analysis_progress_banner.dart';
 import 'package:chordsync/features/analysis/presentation/audio_file_selector.dart';
 import 'package:chordsync/features/analysis/presentation/audio_import_controller.dart';
 import 'package:chordsync/features/analysis/presentation/audio_import_screen.dart';
 import 'package:chordsync/features/practice_timeline/application/practice_session_factory.dart';
 import 'package:chordsync/features/practice_timeline/data/shared_timeline.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -253,6 +255,209 @@ void main() {
       expect(find.byKey(const ValueKey('filesSource')), findsOneWidget);
       expect(find.text('Get the chords for any audio track'), findsOneWidget);
     }
+  });
+
+  group('leaving the progress screen', () {
+    Future<void> startAnalysis(WidgetTester tester) async {
+      await pumpScreen(tester);
+      final filesSource = find.byKey(const ValueKey('filesSource'));
+      await tester.ensureVisible(filesSource);
+      await tester.tap(filesSource);
+      await tester.pump();
+      preparation.emitJob(AnalysisJobStatus.processing);
+      await tester.pump();
+    }
+
+    testWidgets('Library leaves the analysis running and opens the library', (
+      tester,
+    ) async {
+      await startAnalysis(tester);
+      expect(find.text('Analyzing your song…'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('analysisBackButton')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Your songs'), findsOneWidget);
+      expect(controller.isActive, isTrue);
+      expect(controller.inBackground, isTrue);
+      expect(preparation.cancellations.single.isCancelled, isFalse);
+    });
+
+    testWidgets('a song finishing in the background does not open itself', (
+      tester,
+    ) async {
+      await startAnalysis(tester);
+      await tester.tap(find.byKey(const ValueKey('analysisBackButton')));
+      await tester.pumpAndSettle();
+
+      preparation.complete(_session(audio));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Your songs'), findsOneWidget);
+      expect(find.byKey(const ValueKey('currentChordValue')), findsNothing);
+      expect(controller.phase, AudioImportPhase.ready);
+      expect(controller.session, isNotNull);
+    });
+
+    testWidgets('Add song brings the progress screen back', (tester) async {
+      await startAnalysis(tester);
+      await tester.tap(find.byKey(const ValueKey('analysisBackButton')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('bottomNav1')));
+      // The progress screen's record spins forever; settle by time instead.
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(find.text('Analyzing your song…'), findsOneWidget);
+      expect(controller.inBackground, isFalse);
+    });
+  });
+
+  group('progress banner', () {
+    Future<void> pumpBanner(
+      WidgetTester tester,
+      List<AnalyzedPracticeSession> played, {
+      ValueListenable<bool>? atHome,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ChordSyncTheme.light(),
+          home: Stack(
+            children: [
+              const SizedBox.expand(),
+              AnalysisProgressBanner(
+                controller: controller,
+                onPlay: played.add,
+                atHome: atHome,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Future<void> startInBackground(WidgetTester tester) async {
+      controller.selectFile(audio);
+      unawaited(controller.analyze());
+      preparation.emitJob(AnalysisJobStatus.processing);
+      controller.sendToBackground();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+    }
+
+    testWidgets('names the song and its step', (tester) async {
+      await pumpBanner(tester, []);
+      await startInBackground(tester);
+
+      expect(find.text('safe_song'), findsOneWidget);
+      expect(find.text('Step 3 of 4 · Analyzing'), findsOneWidget);
+    });
+
+    testWidgets('says tap to play when ready and opens the song', (
+      tester,
+    ) async {
+      final played = <AnalyzedPracticeSession>[];
+      await pumpBanner(tester, played);
+      await startInBackground(tester);
+
+      preparation.complete(_session(audio));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('Ready · Tap to play'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('analysisProgressBanner')));
+      expect(played.single.title, 'safe_song');
+    });
+
+    bool slidIn(WidgetTester tester) =>
+        tester
+            .widget<IgnorePointer>(
+              find
+                  .descendant(
+                    of: find.byType(AnalysisProgressBanner),
+                    matching: find.byType(IgnorePointer),
+                  )
+                  .first,
+            )
+            .ignoring ==
+        false;
+
+    testWidgets('slides away over another page and returns on coming back', (
+      tester,
+    ) async {
+      final atHome = ValueNotifier(true);
+      await pumpBanner(tester, [], atHome: atHome);
+      await startInBackground(tester);
+      expect(slidIn(tester), isTrue);
+
+      atHome.value = false; // the practice screen opens
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(slidIn(tester), isFalse);
+      // The words stay on it while it leaves.
+      expect(find.text('safe_song'), findsOneWidget);
+
+      atHome.value = true; // back on the library, still analyzing
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(slidIn(tester), isTrue);
+    });
+
+    testWidgets('a finished song leaves after 30 seconds unless tapped', (
+      tester,
+    ) async {
+      await pumpBanner(tester, []);
+      await startInBackground(tester);
+      preparation.complete(_session(audio));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(slidIn(tester), isTrue);
+
+      await tester.pump(const Duration(seconds: 25));
+      expect(slidIn(tester), isTrue);
+
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(slidIn(tester), isFalse);
+      expect(controller.session, isNull);
+    });
+
+    testWidgets('the 30 seconds count only while the banner is showing', (
+      tester,
+    ) async {
+      final atHome = ValueNotifier(true);
+      await pumpBanner(tester, [], atHome: atHome);
+      await startInBackground(tester);
+      preparation.complete(_session(audio));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      atHome.value = false; // practising another song
+      await tester.pump(const Duration(minutes: 10));
+      expect(controller.session, isNotNull);
+
+      atHome.value = true;
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(slidIn(tester), isTrue);
+    });
+
+    testWidgets('stays out of sight while the progress screen is showing', (
+      tester,
+    ) async {
+      await pumpBanner(tester, []);
+      controller.selectFile(audio);
+      unawaited(controller.analyze());
+      await tester.pump(const Duration(milliseconds: 600));
+
+      final banner = tester.widget<IgnorePointer>(
+        find
+            .descendant(
+              of: find.byType(AnalysisProgressBanner),
+              matching: find.byType(IgnorePointer),
+            )
+            .first,
+      );
+      expect(banner.ignoring, isTrue);
+    });
   });
 }
 

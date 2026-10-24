@@ -10,10 +10,14 @@ class AnalysisJourney extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onCancel,
+    this.onBack,
   });
 
   final AudioImportController controller;
   final VoidCallback onCancel;
+
+  /// Leaves this screen while the analysis carries on in the background.
+  final VoidCallback? onBack;
 
   @override
   State<AnalysisJourney> createState() => _AnalysisJourneyState();
@@ -59,7 +63,7 @@ class _AnalysisJourneyState extends State<AnalysisJourney>
       AudioImportPhase.preparing => 'Preparing your practice sheet…',
       _ => 'Preparing your song…',
     };
-    return Center(
+    final journey = Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: Padding(
@@ -90,7 +94,7 @@ class _AnalysisJourneyState extends State<AnalysisJourney>
               ),
               const SizedBox(height: 16),
               Text(
-                'You can leave this screen; analysis continues on the server.',
+                'Go back to your library any time. We\'ll show a banner with the song when it is ready to play.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: UploadPalette.secondaryText,
@@ -101,6 +105,24 @@ class _AnalysisJourneyState extends State<AnalysisJourney>
           ),
         ),
       ),
+    );
+    final onBack = widget.onBack;
+    if (onBack == null) return journey;
+    return Stack(
+      children: [
+        journey,
+        Positioned(
+          top: 4,
+          left: 8,
+          child: TextButton.icon(
+            key: const ValueKey('analysisBackButton'),
+            onPressed: onBack,
+            style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
+            icon: const Icon(Icons.arrow_back_ios_new, size: 16),
+            label: const Text('Library'),
+          ),
+        ),
+      ],
     );
   }
 }
