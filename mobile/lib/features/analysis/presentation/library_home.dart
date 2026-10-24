@@ -1,3 +1,5 @@
+import '../../../design_system/pressable_scale.dart';
+import '../../../design_system/staggered_entrance.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -213,13 +215,19 @@ class _LibraryHomeState extends State<LibraryHome> {
                   ),
                 ),
               ),
-            for (final session in matches)
+            for (final (index, session) in matches.indexed)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _SavedPracticeCard(
-                  key: ValueKey('card-${session.job.jobId}'),
-                  session: session,
-                  onOpen: () => widget.onOpen(session),
+                child: StaggeredEntrance(
+                  key: ValueKey('entrance-${session.job.jobId}'),
+                  index: index,
+                  child: PressableScale(
+                    child: _SavedPracticeCard(
+                      key: ValueKey('card-${session.job.jobId}'),
+                      session: session,
+                      onOpen: () => widget.onOpen(session),
+                    ),
+                  ),
                 ),
               ),
           ],
