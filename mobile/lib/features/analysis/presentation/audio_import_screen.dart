@@ -15,7 +15,6 @@ import 'audio_import_controller.dart';
 import 'library_home.dart';
 import 'song_source_grid.dart';
 import 'tuner_home.dart';
-import 'upload_theme.dart';
 
 class AudioImportScreen extends StatefulWidget {
   const AudioImportScreen({
@@ -67,6 +66,10 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
   void dispose() {
     widget.controller.removeListener(_refresh);
     super.dispose();
+  }
+
+  void _selectTab(int index) {
+    setState(() => _selectedTab = index);
   }
 
   void _refresh() {
@@ -194,7 +197,7 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
     if (_selectedTab == 0) {
       return AppShell(
         selectedIndex: _selectedTab,
-        onSelected: (index) => setState(() => _selectedTab = index),
+        onSelected: _selectTab,
         child: LibraryHome(
           sessions: _savedSessions,
           onOpen: _openSavedPractice,
@@ -206,123 +209,116 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
     if (_selectedTab == 2) {
       return AppShell(
         selectedIndex: _selectedTab,
-        onSelected: (index) => setState(() => _selectedTab = index),
+        onSelected: _selectTab,
         child: const TunerHome(),
       );
     }
     final isFocusedState =
         controller.isActive || controller.phase == AudioImportPhase.ready;
     final compactViewport = MediaQuery.sizeOf(context).height <= 700;
-    return Theme(
-      data: uploadTheme(context),
-      // A Builder hands every descendant a context positioned below this
-      // Theme. Without it, `Theme.of(context)` calls further down would
-      // keep resolving the outer (light) theme — reusing this method's own
-      // `context` parameter, which sits above the Theme we just inserted —
-      // and text relying on that theme's colour would render using the
-      // wrong palette.
+    return AppShell(
+      selectedIndex: _selectedTab,
+      onSelected: _selectTab,
+      // A Builder hands the content a context below the shell's Theme, so
+      // Theme.of(context) resolves the upload palette.
       child: Builder(
-        builder: (context) => Scaffold(
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                compactViewport ? 20 : 28,
-                20,
-                compactViewport ? 24 : 40,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 620),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'Upload',
-                        style: isFocusedState
-                            ? Theme.of(context).textTheme.headlineSmall
-                            : Theme.of(context).textTheme.displayMedium,
-                      ),
-                      if (!isFocusedState) ...[
-                        SizedBox(height: compactViewport ? 8 : 12),
-                        const Text('Get the chords for any audio track'),
-                        SizedBox(height: compactViewport ? 16 : 24),
-                        SongSourceGrid(
-                          compact: compactViewport,
-                          onFiles: _chooseAudio,
-                          onYouTube: () => _showSourceNotice(
-                            'YouTube',
-                            'YouTube can help identify or open a song, but '
-                                'ChordSync does not download arbitrary YouTube '
-                                'audio. Choose an audio file you own for analysis.',
-                          ),
-                          onCameraRoll: () => _showSourceNotice(
-                            'Camera Roll',
-                            'Video import is not connected yet. For now, save or '
-                                'export its audio to Files and choose it there.',
-                          ),
-                          onRecord: () => _showSourceNotice(
-                            'Record audio',
-                            'Microphone recording is not connected yet. You can '
-                                'record with Voice Memos, save it to Files, and '
-                                'analyze the exported audio.',
-                          ),
-                          onShazam: () => _showSourceNotice(
-                            'Shazam',
-                            'Shazam can help identify a song, but ChordSync does '
-                                'not connect to it directly yet. Identify the '
-                                'song there, then choose a matching audio file '
-                                'you own for analysis.',
-                          ),
-                        ),
-                      ],
-                      if (controller.selectedFile != null) ...[
-                        SizedBox(height: compactViewport ? 12 : 16),
-                        _SelectedAudioCard(controller: controller),
-                      ],
+        builder: (context) {
+          return SingleChildScrollView(
+            // Room to scroll clear of the floating dock.
+            padding: EdgeInsets.fromLTRB(
+              20,
+              compactViewport ? 20 : 28,
+              20,
+              (compactViewport ? 24 : 40) +
+                  MediaQuery.paddingOf(context).bottom,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Upload',
+                      style: isFocusedState
+                          ? Theme.of(context).textTheme.headlineSmall
+                          : Theme.of(context).textTheme.displayMedium,
+                    ),
+                    if (!isFocusedState) ...[
                       SizedBox(height: compactViewport ? 8 : 12),
-                      _AnalysisStatus(controller: controller),
-                      SizedBox(height: compactViewport ? 12 : 16),
-                      if (controller.phase == AudioImportPhase.ready)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            FilledButton.icon(
-                              key: const ValueKey('startPracticeButton'),
-                              onPressed: _startPractice,
-                              icon: const Icon(Icons.play_arrow),
-                              label: const Text('Start Practice'),
-                            ),
-                            TextButton(
-                              onPressed: _chooseAudio,
-                              child: const Text('Choose another file'),
-                            ),
-                          ],
-                        )
-                      else if ((controller.phase == AudioImportPhase.failed ||
-                              controller.phase == AudioImportPhase.cancelled) &&
-                          controller.selectedFile != null)
-                        // A failed or cancelled analysis is the only case
-                        // left needing a manual trigger — picking a file
-                        // always starts analysis by itself now.
-                        FilledButton(
-                          key: const ValueKey('retryAnalysisButton'),
-                          onPressed: controller.canAnalyze
-                              ? controller.analyze
-                              : null,
-                          child: const Text('Retry Analysis'),
+                      const Text('Get the chords for any audio track'),
+                      SizedBox(height: compactViewport ? 16 : 24),
+                      SongSourceGrid(
+                        compact: compactViewport,
+                        onFiles: _chooseAudio,
+                        onYouTube: () => _showSourceNotice(
+                          'YouTube',
+                          'YouTube can help identify or open a song, but '
+                              'ChordSync does not download arbitrary YouTube '
+                              'audio. Choose an audio file you own for analysis.',
                         ),
+                        onCameraRoll: () => _showSourceNotice(
+                          'Camera Roll',
+                          'Video import is not connected yet. For now, save or '
+                              'export its audio to Files and choose it there.',
+                        ),
+                        onRecord: () => _showSourceNotice(
+                          'Record audio',
+                          'Microphone recording is not connected yet. You can '
+                              'record with Voice Memos, save it to Files, and '
+                              'analyze the exported audio.',
+                        ),
+                        onShazam: () => _showSourceNotice(
+                          'Shazam',
+                          'Shazam can help identify a song, but ChordSync does '
+                              'not connect to it directly yet. Identify the '
+                              'song there, then choose a matching audio file '
+                              'you own for analysis.',
+                        ),
+                      ),
                     ],
-                  ),
+                    if (controller.selectedFile != null) ...[
+                      SizedBox(height: compactViewport ? 12 : 16),
+                      _SelectedAudioCard(controller: controller),
+                    ],
+                    SizedBox(height: compactViewport ? 8 : 12),
+                    _AnalysisStatus(controller: controller),
+                    SizedBox(height: compactViewport ? 12 : 16),
+                    if (controller.phase == AudioImportPhase.ready)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          FilledButton.icon(
+                            key: const ValueKey('startPracticeButton'),
+                            onPressed: _startPractice,
+                            icon: const Icon(Icons.play_arrow),
+                            label: const Text('Start Practice'),
+                          ),
+                          TextButton(
+                            onPressed: _chooseAudio,
+                            child: const Text('Choose another file'),
+                          ),
+                        ],
+                      )
+                    else if ((controller.phase == AudioImportPhase.failed ||
+                            controller.phase == AudioImportPhase.cancelled) &&
+                        controller.selectedFile != null)
+                      // A failed or cancelled analysis is the only case
+                      // left needing a manual trigger — picking a file
+                      // always starts analysis by itself now.
+                      FilledButton(
+                        key: const ValueKey('retryAnalysisButton'),
+                        onPressed: controller.canAnalyze
+                            ? controller.analyze
+                            : null,
+                        child: const Text('Retry Analysis'),
+                      ),
+                  ],
                 ),
               ),
             ),
-          ),
-          bottomNavigationBar: BottomDock(
-            selectedIndex: _selectedTab,
-            onSelected: (index) => setState(() => _selectedTab = index),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
