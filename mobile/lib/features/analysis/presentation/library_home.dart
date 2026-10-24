@@ -1,9 +1,10 @@
-import '../../../design_system/pressable_scale.dart';
-import '../../../design_system/staggered_entrance.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../design_system/chordsync_design_system.dart';
+import '../../../design_system/pressable_scale.dart';
+import '../../../design_system/staggered_entrance.dart';
 import '../../practice_timeline/data/song_identity.dart';
 import '../application/analyzed_practice_session.dart';
 import '../application/cloud_library_controller.dart';
@@ -246,6 +247,15 @@ class _LibraryHomeState extends State<LibraryHome> {
   }
 }
 
+/// Song names are set a little heavier, and their details a little darker,
+/// than the default text so cards read clearly on the parchment page.
+const _cardSecondary = Color(0xFF55473C);
+
+TextStyle? _cardTitle(TextTheme textTheme) => textTheme.titleMedium?.copyWith(
+  fontWeight: FontWeight.w700,
+  color: ChordSyncColors.textPrimary,
+);
+
 class _SavedPracticeCard extends StatefulWidget {
   const _SavedPracticeCard({
     super.key,
@@ -295,7 +305,7 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
                       identity.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: textTheme.titleMedium,
+                      style: _cardTitle(textTheme),
                     ),
                     if (identity.artist != null)
                       Text(
@@ -303,7 +313,8 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: textTheme.bodyMedium?.copyWith(
-                          color: UploadPalette.secondaryText,
+                          color: _cardSecondary,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     const SizedBox(height: 4),
@@ -311,7 +322,8 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
                       '${_duration(session.timeline.endTime)} · '
                       '${session.timeline.bpm.toStringAsFixed(0)} BPM',
                       style: textTheme.bodySmall?.copyWith(
-                        color: UploadPalette.secondaryText,
+                        color: _cardSecondary,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     if (chords.isNotEmpty) ...[
@@ -327,7 +339,21 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right),
+              const SizedBox(width: 6),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  color: ChordSyncColors.surfaceAlt,
+                  shape: BoxShape.circle,
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 22,
+                    color: ChordSyncColors.brand,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -365,17 +391,19 @@ class _ChordChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: UploadPalette.background,
-        border: Border.all(color: UploadPalette.border),
-        borderRadius: BorderRadius.circular(8),
+        color: ChordSyncColors.surfaceAlt,
+        border: Border.all(
+          color: ChordSyncColors.brand.withValues(alpha: 0.45),
+        ),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         child: Text(
           chord,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: UploadPalette.primaryText,
-            fontWeight: FontWeight.w700,
+            color: ChordSyncColors.brandDark,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
@@ -559,7 +587,7 @@ class _CloudSongCard extends StatelessWidget {
                     identity.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.titleMedium,
+                    style: _cardTitle(textTheme),
                   ),
                   if (identity.artist != null)
                     Text(
@@ -567,7 +595,8 @@ class _CloudSongCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.bodyMedium?.copyWith(
-                        color: UploadPalette.secondaryText,
+                        color: _cardSecondary,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   if (seconds != null)

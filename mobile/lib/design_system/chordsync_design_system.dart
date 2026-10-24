@@ -21,6 +21,8 @@ abstract final class ChordSyncColors {
     0xFFD88732,
   ); // Warm amber — interactive accent
   static const honey = Color(0xFFD88732); // same as brandAccent in this palette
+  /// A firmer edge for white cards on the parchment page.
+  static const cardEdge = Color(0xFFD9C3A3);
   static const border = Color(
     0xFFEAD9C3,
   ); // derived from the peach/parchment family
@@ -70,7 +72,7 @@ abstract final class ChordSyncRadii {
 }
 
 abstract final class ChordSyncTypography {
-  static const displayFamily = 'Newsreader'; // song titles & lyrics
+  static const displayFamily = 'Newsreader'; // song titles
   static const bodyFamily = 'DM Sans'; // controls & instructional content
 
   static TextTheme textTheme() => const TextTheme(
@@ -161,10 +163,13 @@ abstract final class ChordSyncTheme {
       ),
       cardTheme: CardThemeData(
         color: ChordSyncColors.surface,
-        elevation: 0,
+        // A soft lift and a firmer edge, so white cards stand out from the
+        // parchment page instead of fading into it.
+        elevation: 2,
+        shadowColor: const Color(0x4D2B201B),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(ChordSyncRadii.card),
-          side: const BorderSide(color: ChordSyncColors.border),
+          side: const BorderSide(color: ChordSyncColors.cardEdge, width: 1.2),
         ),
       ),
       dividerColor: ChordSyncColors.border,
