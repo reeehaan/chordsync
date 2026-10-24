@@ -189,7 +189,10 @@ void main() {
     expect(find.text('Rest'), findsNothing);
     expect(find.byKey(const ValueKey('lyricValue')), findsNothing);
 
-    tester.widget<Slider>(find.byType(Slider)).onChanged!(2);
+    final slider = tester.widget<Slider>(find.byType(Slider));
+    slider.onChangeStart!(0);
+    slider.onChanged!(2);
+    slider.onChangeEnd!(2);
     await tester.pumpAndSettle();
 
     expect(_text(tester, 'currentChordValue'), 'C');

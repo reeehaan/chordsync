@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../application/practice_playback_speeds.dart';
@@ -6,7 +8,7 @@ import 'practice_stage_colors.dart';
 
 /// Rounded transport pill: bar navigation, play/pause, scrub line, and the
 /// speed control kept as a compact circular button.
-class PracticeTransportBar extends StatelessWidget {
+class PracticeTransportBar extends StatefulWidget {
   const PracticeTransportBar({
     super.key,
     required this.status,
@@ -31,11 +33,75 @@ class PracticeTransportBar extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onPlayPause;
   final VoidCallback onNext;
+
+  /// Called once, when the person lets go of the scrub line (or taps it).
   final ValueChanged<double> onSeek;
   final ValueChanged<double> onSpeedChanged;
 
   @override
+  State<PracticeTransportBar> createState() => _PracticeTransportBarState();
+}
+
+class _PracticeTransportBarState extends State<PracticeTransportBar> {
+  // Where the handle sits while a finger is on it, and for a moment after, so
+  // playback updates cannot pull it back before the seek has landed.
+  double? _scrub;
+  bool _dragging = false;
+  Timer? _settle;
+
+  @override
+  void didUpdateWidget(PracticeTransportBar old) {
+    super.didUpdateWidget(old);
+    final scrub = _scrub;
+    if (scrub != null && !_dragging && (widget.position - scrub).abs() < 1.0) {
+      _release();
+    }
+  }
+
+  @override
+  void dispose() {
+    _settle?.cancel();
+    super.dispose();
+  }
+
+  void _release() {
+    _settle?.cancel();
+    _settle = null;
+    _scrub = null;
+  }
+
+  void _start(double value) {
+    _settle?.cancel();
+    setState(() {
+      _dragging = true;
+      _scrub = value;
+    });
+  }
+
+  void _end(double value) {
+    // One seek per gesture. Seeking on every move floods the player and makes
+    // the playback stutter.
+    widget.onSeek(value);
+    setState(() => _dragging = false);
+    // If playback never reports a position near the target (for example the
+    // song is paused), let go of the hold shortly anyway.
+    _settle = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) setState(_release);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final status = widget.status;
+    final position = widget.position;
+    final maximumPosition = widget.maximumPosition;
+    final speed = widget.speed;
+    final canGoPrevious = widget.canGoPrevious;
+    final canGoNext = widget.canGoNext;
+    final onPrevious = widget.onPrevious;
+    final onPlayPause = widget.onPlayPause;
+    final onNext = widget.onNext;
+    final onSpeedChanged = widget.onSpeedChanged;
     final isPlaying = status == PracticePlaybackStatus.playing;
     final playLabel = status == PracticePlaybackStatus.completed
         ? 'Replay'
@@ -103,10 +169,16 @@ class PracticeTransportBar extends StatelessWidget {
                         child: SliderTheme(
                           data: SliderTheme.of(context),
                           child: Slider(
-                            value: position.clamp(0, maximumPosition),
+                            value: (_scrub ?? position).clamp(
+                              0,
+                              maximumPosition,
+                            ),
                             min: 0,
                             max: maximumPosition,
-                            onChanged: onSeek,
+                            onChangeStart: _start,
+                            onChanged: (value) =>
+                                setState(() => _scrub = value),
+                            onChangeEnd: _end,
                           ),
                         ),
                       ),

@@ -51,7 +51,9 @@ void main() {
 
   Future<void> setPosition(WidgetTester tester, double seconds) async {
     final slider = tester.widget<Slider>(find.byType(Slider));
+    slider.onChangeStart!(seconds);
     slider.onChanged!(seconds);
+    slider.onChangeEnd!(seconds);
     await tester.pumpAndSettle();
   }
 

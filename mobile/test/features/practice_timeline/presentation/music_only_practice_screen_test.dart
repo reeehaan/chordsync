@@ -101,7 +101,10 @@ Future<void> _waitForLoad(WidgetTester tester) async {
 }
 
 Future<void> _seek(WidgetTester tester, double seconds) async {
-  tester.widget<Slider>(find.byType(Slider)).onChanged!(seconds);
+  final slider = tester.widget<Slider>(find.byType(Slider));
+  slider.onChangeStart!(seconds);
+  slider.onChanged!(seconds);
+  slider.onChangeEnd!(seconds);
   // The long title glides forever, so the screen never settles: run for a
   // fixed time instead.
   await tester.pump();
