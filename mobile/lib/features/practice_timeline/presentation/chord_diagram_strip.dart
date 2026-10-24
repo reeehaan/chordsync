@@ -607,25 +607,44 @@ class _StripIconButton extends StatelessWidget {
   final bool isExpanded;
   final VoidCallback onPressed;
 
+  /// The circle people see, inside a larger touch target.
+  static const _circle = 36.0;
+  static const _touchTarget = 44.0;
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: PracticeStageColors.surfaceRaised,
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: IconButton(
-        key: const ValueKey('expandDiagramsButton'),
-        onPressed: onPressed,
-        tooltip: isExpanded ? 'Shrink chord shapes' : 'Enlarge chord shapes',
-        iconSize: 18,
-        visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-        padding: EdgeInsets.zero,
-        color: PracticeStageColors.textSecondary,
-        icon: Icon(
-          isExpanded
-              ? Icons.close_fullscreen_rounded
-              : Icons.open_in_full_rounded,
+    final label = isExpanded ? 'Shrink chord shapes' : 'Enlarge chord shapes';
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        excludeSemantics: true,
+        child: InkResponse(
+          key: const ValueKey('expandDiagramsButton'),
+          onTap: onPressed,
+          radius: _touchTarget / 2,
+          child: SizedBox(
+            width: _touchTarget,
+            height: _touchTarget,
+            child: Center(
+              child: Container(
+                width: _circle,
+                height: _circle,
+                decoration: const BoxDecoration(
+                  color: PracticeStageColors.surfaceRaised,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isExpanded
+                      ? Icons.close_fullscreen_rounded
+                      : Icons.open_in_full_rounded,
+                  size: 18,
+                  color: PracticeStageColors.textSecondary,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

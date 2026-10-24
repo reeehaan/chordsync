@@ -13,7 +13,7 @@ class FollowButton extends StatelessWidget {
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         shape: const StadiumBorder(),
-        minimumSize: const Size(0, 38),
+        minimumSize: const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: 20),
       ),
       child: const Text('Follow'),

@@ -139,6 +139,17 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: 'ChordSync',
       theme: ChordSyncTheme.light(),
+      // Follow the person's text size setting (Dynamic Type), up to a size the
+      // fixed-height rows (lyrics, chord cards) can still hold.
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: media.textScaler.clamp(maxScaleFactor: 1.3),
+          ),
+          child: child!,
+        );
+      },
       home: _usesPracticeFixture
           ? PracticeScreen(
               audioPlayer: widget.audioPlayer,

@@ -145,8 +145,10 @@ class _SpeedSelector extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       child: DropdownButtonHideUnderline(
+        // The whole 56pt circle is the touch target, not just the label.
         child: SizedBox(
-          width: 38,
+          width: 56,
+          height: 56,
           child: DropdownButton<double>(
             key: const ValueKey('speedSelector'),
             value: speed,
