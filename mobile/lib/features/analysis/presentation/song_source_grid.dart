@@ -102,9 +102,12 @@ class SongSourceGrid extends StatelessWidget {
         : sources.where((source) => source.key == 'filesSource').toList();
     final single = shown.length == 1;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         GridView.builder(
+          // A grid adds the safe area (here the floating dock) as padding by
+          // default, which left a gap above the line below it.
+          padding: EdgeInsets.zero,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: shown.length,
@@ -121,6 +124,7 @@ class SongSourceGrid extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           'Phone audio: WAV · MP3 · M4A',
+          textAlign: TextAlign.center,
           style: Theme.of(
             context,
           ).textTheme.labelMedium?.copyWith(color: UploadPalette.secondaryText),
