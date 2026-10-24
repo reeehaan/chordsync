@@ -155,11 +155,13 @@ class _SongSheetLyricsState extends State<SongSheetLyrics>
       if (focused == null) return;
       final position = _scrollController.position;
       const extent = SongSheetLyrics.blockExtent;
-      final target =
-          (focused * extent - (position.viewportDimension - extent) / 2).clamp(
-            0.0,
-            position.maxScrollExtent,
-          );
+      // The line being sung stays near the top, with the line just sung
+      // above it and the lines to come below. The very first line has nothing
+      // above it yet, so it simply starts at the top.
+      final target = ((focused - 1).clamp(0, focused) * extent).clamp(
+        0.0,
+        position.maxScrollExtent,
+      );
       if (jump) {
         _scrollController.jumpTo(target);
       } else {

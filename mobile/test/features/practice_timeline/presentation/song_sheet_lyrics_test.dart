@@ -258,6 +258,31 @@ void main() {
     expect(active.duration, const Duration(milliseconds: 320));
   });
 
+  testWidgets('the line being sung sits second, under the line just sung', (
+    tester,
+  ) async {
+    final timeline = _multiBlockTimeline();
+    await _pumpLyrics(tester, timeline, 0.6);
+    final listTop = tester.getTopLeft(
+      find.byKey(const ValueKey('lyricScrollView')),
+    );
+    // Nothing is above the first line yet, so it starts at the top.
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('currentLyricBlock'))).dy -
+          listTop.dy,
+      closeTo(24, 1),
+    );
+
+    await _pumpLyrics(tester, timeline, 14.6, settle: false);
+    await tester.pumpAndSettle();
+    // Later on one line is shown above it.
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('currentLyricBlock'))).dy -
+          listTop.dy,
+      closeTo(24 + SongSheetLyrics.blockExtent, 1),
+    );
+  });
+
   testWidgets('keeps following when the timeline is rebuilt on every frame', (
     tester,
   ) async {
