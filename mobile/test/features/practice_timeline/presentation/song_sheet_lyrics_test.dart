@@ -72,7 +72,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(colorAt(0.5), PracticeStageColors.amberBright);
     expect(colorAt(1.5), PracticeStageColors.amberBright);
-    expect(colorAt(2.5), PracticeStageColors.textSecondary);
+    expect(colorAt(2.5), const Color(0xFF4A3D33)); // upcoming
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -106,7 +106,7 @@ void main() {
         .style
         .color;
     expect(colorAt(0.5), PracticeStageColors.amberBright);
-    expect(colorAt(1.5), PracticeStageColors.textSecondary);
+    expect(colorAt(1.5), const Color(0xFF4A3D33)); // upcoming
   });
 
   test('only Chinese, Japanese and Korean lines highlight as a whole line', () {
@@ -162,7 +162,7 @@ void main() {
           find.byKey(ValueKey('sheetWordStyle$start')),
         ),
     ];
-    expect(wordStyles.map((word) => word.style.fontSize).toSet(), {19.0});
+    expect(wordStyles.map((word) => word.style.fontSize).toSet(), {20.0});
     expect(tester.takeException(), isNull);
   });
 

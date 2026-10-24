@@ -11,6 +11,10 @@ import 'lyric_chord_marker_mapper.dart';
 import 'lyric_display_block.dart';
 import 'practice_stage_colors.dart';
 
+/// Words still to come: darker than the page's secondary text so they read
+/// clearly before they are sung.
+const _upcomingLyric = Color(0xFF4A3D33);
+
 class SongSheetLyrics extends StatefulWidget {
   const SongSheetLyrics({
     super.key,
@@ -419,15 +423,19 @@ class _LyricChordWord extends StatelessWidget {
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
               style: (textTheme.bodyLarge ?? const TextStyle()).copyWith(
+                // A plain sans reads more clearly at lyric size than the
+                // serif used for titles.
+                fontFamily: ChordSyncTypography.bodyFamily,
+                letterSpacing: 0.1,
                 color: lit
                     ? PracticeStageColors.amberBright
                     : lineDone
                     ? PracticeStageColors.textFaint
-                    : PracticeStageColors.textSecondary,
+                    : _upcomingLyric,
                 // One weight for every word: emphasising a word by making it
                 // bolder would widen it and push the line sideways.
                 fontWeight: FontWeight.w600,
-                fontSize: 19,
+                fontSize: 20,
                 height: 1.25,
               ),
               child: _SweptText(
