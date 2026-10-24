@@ -111,7 +111,13 @@ class _LibraryHomeState extends State<LibraryHome> {
       onTap: _dismissKeyboard,
       child: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          28,
+          20,
+          // The glass dock floats over the page; leave room to scroll clear.
+          32 + MediaQuery.paddingOf(context).bottom,
+        ),
         children: [
           Text('Your songs', style: Theme.of(context).textTheme.displayMedium),
           const SizedBox(height: 8),

@@ -9,7 +9,12 @@ class TunerHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        28,
+        24,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
