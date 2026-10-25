@@ -46,6 +46,7 @@ class _PracticeTransportBarState extends State<PracticeTransportBar> {
   // Where the handle sits while a finger is on it, and for a moment after, so
   // playback updates cannot pull it back before the seek has landed.
   double? _scrub;
+  double? _positionAtRelease;
   bool _dragging = false;
   Timer? _settle;
 
@@ -53,7 +54,12 @@ class _PracticeTransportBarState extends State<PracticeTransportBar> {
   void didUpdateWidget(PracticeTransportBar old) {
     super.didUpdateWidget(old);
     final scrub = _scrub;
-    if (scrub != null && !_dragging && (widget.position - scrub).abs() < 1.0) {
+    // Let go only once the player has reported a new position close to where
+    // the finger left the handle: that is the seek landing.
+    if (scrub != null &&
+        !_dragging &&
+        widget.position != _positionAtRelease &&
+        (widget.position - scrub).abs() < 1.0) {
       _release();
     }
   }
@@ -82,10 +88,11 @@ class _PracticeTransportBarState extends State<PracticeTransportBar> {
     // One seek per gesture. Seeking on every move floods the player and makes
     // the playback stutter.
     widget.onSeek(value);
+    _positionAtRelease = widget.position;
     setState(() => _dragging = false);
     // If playback never reports a position near the target (for example the
     // song is paused), let go of the hold shortly anyway.
-    _settle = Timer(const Duration(milliseconds: 800), () {
+    _settle = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) setState(_release);
     });
   }

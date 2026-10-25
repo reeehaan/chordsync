@@ -85,4 +85,23 @@ void main() {
     await tester.pump();
     expect(handle(tester), closeTo(target + 5, 0.01));
   });
+
+  testWidgets('the handle stays put until the player reports the seek', (
+    tester,
+  ) async {
+    await tester.pumpWidget(bar(10));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(Slider)),
+    );
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+    final target = handle(tester);
+    await gesture.up();
+    await tester.pump();
+
+    // The player has not moved yet: still reporting the old position.
+    await tester.pumpWidget(bar(10));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(handle(tester), target);
+  });
 }
