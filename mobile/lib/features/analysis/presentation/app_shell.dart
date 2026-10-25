@@ -12,7 +12,7 @@ import 'upload_theme.dart';
 
 /// Themed scaffold with the bottom tab dock. It holds the library, add-song
 /// and tuner pages together and keeps all three alive, so a search or a scroll
-/// position survives a trip to another tab.
+/// position survives a trip to another tab. A tab opens instantly.
 class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
@@ -75,64 +75,27 @@ class AppShell extends StatelessWidget {
   }
 }
 
-/// One tab's page. It fades in when chosen and fades out when left, but is
-/// never torn down: its state stays, and while hidden it takes no touches, no
-/// screen-reader focus, no animation ticks and no scroll-to-top.
-class _TabPage extends StatefulWidget {
+/// One tab's page. Choosing a tab shows its page at once; the others are
+/// hidden, not torn down, so their state stays. While hidden a page takes no
+/// touches, no screen-reader focus, no animation ticks and no scroll-to-top.
+class _TabPage extends StatelessWidget {
   const _TabPage({required this.selected, required this.child});
 
   final bool selected;
   final Widget child;
 
   @override
-  State<_TabPage> createState() => _TabPageState();
-}
-
-class _TabPageState extends State<_TabPage> {
-  late bool _shown = widget.selected;
-
-  @override
-  void didUpdateWidget(_TabPage old) {
-    super.didUpdateWidget(old);
-    if (widget.selected) _shown = true;
-  }
-
-  @override
   Widget build(BuildContext context) {
     final inherited = PrimaryScrollController.maybeOf(context);
-    final page = widget.child;
-    // With Reduce Motion there is no fade to wait for: a page that is not
-    // chosen is gone at once.
-    final gone =
-        !_shown || (!widget.selected && ChordSyncMotion.reduced(context));
     return Offstage(
-      offstage: gone,
-      child: IgnorePointer(
-        ignoring: !widget.selected,
-        child: ExcludeSemantics(
-          excluding: !widget.selected,
-          child: AnimatedOpacity(
-            opacity: widget.selected ? 1 : 0,
-            // Quick: a tab change should feel like a cut with a soft edge.
-            duration: ChordSyncMotion.of(context, ChordSyncMotion.quick),
-            curve: widget.selected
-                ? ChordSyncMotion.enter
-                : ChordSyncMotion.exit,
-            // With no fade (Reduce Motion) this fires while building, so the
-            // state change waits for the end of the frame.
-            onEnd: () => WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!widget.selected && mounted) setState(() => _shown = false);
-            }),
-            child: TickerMode(
-              enabled: _shown,
-              // Only the page on show answers the status-bar tap that scrolls
-              // to the top; two pages must not share the route's controller.
-              child: inherited != null && widget.selected
-                  ? PrimaryScrollController(controller: inherited, child: page)
-                  : PrimaryScrollController.none(child: page),
-            ),
-          ),
-        ),
+      offstage: !selected,
+      child: TickerMode(
+        enabled: selected,
+        // Only the page on show answers the status-bar tap that scrolls to
+        // the top; two pages must not share the route's controller.
+        child: inherited != null && selected
+            ? PrimaryScrollController(controller: inherited, child: child)
+            : PrimaryScrollController.none(child: child),
       ),
     );
   }

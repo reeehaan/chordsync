@@ -42,40 +42,25 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('search')), 'wonder');
 
     tab.value = 2;
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.text('tuner page'), findsOneWidget);
     expect(find.byKey(const ValueKey('search')), findsNothing);
 
     tab.value = 0;
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.text('wonder'), findsOneWidget);
     expect(find.text('tuner page'), findsNothing);
   });
 
-  testWidgets('with Reduce Motion the old page goes at once', (tester) async {
-    final tab = ValueNotifier(0);
-    await tester.pumpWidget(shell(tab: tab, reduceMotion: true));
-
-    tab.value = 1;
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.text('add page'), findsOneWidget);
-    expect(find.byKey(const ValueKey('search')), findsNothing);
-  });
-
-  testWidgets('a page hidden by the fade takes no touches', (tester) async {
+  testWidgets('a tab opens at once, with no fade to wait for', (tester) async {
     final tab = ValueNotifier(0);
     await tester.pumpWidget(shell(tab: tab));
 
     tab.value = 1;
-    await tester.pump(const Duration(milliseconds: 100)); // mid-fade
-    final ignoring = tester
-        .widgetList<IgnorePointer>(find.byType(IgnorePointer))
-        .where((widget) => widget.ignoring)
-        .length;
-    expect(ignoring, greaterThanOrEqualTo(1));
-    await tester.pumpAndSettle();
+    await tester.pump(); // one frame, no time passing
+
+    expect(find.text('add page'), findsOneWidget);
+    expect(find.byKey(const ValueKey('search')), findsNothing);
   });
 
   testWidgets('the pages make room for the progress banner', (tester) async {
