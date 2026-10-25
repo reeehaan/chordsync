@@ -221,6 +221,7 @@ class _LibraryHomeState extends State<LibraryHome> {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: StaggeredEntrance(
                   key: ValueKey('entrance-${session.job.jobId}'),
+                  identity: session.job.jobId,
                   index: index,
                   child: PressableScale(
                     child: _SavedPracticeCard(

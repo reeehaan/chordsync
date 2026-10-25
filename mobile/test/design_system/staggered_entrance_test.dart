@@ -25,4 +25,27 @@ void main() {
     expect(find.byType(Opacity), findsNothing);
     expect(find.text('card'), findsOneWidget);
   });
+
+  testWidgets('an item that has entered once does not fade in again', (
+    tester,
+  ) async {
+    Widget item(Key key) => MaterialApp(
+      home: StaggeredEntrance(
+        key: key,
+        index: 0,
+        identity: 'song-1',
+        child: const Text('card'),
+      ),
+    );
+
+    await tester.pumpWidget(item(const ValueKey('first')));
+    expect(tester.widget<Opacity>(find.byType(Opacity)).opacity, 0);
+    await tester.pumpAndSettle();
+
+    // The item is scrolled away and built again.
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await tester.pumpWidget(item(const ValueKey('second')));
+    expect(find.byType(Opacity), findsNothing);
+    expect(find.text('card'), findsOneWidget);
+  });
 }
