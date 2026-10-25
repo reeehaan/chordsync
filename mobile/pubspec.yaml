@@ -72,6 +72,7 @@ flutter:
     - assets/practice_audio/extended_chords_sample.wav
     - assets/practice_timeline/extended_chords_sample.json
     - assets/icons/source_providers/
+    - assets/icons/chordsync_icon.svg
 
   # Golden Hour theme fonts (SIL Open Font License; texts beside the files).
   # Static weights cut from the Google Fonts variable fonts.

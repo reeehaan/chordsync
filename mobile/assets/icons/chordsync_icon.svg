@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="512" height="512"
+     viewBox="0 0 512 512">
+
+  <rect width="512" height="512"
+        rx="112" fill="#FBF6EC"/>
+
+  <path
+    d="M337 96 C281 83 216 117 164 159
+       C119 196 132 251 164 303
+       C194 352 237 399 269 389
+       C309 377 344 326 368 294
+       C377 282 367 272 355 280
+       C319 302 290 323 260 306
+       C223 286 204 248 218 211
+       C232 174 267 158 302 171
+       C327 181 344 195 361 195
+       C377 195 379 180 367 159
+       C358 141 350 110 337 96 Z"
+    fill="#A84F2A"/>
+
+  <!-- Espresso strings for stronger contrast -->
+  <g fill="none" stroke="#2B201B"
+     stroke-width="10" stroke-linecap="round">
+    <path d="M234 218 Q290 221 352 215"/>
+    <path d="M228 249 Q290 252 352 246"/>
+    <path d="M234 280 Q290 283 352 277"/>
+  </g>
+
+  <!-- Amber string endpoints -->
+  <g fill="#D88732" stroke="#FBF6EC" stroke-width="2">
+    <circle cx="360" cy="215" r="12"/>
+    <circle cx="360" cy="246" r="12"/>
+    <circle cx="360" cy="277" r="12"/>
+  </g>
+</svg>

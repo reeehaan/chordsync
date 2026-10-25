@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'design_system/chordsync_design_system.dart';
+import 'design_system/motion.dart';
 import 'features/analysis/application/analysis_job_poller.dart';
 import 'features/analysis/application/cloud_library_controller.dart';
 import 'features/analysis/application/cloud_library_service.dart';
@@ -16,6 +17,7 @@ import 'features/analysis/data/sample_song.dart';
 import 'features/analysis/presentation/analysis_progress_banner.dart';
 import 'features/analysis/presentation/audio_file_selector.dart';
 import 'features/analysis/presentation/page_route_tracker.dart';
+import 'features/splash/chordsync_splash_screen.dart';
 import 'features/analysis/presentation/audio_import_controller.dart';
 import 'features/analysis/presentation/audio_import_screen.dart';
 import 'features/practice_timeline/application/practice_audio_player.dart';
@@ -28,7 +30,7 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
   ]);
-  runApp(const MyApp());
+  runApp(const MyApp(showSplash: true));
 }
 
 class MyApp extends StatefulWidget {
@@ -39,7 +41,12 @@ class MyApp extends StatefulWidget {
     this.sessionFactory,
     this.importController,
     this.fileSelector,
+    this.showSplash = false,
   });
+
+  /// Plays the opening animation before the first screen. Off by default so
+  /// tests and fixtures open straight on their screen.
+  final bool showSplash;
 
   final PracticeAudioPlayer? audioPlayer;
   final AnalyzedPracticeSession? analyzedSession;
@@ -158,6 +165,23 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
+  late bool _splashDone = !widget.showSplash;
+
+  Widget _home() => _usesPracticeFixture
+      ? PracticeScreen(
+          audioPlayer: widget.audioPlayer,
+          analyzedSession: widget.analyzedSession,
+          sessionFactory: widget.sessionFactory,
+        )
+      : AudioImportScreen(
+          controller: _importController!,
+          fileSelector: widget.fileSelector ?? const NativeAudioFileSelector(),
+          practiceSessionFactory: widget.sessionFactory,
+          sessionLibrary: _sessionLibrary,
+          cloudLibrary: _cloudLibrary,
+          bannerInset: _bannerInset,
+        );
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -196,21 +220,17 @@ class _MyAppState extends State<MyApp> {
           ),
         );
       },
-      home: _usesPracticeFixture
-          ? PracticeScreen(
-              audioPlayer: widget.audioPlayer,
-              analyzedSession: widget.analyzedSession,
-              sessionFactory: widget.sessionFactory,
-            )
-          : AudioImportScreen(
-              controller: _importController!,
-              fileSelector:
-                  widget.fileSelector ?? const NativeAudioFileSelector(),
-              practiceSessionFactory: widget.sessionFactory,
-              sessionLibrary: _sessionLibrary,
-              cloudLibrary: _cloudLibrary,
-              bannerInset: _bannerInset,
-            ),
+      // A Builder, so the hand-over can read the app's own MediaQuery.
+      home: Builder(
+        builder: (context) => AnimatedSwitcher(
+          duration: ChordSyncMotion.of(context, ChordSyncMotion.quick),
+          child: _splashDone
+              ? _home()
+              : ChordSyncSplashScreen(
+                  onFinished: () => setState(() => _splashDone = true),
+                ),
+        ),
+      ),
     );
   }
 }
