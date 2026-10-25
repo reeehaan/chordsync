@@ -149,6 +149,21 @@ void main() {
       expect(scale(tester), 1);
     });
 
+    testWidgets('sliding away to scroll lets the card go', (tester) async {
+      await tester.pumpWidget(app());
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('target'))),
+      );
+      await tester.pump();
+      expect(scale(tester), lessThan(1));
+
+      await gesture.moveBy(const Offset(0, -40));
+      await tester.pump();
+      expect(scale(tester), 1);
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('the child keeps its own tap', (tester) async {
       var taps = 0;
       await tester.pumpWidget(app(onTap: () => taps++));

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'motion.dart';
@@ -23,15 +24,28 @@ class PressableScale extends StatefulWidget {
 
 class _PressableScaleState extends State<PressableScale> {
   bool _pressed = false;
+  Offset? _downAt;
 
   void _set(bool pressed) {
     if (_pressed != pressed) setState(() => _pressed = pressed);
   }
 
+  // A finger that slides away is scrolling, not pressing: let the card go.
+  void _moved(PointerMoveEvent event) {
+    final start = _downAt;
+    if (start != null && (event.position - start).distance > kTouchSlop) {
+      _set(false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Listener(
-      onPointerDown: (_) => _set(true),
+      onPointerDown: (event) {
+        _downAt = event.position;
+        _set(true);
+      },
+      onPointerMove: _moved,
       onPointerUp: (_) => _set(false),
       onPointerCancel: (_) => _set(false),
       child: AnimatedScale(
