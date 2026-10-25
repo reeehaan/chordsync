@@ -151,6 +151,19 @@ docker-data/
 # Terraform provider/module cache (lock files remain tracked)
 .terraform/
 
+# Terraform plans, state and variable files can hold secrets in plain text.
+# Example files stay tracked.
+*.tfplan
+tfplan*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# App build settings that carry the demo API token
+*defines*.json
+
 
 # --------------------------
 # PostgreSQL
@@ -164,3 +177,10 @@ postgres-data/
 # --------------------------
 
 redis-data/
+
+
+# --------------------------
+# Claude Code (local agents and settings, never committed)
+# --------------------------
+
+.claude/
