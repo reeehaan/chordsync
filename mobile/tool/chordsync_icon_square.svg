@@ -5,6 +5,8 @@
   <rect width="512" height="512"
         fill="#FBF6EC"/>
 
+  <!-- The mark, shifted so its bounding box sits at the true centre. -->
+  <g transform="translate(1.5 14.5)">
   <path
     d="M337 96 C281 83 216 117 164 159
        C119 196 132 251 164 303
@@ -32,5 +34,6 @@
     <circle cx="360" cy="215" r="12"/>
     <circle cx="360" cy="246" r="12"/>
     <circle cx="360" cy="277" r="12"/>
+  </g>
   </g>
 </svg>
