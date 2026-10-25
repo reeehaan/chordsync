@@ -21,19 +21,23 @@
        C358 141 350 110 337 96 Z"
     fill="#A84F2A"/>
 
-  <!-- Espresso strings for stronger contrast -->
+  <!-- Five espresso strings, one for each string the harmonics are picked on -->
   <g fill="none" stroke="#2B201B"
-     stroke-width="10" stroke-linecap="round">
-    <path d="M234 218 Q290 221 352 215"/>
-    <path d="M228 249 Q290 252 352 246"/>
-    <path d="M234 280 Q290 283 352 277"/>
+     stroke-width="7" stroke-linecap="round">
+    <path d="M234 210 Q290 213 352 207"/>
+    <path d="M228 228.5 Q290 231.5 352 225.5"/>
+    <path d="M228 247 Q290 250 352 244"/>
+    <path d="M233 265.5 Q290 268.5 352 262.5"/>
+    <path d="M244 284 Q290 287 352 281"/>
   </g>
 
   <!-- Amber string endpoints -->
-  <g fill="#D88732" stroke="#FBF6EC" stroke-width="2">
-    <circle cx="360" cy="215" r="12"/>
-    <circle cx="360" cy="246" r="12"/>
-    <circle cx="360" cy="277" r="12"/>
+  <g fill="#D88732" stroke="#FBF6EC" stroke-width="1.6">
+    <circle cx="360" cy="207" r="8.5"/>
+    <circle cx="360" cy="225.5" r="8.5"/>
+    <circle cx="360" cy="244" r="8.5"/>
+    <circle cx="360" cy="262.5" r="8.5"/>
+    <circle cx="360" cy="281" r="8.5"/>
   </g>
   </g>
 </svg>
