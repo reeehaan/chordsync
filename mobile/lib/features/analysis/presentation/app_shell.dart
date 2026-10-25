@@ -113,7 +113,8 @@ class _TabPageState extends State<_TabPage> {
           excluding: !widget.selected,
           child: AnimatedOpacity(
             opacity: widget.selected ? 1 : 0,
-            duration: ChordSyncMotion.of(context, ChordSyncMotion.standard),
+            // Quick: a tab change should feel like a cut with a soft edge.
+            duration: ChordSyncMotion.of(context, ChordSyncMotion.quick),
             curve: widget.selected
                 ? ChordSyncMotion.enter
                 : ChordSyncMotion.exit,
