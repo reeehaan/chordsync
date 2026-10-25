@@ -98,6 +98,8 @@ class AudioImportController extends ChangeNotifier {
 
   bool selectFile(File file, {String? displayName}) {
     if (_active) return false;
+    // Choosing a new file moves on from any song still waiting on the banner.
+    _inBackground = false;
     final name = displayName ?? file.uri.pathSegments.last;
     final storedName = file.uri.pathSegments.last;
     final suffix = storedName.contains('.')

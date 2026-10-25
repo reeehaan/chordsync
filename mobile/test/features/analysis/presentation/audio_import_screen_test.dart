@@ -300,6 +300,50 @@ void main() {
       expect(controller.session, isNotNull);
     });
 
+    testWidgets('starting a finished song from Add song clears the banner', (
+      tester,
+    ) async {
+      await startAnalysis(tester);
+      await tester.tap(find.byKey(const ValueKey('analysisBackButton')));
+      await tester.pumpAndSettle();
+      preparation.complete(_session(audio));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('bottomNav1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('startPracticeButton')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('currentChordValue')), findsOneWidget);
+      expect(controller.inBackground, isFalse);
+      expect(controller.session, isNull);
+    });
+
+    testWidgets('the library keeps its search while a song is analyzed', (
+      tester,
+    ) async {
+      await pumpScreen(
+        tester,
+        sessionLibrary: _FakeSessionLibrary([_session(audio)]),
+        openUpload: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'wonder');
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('bottomNav1')));
+      await tester.pumpAndSettle();
+      final filesSource = find.byKey(const ValueKey('filesSource'));
+      await tester.ensureVisible(filesSource);
+      await tester.tap(filesSource);
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('analysisBackButton')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('wonder'), findsOneWidget);
+    });
+
     testWidgets('Add song brings the progress screen back', (tester) async {
       await startAnalysis(tester);
       await tester.tap(find.byKey(const ValueKey('analysisBackButton')));
@@ -319,6 +363,7 @@ void main() {
       WidgetTester tester,
       List<AnalyzedPracticeSession> played, {
       ValueListenable<bool>? atHome,
+      ValueChanged<double>? onInset,
     }) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -330,6 +375,7 @@ void main() {
                 controller: controller,
                 onPlay: played.add,
                 atHome: atHome,
+                onInsetChanged: onInset,
               ),
             ],
           ),
@@ -400,6 +446,39 @@ void main() {
       atHome.value = true; // back on the library, still analyzing
       await tester.pump(const Duration(milliseconds: 600));
       expect(slidIn(tester), isTrue);
+    });
+
+    testWidgets('tells the page how much room it needs, and none when away', (
+      tester,
+    ) async {
+      final insets = <double>[];
+      final atHome = ValueNotifier(true);
+      await pumpBanner(tester, [], atHome: atHome, onInset: insets.add);
+      await startInBackground(tester);
+      expect(insets.last, greaterThan(40));
+
+      atHome.value = false;
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(insets.last, 0);
+    });
+
+    testWidgets('choosing a new file takes over from a waiting song', (
+      tester,
+    ) async {
+      await pumpBanner(tester, []);
+      await startInBackground(tester);
+      preparation.complete(_session(audio));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(slidIn(tester), isTrue);
+
+      controller.selectFile(
+        File('${directory.path}/notes.txt')..writeAsStringSync('x'),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(controller.inBackground, isFalse);
+      expect(slidIn(tester), isFalse);
     });
 
     testWidgets('a finished song leaves after 30 seconds unless tapped', (

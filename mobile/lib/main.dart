@@ -136,6 +136,7 @@ class _MyAppState extends State<MyApp> {
 
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _routes = PageRouteTracker();
+  final _bannerInset = ValueNotifier<double>(0);
 
   void _playFinished(AnalyzedPracticeSession session) {
     _importController?.reset();
@@ -153,6 +154,7 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     _importController?.dispose();
     _cloudLibrary?.dispose();
+    _bannerInset.dispose();
     super.dispose();
   }
 
@@ -184,7 +186,9 @@ class _MyAppState extends State<MyApp> {
                   right: 0,
                   child: AnalysisProgressBanner(
                     controller: importController,
-                    atHome: _routes.atHome,
+                    // Hidden over pages, dialogs and sheets.
+                    atHome: _routes.uncovered,
+                    onInsetChanged: (inset) => _bannerInset.value = inset,
                     onPlay: _playFinished,
                   ),
                 ),
@@ -205,6 +209,7 @@ class _MyAppState extends State<MyApp> {
               practiceSessionFactory: widget.sessionFactory,
               sessionLibrary: _sessionLibrary,
               cloudLibrary: _cloudLibrary,
+              bannerInset: _bannerInset,
             ),
     );
   }

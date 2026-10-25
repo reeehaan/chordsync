@@ -52,4 +52,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(tracker.atHome.value, isTrue);
   });
+
+  testWidgets('uncovered is false under a dialog or a page, true otherwise', (
+    tester,
+  ) async {
+    final tracker = PageRouteTracker();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorObservers: [tracker],
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                builder: (_) =>
+                    const SizedBox(height: 100, child: Text('sheet')),
+              ),
+              child: const Text('open sheet'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tracker.uncovered.value, isTrue);
+
+    await tester.tap(find.text('open sheet'));
+    await tester.pumpAndSettle();
+    expect(tracker.uncovered.value, isFalse);
+    expect(tracker.atHome.value, isTrue); // a sheet is not a page
+
+    Navigator.of(tester.element(find.text('sheet'))).pop();
+    await tester.pumpAndSettle();
+    expect(tracker.uncovered.value, isTrue);
+  });
 }

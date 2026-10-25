@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -9,21 +10,38 @@ import '../../../design_system/haptics.dart';
 import '../../../design_system/motion.dart';
 import 'upload_theme.dart';
 
-/// Themed scaffold with the bottom tab dock, used by the library and tuner tabs.
+/// Themed scaffold with the bottom tab dock. It holds the library, add-song
+/// and tuner pages together and keeps all three alive, so a search or a scroll
+/// position survives a trip to another tab.
 class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
-    required this.child,
+    required this.pages,
     required this.selectedIndex,
     required this.onSelected,
+    this.bannerInset,
   });
 
-  final Widget child;
+  /// One page per dock item, in dock order.
+  final List<Widget> pages;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
+  /// How far the progress banner hangs below the safe area; the pages move
+  /// down by this much so the banner never covers their titles.
+  final ValueListenable<double>? bannerInset;
+
   @override
   Widget build(BuildContext context) {
+    final inset = bannerInset;
+    final body = Stack(
+      fit: StackFit.expand,
+      alignment: Alignment.topCenter,
+      children: [
+        for (var i = 0; i < pages.length; i++)
+          _TabPage(selected: i == selectedIndex, child: pages[i]),
+      ],
+    );
     return Theme(
       data: uploadTheme(context),
       child: Scaffold(
@@ -32,23 +50,87 @@ class AppShell extends StatelessWidget {
         extendBody: true,
         body: SafeArea(
           bottom: false,
-          child: AnimatedSwitcher(
-            duration: ChordSyncMotion.of(context, ChordSyncMotion.standard),
-            switchInCurve: ChordSyncMotion.enter,
-            switchOutCurve: ChordSyncMotion.exit,
-            // The default layout centres a page while it fades; pin to the top
-            // and fill the area so nothing shifts when the fade ends.
-            layoutBuilder: (current, previous) => Stack(
-              fit: StackFit.expand,
-              alignment: Alignment.topCenter,
-              children: [...previous, ?current],
-            ),
-            child: KeyedSubtree(key: ValueKey(selectedIndex), child: child),
-          ),
+          child: inset == null
+              ? body
+              : ValueListenableBuilder<double>(
+                  valueListenable: inset,
+                  child: body,
+                  builder: (context, value, child) => AnimatedPadding(
+                    duration: ChordSyncMotion.of(
+                      context,
+                      ChordSyncMotion.standard,
+                    ),
+                    curve: ChordSyncMotion.enter,
+                    padding: EdgeInsets.only(top: value),
+                    child: child,
+                  ),
+                ),
         ),
         bottomNavigationBar: BottomDock(
           selectedIndex: selectedIndex,
           onSelected: onSelected,
+        ),
+      ),
+    );
+  }
+}
+
+/// One tab's page. It fades in when chosen and fades out when left, but is
+/// never torn down: its state stays, and while hidden it takes no touches, no
+/// screen-reader focus, no animation ticks and no scroll-to-top.
+class _TabPage extends StatefulWidget {
+  const _TabPage({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+
+  @override
+  State<_TabPage> createState() => _TabPageState();
+}
+
+class _TabPageState extends State<_TabPage> {
+  late bool _shown = widget.selected;
+
+  @override
+  void didUpdateWidget(_TabPage old) {
+    super.didUpdateWidget(old);
+    if (widget.selected) _shown = true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inherited = PrimaryScrollController.maybeOf(context);
+    final page = widget.child;
+    // With Reduce Motion there is no fade to wait for: a page that is not
+    // chosen is gone at once.
+    final gone =
+        !_shown || (!widget.selected && ChordSyncMotion.reduced(context));
+    return Offstage(
+      offstage: gone,
+      child: IgnorePointer(
+        ignoring: !widget.selected,
+        child: ExcludeSemantics(
+          excluding: !widget.selected,
+          child: AnimatedOpacity(
+            opacity: widget.selected ? 1 : 0,
+            duration: ChordSyncMotion.of(context, ChordSyncMotion.standard),
+            curve: widget.selected
+                ? ChordSyncMotion.enter
+                : ChordSyncMotion.exit,
+            // With no fade (Reduce Motion) this fires while building, so the
+            // state change waits for the end of the frame.
+            onEnd: () => WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!widget.selected && mounted) setState(() => _shown = false);
+            }),
+            child: TickerMode(
+              enabled: _shown,
+              // Only the page on show answers the status-bar tap that scrolls
+              // to the top; two pages must not share the route's controller.
+              child: inherited != null && widget.selected
+                  ? PrimaryScrollController(controller: inherited, child: page)
+                  : PrimaryScrollController.none(child: page),
+            ),
+          ),
         ),
       ),
     );

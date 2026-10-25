@@ -22,6 +22,7 @@ class AnalysisProgressBanner extends StatefulWidget {
     required this.controller,
     required this.onPlay,
     this.atHome,
+    this.onInsetChanged,
     this.readyLinger = const Duration(seconds: 30),
   });
 
@@ -33,6 +34,10 @@ class AnalysisProgressBanner extends StatefulWidget {
   /// False while a page such as the practice screen covers the home screens.
   /// Null means always home.
   final ValueListenable<bool>? atHome;
+
+  /// Reports how far the banner hangs below the safe area (zero while it is
+  /// away), so the page underneath can make room for it.
+  final ValueChanged<double>? onInsetChanged;
 
   /// How long a finished song stays on the banner before it slides away.
   final Duration readyLinger;
@@ -47,6 +52,8 @@ class _AnalysisProgressBannerState extends State<AnalysisProgressBanner> {
   AudioImportPhase _lastPhase = AudioImportPhase.idle;
   Timer? _linger;
   bool _visible = false;
+  final _bodyKey = GlobalKey();
+  double _reportedInset = -1;
 
   // What the banner last showed, kept so it can slide away with its words
   // still on it after the controller has moved on.
@@ -73,6 +80,10 @@ class _AnalysisProgressBannerState extends State<AnalysisProgressBanner> {
     if (old.atHome != widget.atHome) {
       old.atHome?.removeListener(_changed);
       widget.atHome?.addListener(_changed);
+    }
+    if (old.controller != widget.controller || old.atHome != widget.atHome) {
+      _lastPhase = widget.controller.phase;
+      _sync();
     }
   }
 
@@ -161,8 +172,30 @@ class _AnalysisProgressBannerState extends State<AnalysisProgressBanner> {
     }
   }
 
+  void _reportInset() {
+    final report = widget.onInsetChanged;
+    if (report == null) return;
+    double inset = 0;
+    if (_visible) {
+      final box = _bodyKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize) {
+        // Below the status bar, plus a little air under the banner.
+        final top = MediaQuery.paddingOf(context).top;
+        inset = (box.size.height + 6 - top + 6).clamp(0, 400).toDouble();
+      } else {
+        return;
+      }
+    }
+    if ((inset - _reportedInset).abs() < 0.5) return;
+    _reportedInset = inset;
+    report(inset);
+  }
+
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _reportInset();
+    });
     return IgnorePointer(
       ignoring: !_visible,
       child: AnimatedSlide(
@@ -192,11 +225,14 @@ class _AnalysisProgressBannerState extends State<AnalysisProgressBanner> {
                   // A hidden banner must not keep its disc turning.
                   child: TickerMode(
                     enabled: _visible,
-                    child: _BannerBody(
-                      title: _title,
-                      subtitle: _subtitle,
-                      step: _step,
-                      mode: _mode,
+                    child: KeyedSubtree(
+                      key: _bodyKey,
+                      child: _BannerBody(
+                        title: _title,
+                        subtitle: _subtitle,
+                        step: _step,
+                        mode: _mode,
+                      ),
                     ),
                   ),
                 ),
