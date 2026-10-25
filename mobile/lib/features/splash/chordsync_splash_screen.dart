@@ -1,22 +1,47 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../design_system/chordsync_design_system.dart';
+import 'splash_sound.dart';
 
-/// The opening moment: the icon grows into place, amber flares open behind it
-/// and the name and tagline fade in. Light theme only for now.
+/// The opening moment, light theme only for now: the icon alone, big. The C
+/// shape appears, the three strings draw in, then a short tab of natural
+/// harmonics (open C tuning, so C major) is picked: each note moves a string
+/// as a real recorded guitar sounds it, at the phone's own volume. Then the
+/// app goes on.
 ///
-/// With Reduce Motion on, the finished frame shows briefly and the app goes on.
+/// With Reduce Motion on, the finished icon shows briefly, in silence.
 class ChordSyncSplashScreen extends StatefulWidget {
-  const ChordSyncSplashScreen({super.key, this.onFinished});
+  const ChordSyncSplashScreen({
+    super.key,
+    this.onFinished,
+    this.sound = const NoSplashSound(),
+  });
 
   /// Called once, when the intro has played.
   final VoidCallback? onFinished;
 
-  static const duration = Duration(milliseconds: 2200);
+  /// The strummed chord. Silent by default.
+  final SplashSound sound;
+
+  static const duration = Duration(milliseconds: 2400);
   static const reducedMotionDuration = Duration(milliseconds: 400);
+
+  /// When the first note is picked, in milliseconds from the beginning.
+  static const pickStartMs = 800.0;
+
+  /// The time between notes (tool/generate_splash_chord.py uses the same).
+  static const pickStepMs = 160.0;
+
+  /// Which of the three drawn strings (0 top, 2 bottom) moves for each note of
+  /// the tab, in order: the bass notes move the top string, the middle notes
+  /// the middle one, the highest note the bottom one.
+  static const pickStrings = [0, 0, 1, 1, 2, 1, 1, 0];
+
+  /// Starting the sound a little early, so it is heard as the strings move:
+  /// the player takes a moment to begin.
+  static const soundLeadMs = 60.0;
 
   @override
   State<ChordSyncSplashScreen> createState() => _ChordSyncSplashScreenState();
@@ -27,25 +52,15 @@ class _ChordSyncSplashScreenState extends State<ChordSyncSplashScreen>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: ChordSyncSplashScreen.duration,
-  );
+  )..addListener(_maybeStartSound);
 
-  late final Animation<double> _iconScale = Tween<double>(begin: 0.72, end: 1.0)
-      .animate(
-        CurvedAnimation(
-          parent: _controller,
-          curve: const Interval(0.0, 0.55, curve: Curves.easeOutBack),
-        ),
-      );
-  late final Animation<double> _iconOpacity = CurvedAnimation(
-    parent: _controller,
-    curve: const Interval(0.0, 0.25, curve: Curves.easeIn),
-  );
-  late final Animation<double> _textOpacity = CurvedAnimation(
-    parent: _controller,
-    curve: const Interval(0.45, 0.8, curve: Curves.easeIn),
-  );
-
+  // The sound this splash began with, whatever the parent rebuilds into.
+  late final SplashSound _sound = widget.sound;
   bool _started = false;
+  bool _soundStarted = false;
+
+  double get _elapsedMs =>
+      _controller.value * ChordSyncSplashScreen.duration.inMilliseconds;
 
   @override
   void didChangeDependencies() {
@@ -53,14 +68,25 @@ class _ChordSyncSplashScreenState extends State<ChordSyncSplashScreen>
     if (_started) return;
     _started = true;
     if (MediaQuery.disableAnimationsOf(context)) {
-      // No movement: show the finished splash, then go on.
+      // No movement and no sound: the finished icon, then on.
+      _soundStarted = true; // before the jump, which would start the sound
       _controller.value = 1;
       Future<void>.delayed(
         ChordSyncSplashScreen.reducedMotionDuration,
         _finish,
       );
     } else {
+      _sound.load();
       _controller.forward().whenComplete(_finish);
+    }
+  }
+
+  void _maybeStartSound() {
+    if (_soundStarted) return;
+    if (_elapsedMs >=
+        ChordSyncSplashScreen.pickStartMs - ChordSyncSplashScreen.soundLeadMs) {
+      _soundStarted = true;
+      _sound.play();
     }
   }
 
@@ -71,119 +97,200 @@ class _ChordSyncSplashScreenState extends State<ChordSyncSplashScreen>
   @override
   void dispose() {
     _controller.dispose();
+    _sound.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final side = math.min(MediaQuery.sizeOf(context).width * 0.66, 300.0);
     return Scaffold(
       backgroundColor: ChordSyncColors.background,
-      body: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) => Stack(
-          fit: StackFit.expand,
-          children: [
-            // Golden flares behind the icon.
-            CustomPaint(
-              painter: GoldenFlarePainter(progress: _controller.value),
+      body: Center(
+        child: Semantics(
+          label: 'ChordSync',
+          image: true,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) => CustomPaint(
+              size: Size.square(side),
+              painter: ChordSyncMarkPainter(elapsedMs: _elapsedMs),
             ),
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FadeTransition(
-                    opacity: _iconOpacity,
-                    child: ScaleTransition(
-                      scale: _iconScale,
-                      child: SvgPicture.asset(
-                        'assets/icons/chordsync_icon.svg',
-                        width: 152,
-                        height: 152,
-                        semanticsLabel: 'ChordSync',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  FadeTransition(
-                    opacity: _textOpacity,
-                    child: Column(
-                      children: [
-                        Text(
-                          'ChordSync',
-                          style: textTheme.displayMedium?.copyWith(
-                            color: ChordSyncColors.textPrimary,
-                            fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.8,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Find your rhythm.',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: ChordSyncColors.textSecondary,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Amber rays and a soft halo that open outward and fade behind the icon.
-class GoldenFlarePainter extends CustomPainter {
-  GoldenFlarePainter({required this.progress});
+/// Draws the ChordSync mark (the same artwork as assets/icons/chordsync_icon.svg,
+/// without its background square) as it builds up and is strummed.
+class ChordSyncMarkPainter extends CustomPainter {
+  ChordSyncMarkPainter({required this.elapsedMs});
 
-  final double progress;
+  /// Milliseconds since the splash began.
+  final double elapsedMs;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2 - 35);
+  // The artwork lives in a 512-unit square, centred (see the SVG).
+  static const _units = 512.0;
+  static const _shift = Offset(1.5, 14.5);
 
-    final t = Curves.easeOut.transform(
-      ((progress - 0.12) / 0.58).clamp(0.0, 1.0),
-    );
-    final fade = (1.0 - t).clamp(0.0, 1.0);
-    final radius = 100.0 + 100.0 * t;
+  // Each string: left end, control point and right end (the amber dot).
+  static const _strings = [
+    [Offset(234, 218), Offset(290, 221), Offset(352, 215), Offset(360, 215)],
+    [Offset(228, 249), Offset(290, 252), Offset(352, 246), Offset(360, 246)],
+    [Offset(234, 280), Offset(290, 283), Offset(352, 277), Offset(360, 277)],
+  ];
 
-    final flarePaint = Paint()
-      ..color = ChordSyncColors.honey.withValues(alpha: 0.65 * fade)
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
+  static const _wiggleHz = [8.0, 9.5, 11.0];
+  static const _wiggleAmplitude = 8.0; // units, per pick
+  static const _wiggleLimit = 14.0; // units, however many picks pile up
+  static const _wiggleDecaySeconds = 0.5;
 
-    for (var i = 0; i < 12; i++) {
-      final angle = (2 * math.pi * i / 12) - math.pi / 2;
-      final endRadius = radius + 8 + (i % 3) * 5;
-      canvas.drawLine(
-        Offset(
-          center.dx + math.cos(angle) * radius,
-          center.dy + math.sin(angle) * radius,
-        ),
-        Offset(
-          center.dx + math.cos(angle) * endRadius,
-          center.dy + math.sin(angle) * endRadius,
-        ),
-        flarePaint,
-      );
+  static Path _pick() => Path()
+    ..moveTo(337, 96)
+    ..cubicTo(281, 83, 216, 117, 164, 159)
+    ..cubicTo(119, 196, 132, 251, 164, 303)
+    ..cubicTo(194, 352, 237, 399, 269, 389)
+    ..cubicTo(309, 377, 344, 326, 368, 294)
+    ..cubicTo(377, 282, 367, 272, 355, 280)
+    ..cubicTo(319, 302, 290, 323, 260, 306)
+    ..cubicTo(223, 286, 204, 248, 218, 211)
+    ..cubicTo(232, 174, 267, 158, 302, 171)
+    ..cubicTo(327, 181, 344, 195, 361, 195)
+    ..cubicTo(377, 195, 379, 180, 367, 159)
+    ..cubicTo(358, 141, 350, 110, 337, 96)
+    ..close();
+
+  static double _ease(Curve curve, double t) => curve.transform(t.clamp(0, 1));
+
+  /// A point on string [i], [u] of the way from its amber dot (0) to its free
+  /// end (1), moved sideways by the strum.
+  Offset _stringPoint(int i, double u) {
+    final s = _strings[i];
+    final free = s[0];
+    final control = s[1];
+    final fixed = s[2];
+    // The curve runs from the free end through the control point to the end
+    // by the dot, so measure along it from the dot.
+    final v = 1 - u;
+    final x =
+        math.pow(1 - v, 2) * free.dx +
+        2 * (1 - v) * v * control.dx +
+        v * v * fixed.dx;
+    final y =
+        math.pow(1 - v, 2) * free.dy +
+        2 * (1 - v) * v * control.dy +
+        v * v * fixed.dy;
+    return Offset(x.toDouble(), y.toDouble() + _wiggle(i, u));
+  }
+
+  /// Seconds since each pick of string [string] began, for the picks so far.
+  Iterable<double> _pickAges(int string) sync* {
+    final picks = ChordSyncSplashScreen.pickStrings;
+    for (var n = 0; n < picks.length; n++) {
+      if (picks[n] != string) continue;
+      final seconds =
+          (elapsedMs -
+              (ChordSyncSplashScreen.pickStartMs +
+                  n * ChordSyncSplashScreen.pickStepMs)) /
+          1000;
+      if (seconds > 0) yield seconds;
     }
+  }
 
-    final haloPaint = Paint()
-      ..color = ChordSyncColors.honey.withValues(alpha: 0.10 * fade)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 28);
-    canvas.drawCircle(center, 75 + 25 * t, haloPaint);
+  /// Sideways movement of string [i] at position [u]: a standing wave that is
+  /// still at both ends, swings most in the middle and dies away. Picks that
+  /// follow each other add up, so a busy string shimmers.
+  double _wiggle(int i, double u) {
+    var total = 0.0;
+    for (final seconds in _pickAges(i)) {
+      total +=
+          _wiggleAmplitude *
+          math.exp(-seconds / _wiggleDecaySeconds) *
+          math.sin(2 * math.pi * _wiggleHz[i] * seconds);
+    }
+    return total.clamp(-_wiggleLimit, _wiggleLimit) * math.sin(math.pi * u);
   }
 
   @override
-  bool shouldRepaint(covariant GoldenFlarePainter oldDelegate) =>
-      oldDelegate.progress != progress;
+  void paint(Canvas canvas, Size size) {
+    final unit = size.width / _units;
+    canvas.save();
+    canvas.scale(unit);
+    canvas.translate(_shift.dx, _shift.dy);
+
+    // The C shape grows and fades in.
+    final shapeT = (elapsedMs / 520).clamp(0.0, 1.0);
+    final scale = 0.82 + 0.18 * _ease(Curves.easeOutBack, shapeT);
+    final opacity = (elapsedMs / 300).clamp(0.0, 1.0);
+    canvas.save();
+    canvas.translate(_units / 2 - _shift.dx, _units / 2 - _shift.dy);
+    canvas.scale(scale);
+    canvas.translate(-(_units / 2 - _shift.dx), -(_units / 2 - _shift.dy));
+    canvas.drawPath(
+      _pick(),
+      Paint()
+        ..color = ChordSyncColors.brand.withValues(alpha: opacity)
+        ..isAntiAlias = true,
+    );
+    canvas.restore();
+
+    final stringPaint = Paint()
+      ..color = ChordSyncColors.brandDark
+      ..strokeWidth = 10
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+
+    for (var i = 0; i < _strings.length; i++) {
+      // A string draws itself outward from its dot.
+      final start = 300.0 + i * 110;
+      final drawn = _ease(Curves.easeOutCubic, (elapsedMs - start) / 380);
+      if (drawn > 0) {
+        final path = Path();
+        const steps = 28;
+        for (var step = 0; step <= steps; step++) {
+          final u = drawn * step / steps;
+          final p = _stringPoint(i, u);
+          if (step == 0) {
+            path.moveTo(p.dx, p.dy);
+          } else {
+            path.lineTo(p.dx, p.dy);
+          }
+        }
+        canvas.drawPath(path, stringPaint);
+      }
+
+      // The amber dot pops in once its string is out, and pulses on the pluck.
+      final popStart = start + 300;
+      final pop = _ease(Curves.easeOutBack, (elapsedMs - popStart) / 220);
+      if (pop > 0) {
+        var pulse = 0.0;
+        for (final seconds in _pickAges(i)) {
+          pulse = math.max(pulse, 0.18 * math.exp(-seconds / 0.18));
+        }
+        final centre = _strings[i][3];
+        final radius = 12 * pop * (1 + pulse);
+        canvas.drawCircle(
+          centre,
+          radius,
+          Paint()..color = ChordSyncColors.honey,
+        );
+        canvas.drawCircle(
+          centre,
+          radius,
+          Paint()
+            ..color = ChordSyncColors.background
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+      }
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant ChordSyncMarkPainter oldDelegate) =>
+      oldDelegate.elapsedMs != elapsedMs;
 }

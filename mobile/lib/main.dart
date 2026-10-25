@@ -18,6 +18,7 @@ import 'features/analysis/presentation/analysis_progress_banner.dart';
 import 'features/analysis/presentation/audio_file_selector.dart';
 import 'features/analysis/presentation/page_route_tracker.dart';
 import 'features/splash/chordsync_splash_screen.dart';
+import 'features/splash/splash_sound.dart';
 import 'features/analysis/presentation/audio_import_controller.dart';
 import 'features/analysis/presentation/audio_import_screen.dart';
 import 'features/practice_timeline/application/practice_audio_player.dart';
@@ -42,11 +43,16 @@ class MyApp extends StatefulWidget {
     this.importController,
     this.fileSelector,
     this.showSplash = false,
+    this.splashSound,
   });
 
   /// Plays the opening animation before the first screen. Off by default so
   /// tests and fixtures open straight on their screen.
   final bool showSplash;
+
+  /// The chord strummed on the splash. The real recording when null; tests
+  /// pass a silent one.
+  final SplashSound? splashSound;
 
   final PracticeAudioPlayer? audioPlayer;
   final AnalyzedPracticeSession? analyzedSession;
@@ -166,6 +172,9 @@ class _MyAppState extends State<MyApp> {
   }
 
   late bool _splashDone = !widget.showSplash;
+  // One sound for the app's whole opening, made only when it will be used.
+  late final SplashSound _splashSound =
+      widget.splashSound ?? JustAudioSplashSound();
 
   Widget _home() => _usesPracticeFixture
       ? PracticeScreen(
@@ -227,6 +236,7 @@ class _MyAppState extends State<MyApp> {
           child: _splashDone
               ? _home()
               : ChordSyncSplashScreen(
+                  sound: _splashSound,
                   onFinished: () => setState(() => _splashDone = true),
                 ),
         ),
