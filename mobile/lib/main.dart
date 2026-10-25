@@ -231,14 +231,19 @@ class _MyAppState extends State<MyApp> {
       },
       // A Builder, so the hand-over can read the app's own MediaQuery.
       home: Builder(
-        builder: (context) => AnimatedSwitcher(
-          duration: ChordSyncMotion.of(context, ChordSyncMotion.quick),
-          child: _splashDone
-              ? _home()
-              : ChordSyncSplashScreen(
-                  sound: _splashSound,
-                  onFinished: () => setState(() => _splashDone = true),
-                ),
+        // The parchment behind the hand-over: with nothing there, the two
+        // screens fading past each other let black show through.
+        builder: (context) => ColoredBox(
+          color: ChordSyncColors.background,
+          child: AnimatedSwitcher(
+            duration: ChordSyncMotion.of(context, ChordSyncMotion.quick),
+            child: _splashDone
+                ? _home()
+                : ChordSyncSplashScreen(
+                    sound: _splashSound,
+                    onFinished: () => setState(() => _splashDone = true),
+                  ),
+          ),
         ),
       ),
     );

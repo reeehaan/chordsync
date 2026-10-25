@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import 'package:chordsync/design_system/chordsync_design_system.dart';
 import 'package:chordsync/features/splash/chordsync_splash_screen.dart';
 import 'package:chordsync/features/splash/splash_sound.dart';
 import 'package:chordsync/main.dart';
@@ -52,11 +53,16 @@ void main() {
     await tester.pumpWidget(splash(() {}, sound: sound));
     expect(sound.loads, 1); // ready early, so playing is instant
 
-    await tester.pump(const Duration(milliseconds: 600));
+    const lead = ChordSyncSplashScreen.soundLeadMs;
+    await tester.pump(
+      Duration(
+        milliseconds: (ChordSyncSplashScreen.pickStartMs - lead - 100).round(),
+      ),
+    );
     expect(sound.plays, 0);
 
-    // 800 ms is the first note; the sound leads it by a little.
-    await tester.pump(const Duration(milliseconds: 160));
+    // The first note is picked at pickStartMs; the sound leads it a little.
+    await tester.pump(const Duration(milliseconds: 200));
     expect(sound.plays, 1);
 
     await tester.pump(const Duration(milliseconds: 1000));
@@ -70,9 +76,11 @@ void main() {
     var finished = 0;
     await tester.pumpWidget(splash(() => finished++));
 
-    await tester.pump(const Duration(milliseconds: 2300));
+    await tester.pump(
+      ChordSyncSplashScreen.duration - const Duration(milliseconds: 200),
+    );
     expect(finished, 0);
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 300));
     expect(finished, 1);
   });
 
@@ -101,6 +109,13 @@ void main() {
     expect(sound.disposes, 1);
   });
 
+  test('the tab is picked on five strings, as the icon draws them', () {
+    const picks = ChordSyncSplashScreen.pickStrings;
+    expect(picks.toSet(), {0, 1, 2, 3, 4});
+    // 5th, 4th, 3rd, 2nd, 1st string, then back down the 2nd, 3rd and 4th.
+    expect(picks, [4, 3, 2, 1, 0, 1, 2, 3]);
+  });
+
   group('the drawing', () {
     Future<ui.Image> draw(double elapsedMs) async {
       final recorder = ui.PictureRecorder();
@@ -119,9 +134,9 @@ void main() {
     testWidgets('builds up, then moves when notes are picked', (tester) async {
       await tester.runAsync(() async {
         final empty = await pixels(0);
-        final drawn = await pixels(700); // shape and strings in, none picked
-        final stillAgain = await pixels(780); // before the first note
-        final picked = await pixels(900); // the first notes are ringing
+        final drawn = await pixels(880); // shape and strings in, none picked
+        final stillAgain = await pixels(895); // just before the first note
+        final picked = await pixels(1050); // the first notes are ringing
 
         expect(drawn, isNot(empty));
         expect(stillAgain.length, drawn.length);
@@ -151,5 +166,27 @@ void main() {
 
     expect(find.bySemanticsLabel('ChordSync'), findsNothing);
     expect(find.text('Your songs'), findsOneWidget);
+  });
+
+  testWidgets('parchment sits behind the hand-over, so it cannot flash black', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MyApp(showSplash: true, splashSound: NoSplashSound()),
+    );
+    final behind = find.ancestor(
+      of: find.byType(AnimatedSwitcher),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox && widget.color == ChordSyncColors.background,
+      ),
+    );
+    expect(behind, findsWidgets);
+
+    // And in the middle of the fade, the screen is still showing something.
+    await tester.pump(ChordSyncSplashScreen.duration);
+    await tester.pump(const Duration(milliseconds: 70));
+    expect(find.byType(AnimatedSwitcher), findsWidgets);
+    await tester.pump(const Duration(milliseconds: 400));
   });
 }

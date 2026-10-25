@@ -25,19 +25,19 @@ class ChordSyncSplashScreen extends StatefulWidget {
   /// The strummed chord. Silent by default.
   final SplashSound sound;
 
-  static const duration = Duration(milliseconds: 2400);
+  static const duration = Duration(milliseconds: 2700);
   static const reducedMotionDuration = Duration(milliseconds: 400);
 
   /// When the first note is picked, in milliseconds from the beginning.
-  static const pickStartMs = 800.0;
+  static const pickStartMs = 900.0;
 
   /// The time between notes (tool/generate_splash_chord.py uses the same).
   static const pickStepMs = 160.0;
 
-  /// Which of the three drawn strings (0 top, 2 bottom) moves for each note of
-  /// the tab, in order: the bass notes move the top string, the middle notes
-  /// the middle one, the highest note the bottom one.
-  static const pickStrings = [0, 0, 1, 1, 2, 1, 1, 0];
+  /// Which of the five drawn strings moves for each note of the tab, in order
+  /// (0 is the top, thinnest string, 1st on a guitar; 4 is the bottom, 5th).
+  /// The tab is picked 5th, 4th, 3rd, 2nd, 1st, then 2nd, 3rd, 4th string.
+  static const pickStrings = [4, 3, 2, 1, 0, 1, 2, 3];
 
   /// Starting the sound a little early, so it is heard as the strings move:
   /// the player takes a moment to begin.
@@ -136,15 +136,32 @@ class ChordSyncMarkPainter extends CustomPainter {
   static const _shift = Offset(1.5, 14.5);
 
   // Each string: left end, control point and right end (the amber dot).
+  // The same five strings as assets/icons/chordsync_icon.svg.
   static const _strings = [
-    [Offset(234, 218), Offset(290, 221), Offset(352, 215), Offset(360, 215)],
-    [Offset(228, 249), Offset(290, 252), Offset(352, 246), Offset(360, 246)],
-    [Offset(234, 280), Offset(290, 283), Offset(352, 277), Offset(360, 277)],
+    [Offset(234, 210), Offset(290, 213), Offset(352, 207), Offset(360, 207)],
+    [
+      Offset(228, 228.5),
+      Offset(290, 231.5),
+      Offset(352, 225.5),
+      Offset(360, 225.5),
+    ],
+    [Offset(228, 247), Offset(290, 250), Offset(352, 244), Offset(360, 244)],
+    [
+      Offset(233, 265.5),
+      Offset(290, 268.5),
+      Offset(352, 262.5),
+      Offset(360, 262.5),
+    ],
+    [Offset(244, 284), Offset(290, 287), Offset(352, 281), Offset(360, 281)],
   ];
 
-  static const _wiggleHz = [8.0, 9.5, 11.0];
-  static const _wiggleAmplitude = 8.0; // units, per pick
-  static const _wiggleLimit = 14.0; // units, however many picks pile up
+  static const _stringWidth = 7.0;
+  static const _dotRadius = 8.5;
+
+  // Thin strings shiver faster than thick ones.
+  static const _wiggleHz = [11.0, 10.0, 9.0, 8.0, 7.0];
+  static const _wiggleAmplitude = 5.0; // units, per pick
+  static const _wiggleLimit = 8.0; // units, however many picks pile up
   static const _wiggleDecaySeconds = 0.5;
 
   static Path _pick() => Path()
@@ -238,15 +255,15 @@ class ChordSyncMarkPainter extends CustomPainter {
 
     final stringPaint = Paint()
       ..color = ChordSyncColors.brandDark
-      ..strokeWidth = 10
+      ..strokeWidth = _stringWidth
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true;
 
     for (var i = 0; i < _strings.length; i++) {
       // A string draws itself outward from its dot.
-      final start = 300.0 + i * 110;
-      final drawn = _ease(Curves.easeOutCubic, (elapsedMs - start) / 380);
+      final start = 250.0 + i * 70;
+      final drawn = _ease(Curves.easeOutCubic, (elapsedMs - start) / 300);
       if (drawn > 0) {
         final path = Path();
         const steps = 28;
@@ -263,7 +280,7 @@ class ChordSyncMarkPainter extends CustomPainter {
       }
 
       // The amber dot pops in once its string is out, and pulses on the pluck.
-      final popStart = start + 300;
+      final popStart = start + 240;
       final pop = _ease(Curves.easeOutBack, (elapsedMs - popStart) / 220);
       if (pop > 0) {
         var pulse = 0.0;
@@ -271,7 +288,7 @@ class ChordSyncMarkPainter extends CustomPainter {
           pulse = math.max(pulse, 0.18 * math.exp(-seconds / 0.18));
         }
         final centre = _strings[i][3];
-        final radius = 12 * pop * (1 + pulse);
+        final radius = _dotRadius * pop * (1 + pulse);
         canvas.drawCircle(
           centre,
           radius,
@@ -283,7 +300,7 @@ class ChordSyncMarkPainter extends CustomPainter {
           Paint()
             ..color = ChordSyncColors.background
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 2,
+            ..strokeWidth = 1.6,
         );
       }
     }
