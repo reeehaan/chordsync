@@ -116,6 +116,11 @@ class _MyAppState extends State<MyApp> {
   /// uses a presigned upload: create the job, send the audio straight to
   /// storage, then confirm.
   AnalysisApiClient _createAnalysisClient(AnalysisApiConfig config) {
+    if (!config.hasSecureHostedUrl) {
+      // A build-time mistake: stop at once rather than send the token in the
+      // clear.
+      throw StateError('CHORDSYNC_API_BASE_URL must be https in hosted mode.');
+    }
     if (!config.isHosted) {
       return DioAnalysisApiClient(baseUrl: config.baseUrl);
     }

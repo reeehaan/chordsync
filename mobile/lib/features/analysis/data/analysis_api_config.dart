@@ -42,4 +42,9 @@ class AnalysisApiConfig {
   final String authToken;
 
   bool get isHosted => mode == AnalysisApiMode.hosted;
+
+  /// The hosted API carries a bearer token, so it must be reached over https.
+  /// The local development server on this computer may use plain http.
+  bool get hasSecureHostedUrl =>
+      !isHosted || Uri.tryParse(baseUrl)?.scheme == 'https';
 }

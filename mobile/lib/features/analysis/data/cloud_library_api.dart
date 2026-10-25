@@ -31,11 +31,18 @@ class CloudAudioLink {
     this.fileType,
   });
 
-  factory CloudAudioLink.fromJson(Map<String, dynamic> json) => CloudAudioLink(
-    url: json['url'] as String,
-    expiresInSeconds: (json['expires_in_seconds'] as num).toInt(),
-    fileType: json['file_type'] as String?,
-  );
+  factory CloudAudioLink.fromJson(Map<String, dynamic> json) {
+    final url = json['url'] as String;
+    // A song's audio must travel encrypted, like an upload does.
+    if (Uri.tryParse(url)?.scheme != 'https') {
+      throw const FormatException('The audio link is not an https link.');
+    }
+    return CloudAudioLink(
+      url: url,
+      expiresInSeconds: (json['expires_in_seconds'] as num).toInt(),
+      fileType: json['file_type'] as String?,
+    );
+  }
 
   final String url;
   final int expiresInSeconds;

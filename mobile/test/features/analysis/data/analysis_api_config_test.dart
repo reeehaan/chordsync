@@ -29,4 +29,28 @@ void main() {
     );
     expect(config.isHosted, isTrue);
   });
+
+  test('the hosted API must be https; local development may use http', () {
+    const hosted = AnalysisApiMode.hosted;
+    expect(
+      const AnalysisApiConfig(
+        baseUrl: 'https://api.example',
+        mode: hosted,
+      ).hasSecureHostedUrl,
+      isTrue,
+    );
+    expect(
+      const AnalysisApiConfig(
+        baseUrl: 'http://api.example',
+        mode: hosted,
+      ).hasSecureHostedUrl,
+      isFalse,
+    );
+    expect(
+      const AnalysisApiConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+      ).hasSecureHostedUrl,
+      isTrue,
+    );
+  });
 }

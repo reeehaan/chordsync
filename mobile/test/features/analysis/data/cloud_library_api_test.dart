@@ -116,4 +116,19 @@ void main() {
       throwsA(isA<AnalysisDataException>()),
     );
   });
+
+  test('an audio link that is not https is refused', () async {
+    final adapter = RecordingHttpAdapter(
+      (_) => jsonBody({
+        'url': 'http://bucket.invalid/jobs/job-b/playback/audio.mp3',
+        'expires_in_seconds': 600,
+        'file_type': 'mp3',
+      }, 200),
+    );
+
+    await expectLater(
+      _api(adapter).getSongAudioLink('job-b'),
+      throwsA(isA<AnalysisDataException>()),
+    );
+  });
 }

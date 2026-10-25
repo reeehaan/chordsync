@@ -31,14 +31,23 @@ class DioAudioDownloader implements AudioDownloader {
     String destination, {
     void Function(double progress)? onProgress,
   }) async {
+    // Uploads stop at 25 MB, so nothing bigger than this is a real song.
+    final cancel = CancelToken();
     await _dio.download(
       url,
       destination,
+      cancelToken: cancel,
       onReceiveProgress: (received, total) {
+        if (received > maxBytes || total > maxBytes) {
+          cancel.cancel('The download is larger than a song can be.');
+          return;
+        }
         if (total > 0) onProgress?.call(received / total);
       },
     );
   }
+
+  static const maxBytes = 30 * 1024 * 1024;
 }
 
 /// Brings a song from the shared library onto this phone: its timeline and its
