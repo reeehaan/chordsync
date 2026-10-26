@@ -190,7 +190,7 @@ pass the group guard and the role trust. The live facts that decide whether this
 so the lead was recorded as *needs validation* and is checked read-only before the fix is
 applied.
 
-Fix in `infrastructure/aws/hardening.tf` (this change, applied only after a reviewed plan):
+Fix in `infrastructure/aws/hardening.tf`:
 
 - A session without MFA can no longer create, enable, delete or resync a virtual MFA
   device. It can still sign in with the device that exists: look up its own devices,
@@ -208,3 +208,24 @@ Still open from the same review (not part of this change): the long-lived access
 `rehan` still exists and should be replaced with short-lived credentials; the
 `sts:AssumeRole` exemption applies to every role, not only the Terraform role;
 `ChordSyncTerraformRole` still carries AdministratorAccess and is not managed by Terraform.
+
+**Applied 2026-10-26** from a saved plan with the live inputs (API image `sha256:a89c4d77…`,
+worker image `sha256:9977fda8…`, model release 2026.10.3, `enforce_admin_mfa=true`):
+**0 added, 1 changed, 0 destroyed**, the in-place update of `chordsync-require-mfa`; drift
+afterwards 0/0/0.
+
+Read-only checks around it (IAM policy simulator, which calculates and enrols nothing):
+
+| For user `rehan`, no MFA | Before | After |
+|---|---|---|
+| `iam:CreateVirtualMFADevice`, `iam:EnableMFADevice` | allowed | explicit deny |
+| `sts:GetSessionToken`, `sts:AssumeRole`, `iam:ListMFADevices` | allowed | allowed |
+| other actions (for example `s3:ListAllMyBuckets`) | explicit deny | explicit deny |
+
+With MFA present every action is allowed as before. Live facts recorded on the same day:
+the guard was attached to group `admin` next to `AdministratorAccess`; the trust policy of
+`ChordSyncTerraformRole` allows `user/rehan` when `aws:MultiFactorAuthPresent` is true
+(no device binding) and the role carries `AdministratorAccess` and
+`ChordSyncTerraformProvisioningPolicy`; user `rehan` has one device,
+`iam-rehan-authenticator`.
+
