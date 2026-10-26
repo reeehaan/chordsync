@@ -5,6 +5,18 @@ from urllib.parse import urlsplit
 
 TARGET_SAMPLE_RATE = 44100
 
+# The worker decodes files strangers upload. FFmpeg picks the demuxer from the
+# content, and some containers (playlists, concat lists) name other inputs to
+# open, including URLs. Only plain local files are ever wanted, so every call
+# restricts the protocols it may use.
+LOCAL_FILES_ONLY = ["-protocol_whitelist", "file"]
+
+# ffprobe only reads headers; it must never be able to hold the worker.
+PROBE_TIMEOUT_SECONDS = 30
+# A generous ceiling for the conversion itself; the worker also bounds the
+# whole stage from outside.
+PREPROCESS_TIMEOUT_SECONDS = 600
+
 
 def preprocess_audio(input_path: Path, output_path: Path) -> Path:
     """
@@ -26,6 +38,7 @@ def preprocess_audio(input_path: Path, output_path: Path) -> Path:
     command = [
         "ffmpeg",
         "-y",
+        *LOCAL_FILES_ONLY,
         "-i",
         str(input_path),
         "-ac",
@@ -43,7 +56,13 @@ def preprocess_audio(input_path: Path, output_path: Path) -> Path:
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            timeout=PREPROCESS_TIMEOUT_SECONDS,
         )
+
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            f"FFmpeg preprocessing timed out after {PREPROCESS_TIMEOUT_SECONDS} s"
+        ) from error
 
     except subprocess.CalledProcessError as error:
         message = error.stderr.decode("utf-8", errors="ignore")
@@ -67,6 +86,7 @@ def get_audio_metadata(audio_path: Path) -> dict[str, object]:
 
     command = [
         "ffprobe",
+        *LOCAL_FILES_ONLY,
         "-v",
         "error",
         "-select_streams",
@@ -87,7 +107,13 @@ def get_audio_metadata(audio_path: Path) -> dict[str, object]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=PROBE_TIMEOUT_SECONDS,
         )
+
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            f"ffprobe timed out after {PROBE_TIMEOUT_SECONDS} s"
+        ) from error
 
     except subprocess.CalledProcessError as error:
         raise RuntimeError(

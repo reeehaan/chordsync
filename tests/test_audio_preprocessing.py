@@ -4,6 +4,8 @@ import subprocess
 import pytest
 
 from analysis.preprocessing.audio_preprocessor import (
+    PREPROCESS_TIMEOUT_SECONDS,
+    PROBE_TIMEOUT_SECONDS,
     get_audio_metadata,
     preprocess_audio,
 )
@@ -212,3 +214,46 @@ def test_get_audio_metadata_represents_missing_artist_as_absent(tmp_path):
 
     assert metadata["title"] == "Title Only"
     assert metadata["artist"] is None
+
+
+def test_ffprobe_has_a_deadline_and_only_opens_local_files(monkeypatch, tmp_path):
+    """The worker runs ffprobe on strangers' uploads: it must not hang or fetch."""
+    audio = tmp_path / "input.wav"
+    audio.write_bytes(b"x")
+    seen = {}
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        seen["timeout"] = kwargs.get("timeout")
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="timed out"):
+        get_audio_metadata(audio)
+
+    assert seen["timeout"] == PROBE_TIMEOUT_SECONDS
+    command = seen["command"]
+    assert command[command.index("-protocol_whitelist") + 1] == "file"
+    assert command.index("-protocol_whitelist") < command.index(str(audio))
+
+
+def test_ffmpeg_conversion_only_opens_local_files_and_has_a_deadline(monkeypatch, tmp_path):
+    audio = tmp_path / "input.wav"
+    audio.write_bytes(b"x")
+    seen = {}
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        seen["timeout"] = kwargs.get("timeout")
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="timed out"):
+        preprocess_audio(audio, tmp_path / "out.wav")
+
+    command = seen["command"]
+    assert seen["timeout"] == PREPROCESS_TIMEOUT_SECONDS
+    assert command[command.index("-protocol_whitelist") + 1] == "file"
+    assert command.index("-protocol_whitelist") < command.index("-i")
