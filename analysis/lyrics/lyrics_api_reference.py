@@ -10,6 +10,13 @@ from typing import Mapping, Protocol
 from analysis.lyrics.lyrics_reference import SongIdentity
 
 
+# Provider lyrics come from a public, crowd-edited database. No real song is
+# anywhere near these sizes; anything larger is refused before the worker spends
+# time aligning it.
+MAX_LYRICS_CHARACTERS = 50_000
+MAX_LYRICS_LINES = 2_000
+
+
 class IdentityConfidence(IntEnum):
     LOW = 1
     MEDIUM = 2
@@ -178,6 +185,14 @@ class LyricsApiReferenceSource:
             raise LyricsApiResponseRejectedError("Provider track ID is missing.")
         if not plain_lyrics:
             raise LyricsApiResponseRejectedError("Provider lyrics are empty.")
+        for text in (plain_lyrics, synced_lyrics):
+            if text and (
+                len(text) > MAX_LYRICS_CHARACTERS
+                or text.count("\n") >= MAX_LYRICS_LINES
+            ):
+                raise LyricsApiResponseRejectedError(
+                    "Provider lyrics are larger than any real song's."
+                )
         if _lyrics_are_malformed_or_duplicated(plain_lyrics):
             raise LyricsApiResponseRejectedError(
                 "Provider lyrics are malformed or duplicated."

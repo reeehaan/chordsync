@@ -10,7 +10,7 @@ from email.utils import parsedate_to_datetime
 from typing import Callable, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from analysis.lyrics.lyrics_api_reference import (
     LyricsApiResponseRejectedError,
@@ -34,6 +34,23 @@ DEFAULT_USER_AGENT = (
     "ChordSync/0.1 (academic development; contact: developer@localhost)"
 )
 DEFAULT_TIMEOUT_SECONDS = 10.0
+# No real song's lyrics come near this. A larger answer is refused instead of
+# being read into the worker's memory.
+MAX_RESPONSE_BYTES = 2_000_000
+
+
+class _RefuseRedirects(HTTPRedirectHandler):
+    """The provider's host is fixed; it never gets to send the worker elsewhere."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_OPENER = build_opener(_RefuseRedirects)
+
+
+def _open_without_redirects(request: Request, *, timeout: float):
+    return _OPENER.open(request, timeout=timeout)
 
 
 class _TemporaryFailure(LyricsApiUnavailableError):
@@ -56,7 +73,7 @@ class LrclibTransport:
         *,
         user_agent: str = DEFAULT_USER_AGENT,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-        opener: Callable[..., object] = urlopen,
+        opener: Callable[..., object] = _open_without_redirects,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not user_agent.strip():
@@ -242,7 +259,12 @@ class LrclibTransport:
         )
         try:
             with self._opener(request, timeout=self._timeout_seconds) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+                body = response.read(MAX_RESPONSE_BYTES + 1)
+                if len(body) > MAX_RESPONSE_BYTES:
+                    raise LyricsApiResponseRejectedError(
+                        "Lyrics provider response is too large."
+                    )
+                payload = json.loads(body.decode("utf-8"))
         except HTTPError as error:
             if error.code == 404:
                 raise LyricsApiUnavailableError(

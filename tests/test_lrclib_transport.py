@@ -33,8 +33,8 @@ class FakeResponse:
     def __exit__(self, *args):
         return None
 
-    def read(self):
-        return self._body
+    def read(self, size=-1):
+        return self._body if size < 0 else self._body[:size]
 
 
 def _payload(**updates):
@@ -163,7 +163,7 @@ def test_timeout_falls_back():
 
 def test_malformed_json_is_rejected():
     class MalformedResponse(FakeResponse):
-        def read(self):
+        def read(self, size=-1):
             return b"not-json"
 
     with pytest.raises(LyricsApiResponseRejectedError):
@@ -560,3 +560,48 @@ def test_an_entry_with_no_length_still_needs_the_same_title_and_artist():
     )
 
     assert _source(opener).get_reference_or_none(IDENTITY) is None
+
+
+def test_an_oversized_provider_answer_is_refused():
+    from analysis.lyrics.lrclib_transport import MAX_RESPONSE_BYTES
+
+    huge = FakeResponse(_payload(plainLyrics="la " * (MAX_RESPONSE_BYTES // 2)))
+
+    with pytest.raises(LyricsApiResponseRejectedError, match="too large"):
+        _source(lambda request, timeout: huge).get_reference(IDENTITY)
+
+
+def test_the_transport_never_reads_more_than_the_cap():
+    from analysis.lyrics.lrclib_transport import MAX_RESPONSE_BYTES
+
+    asked = []
+
+    class Spy(FakeResponse):
+        def read(self, size=-1):
+            asked.append(size)
+            return super().read(size)
+
+    _source(lambda request, timeout: Spy(_payload())).get_reference(IDENTITY)
+
+    assert asked and all(0 < size <= MAX_RESPONSE_BYTES + 1 for size in asked)
+
+
+@pytest.mark.parametrize(
+    "lyrics",
+    ["la " * 40_000, "line\n" * 3_000],
+    ids=["too many characters", "too many lines"],
+)
+def test_lyrics_larger_than_any_song_are_refused(lyrics):
+    with pytest.raises(LyricsApiResponseRejectedError, match="larger than any real song"):
+        _source(lambda request, timeout: FakeResponse(_payload(plainLyrics=lyrics))).get_reference(IDENTITY)
+
+
+def test_the_default_opener_does_not_follow_redirects():
+    from urllib.request import Request
+
+    from analysis.lyrics.lrclib_transport import _RefuseRedirects
+
+    handler = _RefuseRedirects()
+    request = Request("https://lrclib.net/api/get")
+
+    assert handler.redirect_request(request, None, 302, "Found", {}, "http://elsewhere.invalid/") is None
