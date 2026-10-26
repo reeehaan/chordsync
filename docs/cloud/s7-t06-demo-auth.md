@@ -57,9 +57,16 @@ the document.
 - **Caching:** the document is loaded once per warm environment and cached for
   5 minutes (so a rotated token takes effect without a cold start), not fetched
   per request. If a refresh fails, the last good verifier keeps serving and the
-  failure is logged. With nothing loaded yet, a failure raises "unavailable" and
-  is remembered for 5 s so a broken parameter is not hammered. Concurrent first
-  requests cause one load.
+  failure is logged, but only for **one hour** after it was loaded
+  (`DEFAULT_MAX_STALE_SECONDS`); after that the API answers 503, so a deleted or
+  unreadable parameter cannot keep revoked tokens alive. With nothing loaded yet,
+  a failure raises "unavailable" and is remembered for 5 s so a broken parameter
+  is not hammered. Concurrent first requests cause one load.
+- **Revoking everything:** publish `{"version": 1, "tokens": []}`. An empty list is a
+  valid "nobody is allowed" document (every request gets 401) and replaces the cached
+  verifier at the next refresh, within 5 minutes. Before 2026-10-26 an empty list
+  counted as a broken document, so the old tokens kept working; deleting the
+  parameter or blocking its read is now bounded by the one-hour limit instead.
 - **Failures are 503, never 401:** load failure, throttling, a missing
   parameter, and a malformed value all return
   `503 service_unavailable`; the cause is only in the server log (error type, no

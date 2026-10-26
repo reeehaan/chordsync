@@ -28,6 +28,10 @@ MAX_TOKEN_CHARS = 256
 MIN_TOKEN_CHARS = 16
 DEFAULT_CACHE_SECONDS = 300
 DEFAULT_FAILURE_BACKOFF_SECONDS = 5
+# How long the last good verifier may keep serving while refreshes keep
+# failing. Past this the API answers 503 instead, so a revocation cannot be
+# held off for ever by an unreadable or deleted parameter.
+DEFAULT_MAX_STALE_SECONDS = 3600
 _TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9._~+/=-]+$")
 _ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 _HEX_SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -96,9 +100,13 @@ def token_sha256(token: str) -> str:
 
 
 class DemoTokenVerifier:
-    def __init__(self, entries: Mapping[str, str]) -> None:
-        """``entries`` maps a token label (``id``) to its SHA-256 hex verifier."""
-        if not entries:
+    def __init__(self, entries: Mapping[str, str], *, allow_none: bool = False) -> None:
+        """``entries`` maps a token label (``id``) to its SHA-256 hex verifier.
+
+        ``allow_none`` makes an empty set a valid "nobody is allowed" verifier.
+        Without it an empty set is a configuration fault.
+        """
+        if not entries and not allow_none:
             raise AuthUnavailableError("no tokens configured")
         self._entries = [(label, bytes.fromhex(digest)) for label, digest in entries.items()]
 
@@ -116,8 +124,10 @@ class DemoTokenVerifier:
         if not isinstance(data, dict) or data.get("version") != 1:
             raise AuthUnavailableError("verifier document version is unsupported")
         tokens = data.get("tokens")
-        if not isinstance(tokens, list) or not 1 <= len(tokens) <= _MAX_ENTRIES:
+        if not isinstance(tokens, list) or len(tokens) > _MAX_ENTRIES:
             raise AuthUnavailableError("verifier document has no usable tokens")
+        # An empty list is how the operator revokes every token on purpose:
+        # nobody is let in (401), and it takes effect like any other change.
         entries: dict[str, str] = {}
         for item in tokens:
             if not isinstance(item, dict):
@@ -132,7 +142,7 @@ class DemoTokenVerifier:
             ):
                 raise AuthUnavailableError("verifier entry is malformed")
             entries[label] = digest
-        return cls(entries)
+        return cls(entries, allow_none=True)
 
     def verify(self, token: str) -> AuthenticatedPrincipal | None:
         presented = hashlib.sha256(token.encode("ascii", "replace")).digest()
@@ -160,8 +170,11 @@ class CachedVerifierProvider:
     """Loads the verifier document once and caches it, instead of once per request.
 
     The cache refreshes after cache_seconds. If a refresh fails, the last good
-    verifier keeps working. If nothing is loaded yet, the failure raises
-    AuthUnavailableError and is remembered briefly to avoid hammering SSM.
+    verifier keeps working, but only for max_stale_seconds after it was loaded:
+    past that the failure raises AuthUnavailableError (503), so tokens cannot be
+    kept alive for ever by a parameter that can no longer be read. If nothing is
+    loaded yet, the failure raises AuthUnavailableError and is remembered briefly
+    to avoid hammering SSM.
     """
 
     def __init__(
@@ -170,9 +183,12 @@ class CachedVerifierProvider:
         *,
         cache_seconds: float = DEFAULT_CACHE_SECONDS,
         failure_backoff_seconds: float = DEFAULT_FAILURE_BACKOFF_SECONDS,
+        max_stale_seconds: float = DEFAULT_MAX_STALE_SECONDS,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._load_document = load_document
+        self._max_stale = max_stale_seconds
+        self._loaded_at = 0.0
         self._cache_seconds = cache_seconds
         self._backoff = failure_backoff_seconds
         self._clock = clock
@@ -191,7 +207,7 @@ class CachedVerifierProvider:
             if self._verifier is not None and now < self._expires_at:
                 return self._verifier
             if now < self._failed_until:
-                if self._verifier is not None:
+                if self._verifier is not None and self._fresh_enough(now):
                     return self._verifier
                 raise AuthUnavailableError("verifier unavailable")
             try:
@@ -201,14 +217,21 @@ class CachedVerifierProvider:
             except Exception as error:  # only the error type is logged
                 return self._failed(now, AuthUnavailableError(type(error).__name__))
             self._verifier = loaded
+            self._loaded_at = now
             self._expires_at = now + self._cache_seconds
             return loaded
 
+    def _fresh_enough(self, now: float) -> bool:
+        return now - self._loaded_at <= self._max_stale
+
     def _failed(self, now: float, error: AuthUnavailableError) -> TokenVerifier:
         self._failed_until = now + self._backoff
-        if self._verifier is not None:
+        if self._verifier is not None and self._fresh_enough(now):
             logger.warning("auth verifier refresh failed (%s); keeping the last good one", error)
             return self._verifier
+        if self._verifier is not None:
+            logger.error("auth verifier refresh failed (%s) and the last good one is too old", error)
+            raise AuthUnavailableError("verifier unavailable") from error
         logger.error("auth verifier unavailable (%s)", error)
         raise AuthUnavailableError("verifier unavailable") from error
 

@@ -151,7 +151,6 @@ GOOD = {"id": "a-1", "sha256": "a" * 64}
         json.dumps({"version": 2, "tokens": [GOOD]}),
         json.dumps({"tokens": [GOOD]}),
         json.dumps({"version": 1}),
-        json.dumps({"version": 1, "tokens": []}),
         json.dumps({"version": 1, "tokens": "x"}),
         json.dumps({"version": 1, "tokens": [GOOD, GOOD]}),
         json.dumps({"version": 1, "tokens": [{"id": "Bad Id", "sha256": "a" * 64}]}),
@@ -672,3 +671,57 @@ def auth_helpers_hosted():
     return ApiHostingConfig(
         HostingMode.LAMBDA, Path("/tmp/chordsync-api"), demo_token_parameter=auth_helpers.PARAMETER
     )
+
+
+def test_an_empty_token_list_is_a_deliberate_revoke_all():
+    verifier = auth.DemoTokenVerifier.from_document(json.dumps({"version": 1, "tokens": []}))
+
+    assert verifier.verify(TOKEN_A) is None  # nobody is let in: a 401, not a 503
+
+
+def test_revoke_all_replaces_the_cached_verifier():
+    clock = Clock()
+    revoke_all = json.dumps({"version": 1, "tokens": []})
+    loader = Loader(_document(("a", TOKEN_A)), revoke_all)
+    provider = auth.CachedVerifierProvider(loader, cache_seconds=300, clock=clock)
+    assert provider.get().verify(TOKEN_A) is not None
+
+    clock.now += 301
+
+    assert provider.get().verify(TOKEN_A) is None
+
+
+def test_an_unreadable_parameter_stops_serving_old_tokens_after_the_stale_limit():
+    clock = Clock()
+    loader = Loader(_document(("a", TOKEN_A)), *[RuntimeError("gone")] * 50)
+    provider = auth.CachedVerifierProvider(
+        loader, cache_seconds=300, failure_backoff_seconds=5, max_stale_seconds=3600, clock=clock
+    )
+    provider.get()
+
+    clock.now += 1800  # an hour has not passed: the last good verifier still serves
+    assert provider.get().verify(TOKEN_A) is not None
+
+    clock.now += 1900  # now 3700 s after it was loaded
+    with pytest.raises(auth.AuthUnavailableError):
+        provider.get()
+    clock.now += 6
+    with pytest.raises(auth.AuthUnavailableError):  # and it stays closed
+        provider.get()
+
+
+def test_a_successful_refresh_restarts_the_stale_clock():
+    clock = Clock()
+    loader = Loader(
+        _document(("a", TOKEN_A)), RuntimeError("blip"), _document(("a", TOKEN_A)), RuntimeError("blip")
+    )
+    provider = auth.CachedVerifierProvider(
+        loader, cache_seconds=300, failure_backoff_seconds=5, max_stale_seconds=3600, clock=clock
+    )
+    provider.get()
+    clock.now += 400
+    provider.get()  # refresh fails, still fine
+    clock.now += 400
+    provider.get()  # refresh succeeds at t=800
+    clock.now += 3500  # 3500 s since the good load: within the limit
+    assert provider.get().verify(TOKEN_A) is not None
