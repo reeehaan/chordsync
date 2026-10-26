@@ -2059,3 +2059,24 @@ def test_local_config_finds_the_large_model_beside_the_standard_one(monkeypatch)
 
     monkeypatch.delenv("CHORDSYNC_CHORD_EXTENSIONS_ENABLED")
     assert AnalysisPipelineConfig.local().chord_extensions_enabled is False
+
+
+def test_a_failed_stage_logs_only_a_bounded_and_defanged_tail_of_stderr():
+    from backend.api.app.services.real_analysis_processor import _loggable_stderr
+
+    forged = "[job 1234] preprocess: finished in 0.1s"
+    noisy = "x" * 50_000 + "\n" + forged + "\x1b[31m\x00 done"
+
+    logged = _loggable_stderr(noisy)
+
+    assert len(logged) < 4_500  # bounded, whatever the stage printed
+    assert "\x1b" not in logged and "\x00" not in logged  # control characters are gone
+    assert all(line.startswith("    | ") for line in logged.splitlines())  # nothing starts a log line
+    assert forged in logged  # the useful end of the output is kept, but indented
+
+
+def test_nothing_on_stderr_is_still_loggable():
+    from backend.api.app.services.real_analysis_processor import _loggable_stderr
+
+    assert _loggable_stderr("") == ""
+    assert _loggable_stderr(None) == ""

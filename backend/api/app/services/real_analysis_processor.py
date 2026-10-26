@@ -1454,7 +1454,7 @@ class RealAnalysisProcessor:
                 raise AnalysisPipelineError(f"{stage} stage could not start") from error
             elapsed = time.monotonic() - started_at
         if result.returncode != 0:
-            logger.warning("%s: failed\n%s", prefix, result.stderr)
+            logger.warning("%s: failed\n%s", prefix, _loggable_stderr(result.stderr))
             raise AnalysisPipelineError(f"{stage} stage failed")
         if not expected_output.is_file() or expected_output.stat().st_size == 0:
             logger.warning("%s: output is missing", prefix)
@@ -1494,6 +1494,25 @@ _MISSING_ALIGNMENT_MESSAGES = (
     "The chosen align_model",
     "could not be found in huggingface",
 )
+
+
+_MAX_LOGGED_STDERR_CHARACTERS = 4000
+
+
+def _loggable_stderr(stderr: str) -> str:
+    """The end of a stage's stderr, safe to put in the worker log.
+
+    Decoder and model output can repeat text taken from the uploaded file (tags,
+    names). Only the last part is kept (that is where a failure is explained),
+    control characters are replaced, and every line is indented so a line in the
+    file cannot pass for one of the worker's own ``[job ...]`` log lines.
+    """
+    tail = (stderr or "")[-_MAX_LOGGED_STDERR_CHARACTERS:]
+    cleaned = "".join(
+        character if character in "\n\t" or character.isprintable() else "?"
+        for character in tail
+    )
+    return "\n".join(f"    | {line}" for line in cleaned.splitlines())
 
 
 def _is_missing_alignment_model(stderr: str) -> bool:
