@@ -8,6 +8,10 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 
+class SourceChangedError(Exception):
+    """The object is no longer the one that was checked (its ETag changed)."""
+
+
 class ArtifactRole(str, Enum):
     SOURCE_UPLOAD = "source_upload"
     PLAYBACK_AUDIO = "playback_audio"
@@ -49,7 +53,10 @@ class ArtifactStorage(Protocol):
         content_type: str,
     ) -> ArtifactMetadata: ...
 
-    def read_bytes(self, key: ArtifactKey) -> bytes: ...
+    def read_bytes(self, key: ArtifactKey, *, if_match: str | None = None) -> bytes:
+        """Read an object. With ``if_match`` (an ETag), read it only if it is
+        still that exact version; otherwise raise SourceChangedError."""
+        ...
 
     def exists(self, key: ArtifactKey) -> bool: ...
 
@@ -118,7 +125,8 @@ class LocalArtifactStorage:
             sha256=hashlib.sha256(content).hexdigest(),
         )
 
-    def read_bytes(self, key: ArtifactKey) -> bytes:
+    def read_bytes(self, key: ArtifactKey, *, if_match: str | None = None) -> bytes:
+        # Local files have no ETag; the pin only applies to S3.
         return self._path(key).read_bytes()
 
     def exists(self, key: ArtifactKey) -> bool:

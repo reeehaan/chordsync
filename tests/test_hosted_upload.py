@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -599,11 +600,11 @@ def test_a_transient_download_failure_cleans_up_and_is_retryable(env):
     original = env.uploads.open
     calls = {"n": 0}
 
-    def flaky(key):
+    def flaky(key, **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             raise CloudProviderError(CloudProviderErrorKind.TEMPORARY_UNAVAILABLE, "down")
-        return original(key)
+        return original(key, **kwargs)
 
     env.uploads.open = flaky
 
@@ -963,3 +964,60 @@ def test_confirming_an_upload_does_not_ask_for_another_warm_worker(env, monkeypa
     env.confirm(job_id)
 
     assert calls == [1]  # only the creation asked
+
+
+# --- the file the worker reads is the file confirm checked ------------------------------
+
+
+def test_confirm_records_the_etag_of_the_file_it_checked(env):
+    job_id = env.create_and_upload(WAV)
+    key = env.job(job_id).source_object_key
+    checked = env.uploads.head(ArtifactKey(ArtifactRole.SOURCE_UPLOAD, key)).etag
+
+    assert env.confirm(job_id).status_code == 202
+
+    assert checked and env.job(job_id).source_etag == checked
+
+
+def test_a_file_swapped_while_confirm_is_running_is_rejected(env):
+    """The upload link still works after the check starts: the bytes inspected must be
+    the ones whose ETag is recorded, or the swap is refused."""
+    job_id = env.create_and_upload(WAV)
+    key = env.job(job_id).source_object_key
+    original_head = env.uploads.head
+    stored = env.uploads.objects[key]
+
+    def head_then_swap(object_key):
+        info = original_head(object_key)
+        env.uploads.client_upload(
+            key,
+            b"not the audio that was checked" * 100,
+            content_type=stored.content_type,
+            server_side_encryption=stored.server_side_encryption,
+        )
+        return info
+
+    env.uploads.head = head_then_swap
+
+    response = env.confirm(job_id)
+
+    assert 400 <= response.status_code < 500
+    assert env.job(job_id).status is CloudJobStatus.FAILED
+    assert env.queue.sent == []  # nothing was queued for analysis
+    assert env.uploads.objects == {}  # and the replaced object was deleted
+    assert env.staged_files() == []
+
+
+def test_a_job_confirmed_without_an_etag_store_still_works(env, monkeypatch):
+    """A store that reports no ETag (older data, local mode) is not pinned and not blocked."""
+    job_id = env.create_and_upload(WAV)
+    original_head = env.uploads.head
+
+    def head_without_etag(key):
+        info = original_head(key)
+        return replace(info, etag=None)
+
+    env.uploads.head = head_without_etag
+
+    assert env.confirm(job_id).status_code == 202
+    assert env.job(job_id).source_etag is None

@@ -14,6 +14,7 @@ from backend.api.app.services.artifact_storage import (
     ArtifactKey,
     ArtifactRole,
     ArtifactStorage,
+    SourceChangedError,
 )
 from backend.api.app.services.aws_errors import (
     CloudProviderError,
@@ -44,6 +45,9 @@ class SourceObjectInfo:
     size_bytes: int
     content_type: str | None
     server_side_encryption: str | None
+    # The object's version fingerprint (S3 ETag). Confirm records it, and every
+    # later read pins to it, so a file replaced after the check is not used.
+    etag: str | None = None
 
 
 class SourceUploadStore(Protocol):
@@ -60,7 +64,7 @@ class SourceUploadStore(Protocol):
 
     def head(self, key: ArtifactKey) -> SourceObjectInfo | None: ...
 
-    def open(self, key: ArtifactKey) -> BinaryIO: ...
+    def open(self, key: ArtifactKey, *, if_match: str | None = None) -> BinaryIO: ...
 
     def delete(self, key: ArtifactKey) -> None: ...
 
@@ -147,12 +151,18 @@ class S3SourceUploadStore:
             size_bytes=int(response["ContentLength"]),
             content_type=response.get("ContentType"),
             server_side_encryption=response.get("ServerSideEncryption"),
+            etag=response.get("ETag"),
         )
 
-    def open(self, key: ArtifactKey) -> BinaryIO:
+    def open(self, key: ArtifactKey, *, if_match: str | None = None) -> BinaryIO:
+        request: dict[str, Any] = {"Bucket": self._bucket, "Key": key.value}
+        if if_match:
+            request["IfMatch"] = if_match
         try:
-            return self._client.get_object(Bucket=self._bucket, Key=key.value)["Body"]
+            return self._client.get_object(**request)["Body"]
         except Exception as error:
+            if if_match and provider_error_code(error) in {"PreconditionFailed", "412"}:
+                raise SourceChangedError("object changed since it was checked") from error
             if provider_error_code(error) in {"NoSuchKey", "404", "NotFound"}:
                 raise CloudProviderError(
                     CloudProviderErrorKind.NOT_FOUND, "Cloud object was not found"
@@ -164,6 +174,13 @@ class S3SourceUploadStore:
             self._client.delete_object(Bucket=self._bucket, Key=key.value)
         except Exception as error:
             raise translate_provider_error(error) from error
+
+
+def _etag_of(data: bytes) -> str:
+    """What the test double reports as an ETag: it changes whenever the bytes do."""
+    import hashlib
+
+    return f'"{hashlib.md5(data).hexdigest()}"'
 
 
 @dataclass
@@ -238,10 +255,13 @@ class InMemorySourceUploadStore:
         if stored is None:
             return None
         return SourceObjectInfo(
-            len(stored.data), stored.content_type, stored.server_side_encryption
+            len(stored.data),
+            stored.content_type,
+            stored.server_side_encryption,
+            etag=_etag_of(stored.data),
         )
 
-    def open(self, key: ArtifactKey) -> BinaryIO:
+    def open(self, key: ArtifactKey, *, if_match: str | None = None) -> BinaryIO:
         import io
 
         stored = self.objects.get(key.value)
@@ -249,6 +269,8 @@ class InMemorySourceUploadStore:
             raise CloudProviderError(
                 CloudProviderErrorKind.NOT_FOUND, "Cloud object was not found"
             )
+        if if_match and _etag_of(stored.data) != if_match:
+            raise SourceChangedError("object changed since it was checked")
         return io.BytesIO(stored.data)
 
     def delete(self, key: ArtifactKey) -> None:

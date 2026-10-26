@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from contextlib import AbstractContextManager
 from enum import Enum
@@ -16,6 +17,7 @@ from backend.api.app.services.artifact_storage import (
     ArtifactKey,
     ArtifactRole,
     ArtifactStorage,
+    SourceChangedError,
 )
 from backend.api.app.services.aws_errors import (
     CloudProviderError,
@@ -45,6 +47,8 @@ CLAIM_ATTEMPTS = 4
 CLAIM_RETRY_DELAY_SECONDS = 0.5
 CLAIM_CONFLICT_RELEASE_SECONDS = 5
 
+
+logger = logging.getLogger(__name__)
 
 class WorkerOutcome(str, Enum):
     EMPTY = "empty"
@@ -157,10 +161,18 @@ class AnalysisWorkerConsumer:
         delivery: QueueDelivery,
         job: CloudJobRecord,
     ) -> WorkerOutcome:
-        source = self._materializer.materialize(
-            job.job_id,
-            delivery.descriptor.source_artifact_key,
-        )
+        try:
+            source = self._materializer.materialize(
+                job.job_id,
+                delivery.descriptor.source_artifact_key,
+                expected_etag=job.source_etag,
+            )
+        except SourceChangedError:
+            logger.warning(
+                "job %s: the uploaded file changed after it was validated; refusing it",
+                job.job_id,
+            )
+            raise
         timeline = self._processor.process(source.path, source_title=job.title)
         latest = self._repository.get(job.job_id)
         if latest is None or latest.status is CloudJobStatus.CANCELLED:
@@ -225,7 +237,7 @@ class AnalysisWorkerConsumer:
 
 
 def _is_retryable(error: Exception) -> bool:
-    if isinstance(error, NonRetryableWorkerError):
+    if isinstance(error, (NonRetryableWorkerError, SourceChangedError)):
         return False
     if isinstance(error, (ValueError, FileNotFoundError)):
         return False

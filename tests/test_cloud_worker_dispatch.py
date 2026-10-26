@@ -322,3 +322,59 @@ def test_a_job_another_worker_took_meanwhile_is_still_left_alone(tmp_path):
     assert consumer.process_once() is WorkerOutcome.RELEASED_BUSY
     assert releases == [{"visibility_timeout_seconds": 60}]
     assert pauses == []
+
+
+class _EtagStorage:
+    """An object store whose ETag changes with the bytes, as S3's does."""
+
+    def __init__(self) -> None:
+        self.data: dict[str, bytes] = {}
+
+    @staticmethod
+    def etag(content: bytes) -> str:
+        import hashlib
+
+        return f'"{hashlib.md5(content).hexdigest()}"'
+
+    def read_bytes(self, key, *, if_match=None):
+        from backend.api.app.services.artifact_storage import SourceChangedError
+
+        content = self.data[key.value]
+        if if_match and if_match != self.etag(content):
+            raise SourceChangedError("changed")
+        return content
+
+
+def test_the_worker_refuses_a_file_replaced_after_it_was_validated(tmp_path):
+    from backend.api.app.services.artifact_storage import SourceChangedError
+
+    storage = _EtagStorage()
+    key = ArtifactKeyFactory().source("job-one", ".mp3")
+    storage.data[key.value] = b"the audio that confirm checked"
+    checked = storage.etag(storage.data[key.value])
+    materializer = SourceMaterializer(storage, tmp_path / "work")
+
+    same = materializer.materialize("job-one", key.value, expected_etag=checked)
+    assert same.content == b"the audio that confirm checked"
+
+    storage.data[key.value] = b"a different file put there with the upload link"
+    with pytest.raises(SourceChangedError):
+        materializer.materialize("job-two", key.value, expected_etag=checked)
+    assert not (tmp_path / "work" / "job-two").exists()  # nothing was written for decoding
+
+
+def test_a_file_without_a_recorded_etag_is_read_as_before(tmp_path):
+    storage = _EtagStorage()
+    key = ArtifactKeyFactory().source("job-one", ".mp3")
+    storage.data[key.value] = b"older job"
+
+    result = SourceMaterializer(storage, tmp_path / "work").materialize("job-one", key.value)
+
+    assert result.content == b"older job"
+
+
+def test_a_replaced_file_is_failed_permanently_not_retried():
+    from backend.api.app.services.analysis_worker_consumer import _is_retryable
+    from backend.api.app.services.artifact_storage import SourceChangedError
+
+    assert _is_retryable(SourceChangedError("changed")) is False

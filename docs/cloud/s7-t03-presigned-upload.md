@@ -95,9 +95,10 @@ New durable fields: `declared_size_bytes`, `upload_expires_at`.
 4. `HEAD` the exact object. Missing: see "Expiry". Present: require
    `0 < ContentLength ≤ 25 MB`, equal to the declared size, `ContentType` (if
    present) equal to the canonical type, and `ServerSideEncryption` of
-   `AES256` or `aws:kms`. The ETag is not used.
+   `AES256` or `aws:kms`. **Record the ETag** (changed 2026-10-26).
 5. Clear stale staging, stream the object into `/tmp/chordsync-api/cloud_api_staging/<job>/`
-   with a hard 25 MB cap, then run `inspect_audio`: real format must match the
+   with a hard 25 MB cap (the read is pinned to the recorded ETag with `IfMatch`, so it
+   is exactly the checked version), then run `inspect_audio`: real format must match the
    extension, duration `> 0` and `≤ 360 s`.
 6. Delete the staged file (`finally`, on every path).
 7. Save the duration, then dispatch: conditional `validating` → `queued`
@@ -219,3 +220,21 @@ on error) makes at least one test fail.
 
 Worker dispatcher Lambda (the reconciler for `queued` + `dispatch_pending` jobs
 and the ECS worker trigger), then the Terraform API stack.
+
+## Pinning the checked file (2026-10-26)
+
+The signed PUT stays valid until it expires (600 s by default) and confirm cannot revoke
+it, so a tester could replace the file after confirm had checked it, and the worker
+would decode it and publish it as playback audio to every token holder. The audit lead
+`upload-presigned-put-reusable-after-confirm` described this.
+
+- Confirm stores the ETag of the checked object on the job (`source_etag`) and inspects
+  the object with `IfMatch` on that ETag, so a file swapped while confirm runs is
+  refused and deleted like any other rejected upload.
+- The worker (`SourceMaterializer`) reads the source with `IfMatch` on the stored ETag.
+  If the object has changed, S3 answers 412, the read raises `SourceChangedError`, and the
+  job fails permanently (never retried, never decoded, never published).
+- Jobs created before this change have no stored ETag and are read as before.
+- Not covered: S3 itself still accepts a second PUT with the same link. The change makes
+  that harmless to the analysis; it does not stop the extra write.
+

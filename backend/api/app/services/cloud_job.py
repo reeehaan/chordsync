@@ -78,6 +78,9 @@ class CloudJobRecord:
     dispatch_pending: bool = False
     version: int = 0
     # Presigned-upload fields (hosted API); unset for multipart uploads.
+    # The ETag of the uploaded file as it was when confirm checked it. The worker
+    # reads the file only if it still has this ETag (see SourceMaterializer).
+    source_etag: str | None = None
     declared_size_bytes: int | None = None
     upload_expires_at: datetime | None = None
 
@@ -143,6 +146,7 @@ class CloudJobRecord:
             "dispatch_pending": self.dispatch_pending,
             "version": self.version,
             "declared_size_bytes": self.declared_size_bytes,
+            "source_etag": self.source_etag,
             "upload_expires_at": (
                 self.upload_expires_at.isoformat() if self.upload_expires_at else None
             ),
@@ -188,6 +192,7 @@ class CloudJobRecord:
                 if value.get("upload_expires_at")
                 else None
             ),
+            source_etag=_optional_text(value.get("source_etag")),
         )
         record.validate()
         return record

@@ -302,3 +302,75 @@ def test_a_small_library_is_read_completely_without_a_warning(caplog):
 
     assert table.scans == 3
     assert "may be incomplete" not in caplog.text
+
+
+class _EtagS3Client(FakeS3Client):
+    """A client that honours IfMatch the way S3 does (412 PreconditionFailed)."""
+
+    def put_object(self, **values):
+        super().put_object(**values)
+        self.objects[values["Key"]]["ETag"] = f'"v{len(self.calls)}"'
+        return {}
+
+    def get_object(self, **values):
+        self._record("get", values)
+        stored = self.objects.get(values["Key"])
+        if stored is None:
+            raise FakeAwsError("NoSuchKey")
+        if "IfMatch" in values and values["IfMatch"] != stored["ETag"]:
+            raise FakeAwsError("PreconditionFailed")
+        return {"Body": BytesIO(stored["Body"])}
+
+    def head_object(self, **values):
+        response = super().head_object(**values)
+        response["ETag"] = self.objects[values["Key"]]["ETag"]
+        return response
+
+
+def test_s3_read_with_if_match_reads_only_the_checked_version():
+    from backend.api.app.services.artifact_storage import SourceChangedError
+
+    client = _EtagS3Client()
+    storage = S3ArtifactStorage(client, "private-bucket")
+    key = ArtifactKeyFactory().source("job-one", ".mp3")
+    storage.put_bytes(key, b"audio", content_type="audio/mpeg")
+    checked = client.objects[key.value]["ETag"]
+
+    assert storage.read_bytes(key, if_match=checked) == b"audio"
+    assert client.calls[-1][1]["IfMatch"] == checked
+
+    storage.put_bytes(key, b"something else", content_type="audio/mpeg")  # replaced
+
+    with pytest.raises(SourceChangedError):
+        storage.read_bytes(key, if_match=checked)
+    assert storage.read_bytes(key) == b"something else"  # an unpinned read is unchanged
+
+
+def test_s3_read_without_if_match_sends_no_precondition():
+    client = _EtagS3Client()
+    storage = S3ArtifactStorage(client, "private-bucket")
+    key = ArtifactKeyFactory().source("job-one", ".mp3")
+    storage.put_bytes(key, b"audio", content_type="audio/mpeg")
+
+    storage.read_bytes(key)
+
+    assert "IfMatch" not in client.calls[-1][1]
+
+
+def test_the_source_upload_store_reports_the_etag_and_pins_its_read():
+    from backend.api.app.services.artifact_storage import SourceChangedError
+    from backend.api.app.services.source_upload_store import S3SourceUploadStore
+
+    client = _EtagS3Client()
+    artifacts = S3ArtifactStorage(client, "private-bucket")
+    key = ArtifactKeyFactory().source("job-one", ".mp3")
+    artifacts.put_bytes(key, b"audio", content_type="audio/mpeg")
+    uploads = S3SourceUploadStore(client, "private-bucket")
+
+    info = uploads.head(key)
+    assert info.etag == client.objects[key.value]["ETag"]
+    assert uploads.open(key, if_match=info.etag).read() == b"audio"
+
+    artifacts.put_bytes(key, b"swapped", content_type="audio/mpeg")
+    with pytest.raises(SourceChangedError):
+        uploads.open(key, if_match=info.etag)

@@ -6,6 +6,7 @@ from typing import Any
 from backend.api.app.services.artifact_storage import (
     ArtifactKey,
     ArtifactMetadata,
+    SourceChangedError,
 )
 from backend.api.app.services.aws_errors import (
     CloudProviderError,
@@ -55,12 +56,17 @@ class S3ArtifactStorage:
             raise translate_provider_error(error) from error
         return ArtifactMetadata(key, content_type, len(content), checksum)
 
-    def read_bytes(self, key: ArtifactKey) -> bytes:
+    def read_bytes(self, key: ArtifactKey, *, if_match: str | None = None) -> bytes:
         try:
-            response = self._client.get_object(Bucket=self._bucket, Key=key.value)
+            request = {"Bucket": self._bucket, "Key": key.value}
+            if if_match:
+                request["IfMatch"] = if_match
+            response = self._client.get_object(**request)
             body = response["Body"]
             return body.read() if hasattr(body, "read") else bytes(body)
         except Exception as error:
+            if if_match and provider_error_code(error) in {"PreconditionFailed", "412"}:
+                raise SourceChangedError("object changed since it was checked") from error
             if provider_error_code(error) in {"NoSuchKey", "NotFound"}:
                 raise CloudProviderError(
                     CloudProviderErrorKind.NOT_FOUND,

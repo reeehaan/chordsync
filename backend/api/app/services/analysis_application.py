@@ -39,6 +39,7 @@ from backend.api.app.services.artifact_storage import (
     ArtifactKeyFactory,
     ArtifactRole,
     ArtifactStorage,
+    SourceChangedError,
 )
 from backend.api.app.services.aws_errors import CloudProviderError
 from backend.api.app.services.aws_errors import CloudProviderErrorKind
@@ -434,8 +435,9 @@ class CloudAnalysisApplication:
         job_id = job.job_id
         try:
             key, extension = self._expected_source_key(job)
-            self._check_object(uploads, job, key, extension)
-            metadata = self._stage_and_inspect(uploads, job_id, key, extension)
+            etag = self._check_object(uploads, job, key, extension)
+            # Inspect exactly the version whose ETag was just recorded.
+            metadata = self._stage_and_inspect(uploads, job_id, key, extension, etag)
         except AnalysisInputValidationError as error:
             self._reject(job, key, uploads, error)
             raise
@@ -456,6 +458,9 @@ class CloudAnalysisApplication:
 
         job.duration_seconds = metadata.duration_seconds
         job.file_type = extension
+        # From here the worker reads the file only while it still has this ETag, so
+        # a file swapped in with the (still valid) upload link is never analysed.
+        job.source_etag = etag
         try:
             self._repository.save(job, expected_status=CloudJobStatus.VALIDATING)
             self._dispatcher.dispatch(job_id)
@@ -496,7 +501,8 @@ class CloudAnalysisApplication:
         job: CloudJobRecord,
         key: ArtifactKey,
         extension: str,
-    ) -> None:
+    ) -> str | None:
+        """Checks the stored object and returns its ETag (None if the store has none)."""
         info = uploads.head(key)
         if info is None:
             self._not_received(job)
@@ -512,6 +518,7 @@ class CloudAnalysisApplication:
             raise UploadRejectedError
         if info.server_side_encryption not in ACCEPTED_ENCRYPTIONS:
             raise UploadRejectedError
+        return info.etag
 
     def _stage_and_inspect(
         self,
@@ -519,10 +526,15 @@ class CloudAnalysisApplication:
         job_id: str,
         key: ArtifactKey,
         extension: str,
+        etag: str | None = None,
     ) -> AnalysisInputMetadata:
         # /tmp survives between invocations, so clear leftovers first.
         self._staging.delete(job_id)
-        stream = uploads.open(key)
+        try:
+            stream = uploads.open(key, if_match=etag)
+        except SourceChangedError as error:
+            # Replaced between the check and this read: not the file that was checked.
+            raise UploadRejectedError from error
         try:
             # Stream with a size cap, then check format, extension and duration.
             return self._staging.store(
