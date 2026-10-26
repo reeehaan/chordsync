@@ -411,51 +411,71 @@ resource "aws_iam_account_password_policy" "baseline" {
   hard_expiry                    = false
 }
 
-# OPTIONAL: deny almost everything for a signed-in user without MFA, while
-# leaving the actions needed to register a device. sts:AssumeRole stays allowed
-# so the Terraform role workflow keeps working. Off by default.
+# OPTIONAL: deny almost everything for a signed-in user without MFA. A session
+# without MFA keeps only what it needs to sign in with MFA: look up its own
+# devices, ask STS for an MFA session, and assume a role. sts:AssumeRole stays
+# allowed so the Terraform role workflow keeps working. Off by default.
+#
+# Registering a NEW MFA device is deliberately not allowed without MFA once a
+# device exists. Otherwise a stolen long-lived access key could enrol a device
+# the thief controls, mint an MFA session with it, and pass every MFA check
+# (the group guard and the role trust). Enrolment and removal of devices
+# therefore need an MFA session, or the root user. For a supervised first or
+# recovery enrolment only, set mfa_enrolment_open = true, enrol, then turn it
+# off again.
+variable "mfa_enrolment_open" {
+  description = "Let a session WITHOUT MFA register or resync a virtual MFA device. Leave false. Set true only to enrol the first device for a new admin user, or to recover after losing a device without using the root user, and set it back to false straight after."
+  type        = bool
+  default     = false
+}
+
+locals {
+  mfa_enrolment_actions = [
+    "iam:CreateVirtualMFADevice",
+    "iam:DeleteVirtualMFADevice",
+    "iam:EnableMFADevice",
+    "iam:ResyncMFADevice",
+  ]
+  mfa_signin_actions = [
+    "iam:ChangePassword",
+    "iam:GetAccountPasswordPolicy",
+    "iam:GetAccountSummary",
+    "iam:GetUser",
+    "iam:ListAccountAliases",
+    "iam:ListMFADevices",
+    "iam:ListUsers",
+    "iam:ListVirtualMFADevices",
+    "sts:AssumeRole",
+    "sts:GetCallerIdentity",
+    "sts:GetSessionToken",
+  ]
+}
+
 data "aws_iam_policy_document" "require_mfa" {
   statement {
-    sid    = "AllowManageOwnMfaAndPassword"
-    effect = "Allow"
-    actions = [
-      "iam:ChangePassword",
-      "iam:CreateVirtualMFADevice",
-      "iam:DeleteVirtualMFADevice",
-      "iam:EnableMFADevice",
-      "iam:GetAccountPasswordPolicy",
-      "iam:GetAccountSummary",
-      "iam:GetUser",
-      "iam:ListAccountAliases",
-      "iam:ListMFADevices",
-      "iam:ListUsers",
-      "iam:ListVirtualMFADevices",
-      "iam:ResyncMFADevice",
-    ]
+    sid       = "AllowSignInLookups"
+    effect    = "Allow"
+    actions   = [for a in local.mfa_signin_actions : a if startswith(a, "iam:")]
     resources = ["*"]
   }
 
+  # A caller may manage only its own devices: a device named for its own user
+  # (the console names them that way) and its own user record.
   statement {
-    sid    = "DenyEverythingElseWithoutMfa"
-    effect = "Deny"
-    not_actions = [
-      "iam:ChangePassword",
-      "iam:CreateVirtualMFADevice",
-      "iam:DeleteVirtualMFADevice",
-      "iam:EnableMFADevice",
-      "iam:GetAccountPasswordPolicy",
-      "iam:GetAccountSummary",
-      "iam:GetUser",
-      "iam:ListAccountAliases",
-      "iam:ListMFADevices",
-      "iam:ListUsers",
-      "iam:ListVirtualMFADevices",
-      "iam:ResyncMFADevice",
-      "sts:AssumeRole",
-      "sts:GetCallerIdentity",
-      "sts:GetSessionToken",
+    sid     = "AllowManageOwnMfaDevice"
+    effect  = "Allow"
+    actions = local.mfa_enrolment_actions
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:mfa/*",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/$${aws:username}",
     ]
-    resources = ["*"]
+  }
+
+  statement {
+    sid         = "DenyEverythingElseWithoutMfa"
+    effect      = "Deny"
+    not_actions = concat(local.mfa_signin_actions, var.mfa_enrolment_open ? local.mfa_enrolment_actions : [])
+    resources   = ["*"]
 
     condition {
       test     = "BoolIfExists"

@@ -21,6 +21,27 @@ def _block(text: str, header: str) -> str:
     raise AssertionError(header)
 
 
+def _list(text: str, name: str) -> str:
+    """The text of a `name = [ ... ]` list."""
+    match = re.search(re.escape(name) + r"\s*=\s*\[(.*?)\]", text, re.S)
+    assert match, name
+    return match.group(1)
+
+
+def _statement(policy: str, sid: str) -> str:
+    """The `statement { ... }` block of an IAM policy document, found by its sid."""
+    match = re.search(r'sid\s*=\s*"' + re.escape(sid) + '"', policy)
+    assert match, sid
+    start = policy.rindex("statement {", 0, match.start())
+    depth = 0
+    for index in range(policy.index("{", start), len(policy)):
+        depth += policy[index] == "{"
+        depth -= policy[index] == "}"
+        if depth == 0:
+            return policy[start : index + 1]
+    raise AssertionError(sid)
+
+
 def test_the_budget_always_exists_and_alerts_only_with_an_address():
     budget = _block(H, 'resource "aws_budgets_budget" "monthly"')
     assert "count" not in budget.split("dynamic")[0]  # tracked even without an email
@@ -90,10 +111,33 @@ def test_the_mfa_guard_is_off_by_default_and_keeps_role_assumption_working():
     for resource in ('aws_iam_policy" "require_mfa"', 'aws_iam_group_policy_attachment" "require_mfa"'):
         assert "var.enforce_admin_mfa ? 1 : 0" in _block(H, f'resource "{resource}')
     policy = _block(H, 'data "aws_iam_policy_document" "require_mfa"')
-    deny = _block(policy, 'sid    = "DenyEverythingElseWithoutMfa"')
-    for kept in ("sts:AssumeRole", "iam:EnableMFADevice", "iam:CreateVirtualMFADevice", "iam:ChangePassword"):
-        assert kept in deny, kept  # excluded from the deny, so no lockout path
-    assert "BoolIfExists" in deny and "aws:MultiFactorAuthPresent" in deny
+    deny = _statement(policy, "DenyEverythingElseWithoutMfa")
+    signin = _list(H, "mfa_signin_actions")
+    for kept in ("sts:AssumeRole", "sts:GetSessionToken", "iam:ListMFADevices", "iam:ChangePassword"):
+        assert kept in signin, kept  # excluded from the deny, so a key can still start an MFA session
+    assert "mfa_signin_actions" in deny and "BoolIfExists" in deny and "aws:MultiFactorAuthPresent" in deny
+
+
+def test_a_key_without_mfa_cannot_enrol_a_new_mfa_device():
+    """A stolen long-lived key must not be able to add the second factor itself."""
+    signin = _list(H, "mfa_signin_actions")
+    enrolment = _list(H, "mfa_enrolment_actions")
+    for action in ("iam:CreateVirtualMFADevice", "iam:EnableMFADevice", "iam:DeleteVirtualMFADevice", "iam:ResyncMFADevice"):
+        assert action in enrolment, action
+        assert action not in signin, action  # not exempt from the no-MFA deny by default
+    policy = _block(H, 'data "aws_iam_policy_document" "require_mfa"')
+    deny = _statement(policy, "DenyEverythingElseWithoutMfa")
+    # The only way to exempt enrolment is the explicit, default-off switch.
+    assert "var.mfa_enrolment_open ? local.mfa_enrolment_actions : []" in deny
+    assert re.search(r"default\s+= false", _block(H, 'variable "mfa_enrolment_open"'))
+
+
+def test_the_guards_own_allow_is_scoped_to_the_callers_own_devices():
+    policy = _block(H, 'data "aws_iam_policy_document" "require_mfa"')
+    own = _statement(policy, "AllowManageOwnMfaDevice")
+    assert "local.mfa_enrolment_actions" in own
+    assert "$${aws:username}" in own  # its own user record
+    assert 'resources = ["*"]' not in own  # no wildcard resource for device management
 
 
 def test_the_password_policy_never_expires_existing_passwords():
