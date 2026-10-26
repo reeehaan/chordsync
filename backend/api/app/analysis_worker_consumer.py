@@ -128,14 +128,22 @@ def build_consumer(config: CloudRuntimeConfig) -> AnalysisWorkerConsumer:
     workspace_root = Path(
         os.environ.get("CHORDSYNC_WORKSPACE_ROOT", "/tmp/chordsync-worker")
     ) / "materialized"
+    processor = RealAnalysisProcessor(model_installer=on_demand_model_installer(config))
     return AnalysisWorkerConsumer(
         runtime.queue,
         runtime.repository,
         runtime.artifact_storage,
         SourceMaterializer(runtime.artifact_storage, workspace_root),
-        RealAnalysisProcessor(model_installer=on_demand_model_installer(config)),
+        processor,
         AnalysisResultPublisher(runtime.repository, runtime.artifact_storage),
-        ArtifactCleanup(workspace_root, runtime.artifact_storage),
+        # The processor works in <processor workspace root>/<job_id>; remove that too, or a
+        # warm worker keeps every earlier job's derived audio and its retry of the
+        # same job fails because the folder already exists.
+        ArtifactCleanup(
+            workspace_root,
+            runtime.artifact_storage,
+            extra_workspace_roots=(processor.workspace_root,),
+        ),
     )
 
 

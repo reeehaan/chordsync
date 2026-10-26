@@ -415,6 +415,11 @@ class RealAnalysisProcessor:
         # libraries find their models themselves (local development).
         self._model_installer = model_installer
 
+    @property
+    def workspace_root(self) -> Path:
+        """Where each job's working folder (``<root>/<job_id>``) is created."""
+        return self._config.workspace_root
+
     def process(
         self, input_path: Path, *, source_title: str | None = None
     ) -> SharedTimeline:

@@ -287,3 +287,36 @@ def test_cleanup_removes_only_workspace_and_transient_source(tmp_path):
     assert not object_storage.exists(source)
     assert object_storage.exists(playback)
     assert object_storage.exists(timeline)
+
+
+def test_cleanup_also_removes_the_processors_own_workspace_for_the_job(tmp_path):
+    """A warm worker runs many jobs in one container: no earlier job's files may stay."""
+    object_storage = LocalArtifactStorage(tmp_path / "objects")
+    materialized = tmp_path / "work" / "materialized"
+    processing = tmp_path / "work"
+    for root, name in ((materialized, "input.mp3"), (processing, "normalized.wav")):
+        for job_id in ("job-one", "job-two"):
+            (root / job_id).mkdir(parents=True)
+            (root / job_id / name).write_bytes(b"temporary")
+    cleanup = ArtifactCleanup(
+        materialized, object_storage, extra_workspace_roots=(processing,)
+    )
+
+    cleanup.delete_workspace("job-one")
+
+    assert not (materialized / "job-one").exists()
+    assert not (processing / "job-one").exists()  # the processor's derived audio goes too
+    assert (materialized / "job-two" / "input.mp3").exists()  # another job is untouched
+    assert (processing / "job-two" / "normalized.wav").exists()
+    assert materialized.exists()  # only the job's folder is removed, never a root
+
+
+def test_cleanup_still_refuses_a_job_id_that_is_a_path(tmp_path):
+    object_storage = LocalArtifactStorage(tmp_path / "objects")
+    cleanup = ArtifactCleanup(
+        tmp_path / "a", object_storage, extra_workspace_roots=(tmp_path / "b",)
+    )
+
+    for bad in ("", ".", "..", "../x", "a/b"):
+        with pytest.raises(ValueError):
+            cleanup.delete_workspace(bad)
