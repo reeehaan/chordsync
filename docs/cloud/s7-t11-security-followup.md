@@ -177,3 +177,34 @@ outside ChordSync, so it was left for the owner to decide.
 
 Also not changed: the worker role's unused `dynamodb:UpdateItem` (removing it would need a
 real analysis to verify).
+
+## Correction, 2026-10-26: MFA enrolment must need MFA
+
+A source audit (run-1, a read-only review, nothing executed) found that the Phase 3
+guard let a session without MFA register a new virtual MFA device, and Phase 4's role
+trust only checks that *some* MFA is present. Together they contradicted the line above
+that the stored access key alone can no longer reach admin: a key without MFA could
+enrol a device whose seed the holder controls, ask STS for an MFA session with it, and
+pass the group guard and the role trust. The live facts that decide whether this works
+(the attached policy, the role trust, any SCP, the device count) are not in the repository,
+so the lead was recorded as *needs validation* and is checked read-only before the fix is
+applied.
+
+Fix in `infrastructure/aws/hardening.tf` (this change, applied only after a reviewed plan):
+
+- A session without MFA can no longer create, enable, delete or resync a virtual MFA
+  device. It can still sign in with the device that exists: look up its own devices,
+  `sts:GetSessionToken`, `sts:AssumeRole`.
+- The guard's own Allow for device management is limited to the caller's own user and
+  device names instead of every resource.
+- New variable `mfa_enrolment_open` (default `false`). Set it to `true` only to enrol the
+  first device for a new admin user or to recover after losing a device without the root
+  user, then set it back to `false` immediately.
+
+**Recovery if the device is lost:** sign in as the account root user and reset the
+user's MFA from the IAM console. Keep the root user's own MFA and recovery details safe.
+
+Still open from the same review (not part of this change): the long-lived access key of
+`rehan` still exists and should be replaced with short-lived credentials; the
+`sts:AssumeRole` exemption applies to every role, not only the Terraform role;
+`ChordSyncTerraformRole` still carries AdministratorAccess and is not managed by Terraform.
