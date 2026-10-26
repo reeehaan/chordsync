@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Any
 
@@ -9,6 +10,14 @@ from backend.api.app.services.aws_errors import (
 )
 from backend.api.app.services.cloud_job import CloudJobRecord, CloudJobStatus
 from backend.api.app.services.cloud_job_repository import JobWriteConflictError
+
+
+logger = logging.getLogger(__name__)
+
+# One Scan page reads up to 1 MB. A library request must not read an unbounded
+# table: past this many pages the list is cut short (and the cut is logged)
+# instead of running into the Lambda timeout and failing for every tester.
+MAX_LIBRARY_SCAN_PAGES = 20
 
 
 class DynamoDbCloudJobRepository:
@@ -67,6 +76,7 @@ class DynamoDbCloudJobRepository:
         # index on status if it ever grows well beyond that.
         jobs: list[CloudJobRecord] = []
         start_key = None
+        pages = 0
         while True:
             request: dict[str, Any] = {
                 "FilterExpression": "#status = :completed",
@@ -82,8 +92,15 @@ class DynamoDbCloudJobRepository:
             except Exception as error:
                 raise translate_provider_error(error) from error
             jobs.extend(_from_item(item) for item in response.get("Items", []))
+            pages += 1
             start_key = response.get("LastEvaluatedKey")
             if not start_key:
+                break
+            if pages >= MAX_LIBRARY_SCAN_PAGES:
+                logger.warning(
+                    "library scan stopped after %d pages; the list may be incomplete",
+                    pages,
+                )
                 break
         jobs.sort(key=lambda job: job.created_at, reverse=True)
         return jobs[:limit]

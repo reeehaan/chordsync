@@ -263,3 +263,42 @@ def test_dynamodb_translates_nonconditional_provider_failure():
     with pytest.raises(CloudProviderError) as captured:
         DynamoDbCloudJobRepository(table).get("job-one")
     assert captured.value.kind is CloudProviderErrorKind.TEMPORARY_UNAVAILABLE
+
+
+class _PagedScanTable:
+    """A table whose Scan keeps returning pages of unrelated items."""
+
+    def __init__(self, pages: int) -> None:
+        self.pages = pages
+        self.scans = 0
+
+    def scan(self, **values):
+        self.scans += 1
+        response = {"Items": []}
+        if self.scans < self.pages:
+            response["LastEvaluatedKey"] = {"PK": f"page-{self.scans}"}
+        return response
+
+
+def test_the_library_scan_stops_after_a_fixed_number_of_pages(caplog):
+    """A growing table must not make every library request read all of it."""
+    from backend.api.app.services.dynamodb_cloud_job_repository import MAX_LIBRARY_SCAN_PAGES
+
+    table = _PagedScanTable(pages=MAX_LIBRARY_SCAN_PAGES * 5)
+
+    with caplog.at_level("WARNING"):
+        result = DynamoDbCloudJobRepository(table).list_completed()
+
+    assert result == []
+    assert table.scans == MAX_LIBRARY_SCAN_PAGES
+    assert "may be incomplete" in caplog.text
+
+
+def test_a_small_library_is_read_completely_without_a_warning(caplog):
+    table = _PagedScanTable(pages=3)
+
+    with caplog.at_level("WARNING"):
+        DynamoDbCloudJobRepository(table).list_completed()
+
+    assert table.scans == 3
+    assert "may be incomplete" not in caplog.text
