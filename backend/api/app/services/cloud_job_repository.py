@@ -59,6 +59,8 @@ def is_catalogue_owner(owner_id: str | None) -> bool:
 
 
 def in_scope(job: CloudJobRecord, owner_id: str | None, catalogue_only: bool) -> bool:
+    if job.superseded_by:
+        return False  # a duplicate that was replaced by another copy
     if owner_id is not None:
         return job.owner_id == owner_id
     if catalogue_only:

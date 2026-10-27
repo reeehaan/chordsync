@@ -196,3 +196,81 @@ def test_dynamodb_filters_by_owner_before_reading_the_results(scope, must_contai
     expression = request["FilterExpression"]
     assert all(name in expression for name in request["ExpressionAttributeNames"])
     assert all(name in expression for name in request["ExpressionAttributeValues"])
+
+
+# --- genres, and duplicates that are hidden rather than deleted ---
+
+
+def _tag(env, job_id, **fields):
+    job = env.repository.get(job_id)
+    for name, value in fields.items():
+        setattr(job, name, value)
+    env.repository.save(job, expected_status=job.status)
+
+
+def test_the_library_shows_each_songs_artist_and_genres(env):
+    seed(env, "tagged", title="Wonderwall - Oasis", owner="demo:tester-a")
+    seed(env, "untagged", title="Duvet", owner="demo:tester-a", age_minutes=5)
+    _tag(env, "tagged", artist="Oasis", genres=["Rock", "Indie"], genre_source="review")
+
+    songs = {s["title"]: s for s in env.client.get("/analysis/library").json()["songs"]}
+
+    assert songs["Wonderwall - Oasis"]["artist"] == "Oasis"
+    assert songs["Wonderwall - Oasis"]["genres"] == ["Rock", "Indie"]
+    assert songs["Duvet"]["artist"] is None and songs["Duvet"]["genres"] == []
+
+
+def test_a_hidden_duplicate_leaves_every_list_but_nothing_is_deleted(env):
+    seed(env, "keep", title="Dangalanna Be", owner="demo:tester-a")
+    seed(env, "dupe", title="Dangalanna Be", owner="demo:tester-a", age_minutes=30)
+    seed(env, "mine-keep", title="Mine", owner=f"cognito:{SUB_A}")
+    seed(env, "mine-dupe", title="Mine", owner=f"cognito:{SUB_A}", age_minutes=30)
+    _tag(env, "dupe", superseded_by="keep")
+    _tag(env, "mine-dupe", superseded_by="mine-keep")
+
+    library = [s["job_id"] for s in env.client.get("/analysis/library").json()["songs"]]
+    mine = [s["job_id"] for s in _as(env, SUB_A).get("/analysis/mine").json()["songs"]]
+
+    assert library == ["keep"] and mine == ["mine-keep"]
+    assert env.client.get("/analysis/library/dupe/result").status_code == 404
+    assert env.client.get("/analysis/library/dupe/audio").status_code == 404
+    assert env.client.get("/analysis/library/keep/result").status_code == 200
+    # Still stored, with its audio and timeline: only hidden.
+    assert env.repository.get("dupe").superseded_by == "keep"
+    assert env.repository.get("dupe").timeline_object_key is not None
+
+
+def test_unmarking_a_duplicate_brings_it_back(env):
+    seed(env, "keep", title="Song", owner="demo:tester-a")
+    seed(env, "dupe", title="Song", owner="demo:tester-a", age_minutes=30)
+    _tag(env, "dupe", superseded_by="keep")
+    assert len(env.client.get("/analysis/library").json()["songs"]) == 1
+
+    _tag(env, "dupe", superseded_by=None)
+
+    assert len(env.client.get("/analysis/library").json()["songs"]) == 2
+
+
+def test_stored_genres_outside_the_list_are_ignored_not_trusted():
+    from backend.api.app.services.cloud_job import CloudJobRecord, new_cloud_job
+
+    record = new_cloud_job("j1", "Song")
+    payload = record.to_dict()
+    for bad in ("Rock", None, 5, ["Polka", "Rock", 7, None, "Sinhala"], {"a": 1}):
+        loaded = CloudJobRecord.from_dict({**payload, "genres": bad})
+        assert loaded.genres in ([], ["Rock"], ["Sinhala"], ["Rock", "Sinhala"])
+    assert CloudJobRecord.from_dict({**payload, "genres": ["Polka", "Rock", 7, "Sinhala"]}).genres == ["Rock", "Sinhala"]
+    old = {k: v for k, v in payload.items() if k not in {"artist", "genres", "genre_source", "superseded_by"}}
+    loaded = CloudJobRecord.from_dict(old)  # a song saved before these fields existed
+    assert loaded.genres == [] and loaded.artist is None and loaded.superseded_by is None
+
+
+def test_dynamodb_leaves_hidden_duplicates_out_of_every_list():
+    from backend.api.app.services.dynamodb_cloud_job_repository import DynamoDbCloudJobRepository
+
+    for scope in ({}, {"owner_id": "cognito:abc"}, {"catalogue_only": True}):
+        table = _CapturingTable()
+        DynamoDbCloudJobRepository(table).list_completed(**scope)
+        request = table.requests[0]
+        assert "attribute_not_exists(superseded_by)" in request["FilterExpression"]
+        assert request["ExpressionAttributeValues"][":null"] == "NULL"

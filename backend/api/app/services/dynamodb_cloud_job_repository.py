@@ -83,9 +83,16 @@ class DynamoDbCloudJobRepository:
         catalogue_only: bool = False,
     ) -> list[CloudJobRecord]:
         _check_scope(owner_id, catalogue_only)
-        condition = "#status = :completed"
+        # Copies hidden as duplicates (superseded_by set) are left out of every list.
+        condition = (
+            "#status = :completed AND "
+            "(attribute_not_exists(superseded_by) OR attribute_type(superseded_by, :null))"
+        )
         names = {"#status": "status"}
-        values: dict[str, Any] = {":completed": CloudJobStatus.COMPLETED.value}
+        values: dict[str, Any] = {
+            ":completed": CloudJobStatus.COMPLETED.value,
+            ":null": "NULL",
+        }
         if owner_id is not None:
             condition += " AND #owner = :owner"
             names["#owner"] = "owner_id"
@@ -97,7 +104,6 @@ class DynamoDbCloudJobRepository:
                 " OR begins_with(#owner, :demo))"
             )
             names["#owner"] = "owner_id"
-            values[":null"] = "NULL"
             values[":demo"] = DEMO_OWNER_PREFIX
         # A scan: the table holds a few hundred jobs at most. Move this to an
         # index on status if it ever grows well beyond that.

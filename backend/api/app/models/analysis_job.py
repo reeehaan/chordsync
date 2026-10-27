@@ -53,6 +53,9 @@ class LibrarySong(BaseModel):
     title: str
     created_at: datetime
     duration_seconds: float | None = None
+    # What kind of music it is; empty for songs not tagged yet.
+    artist: str | None = None
+    genres: list[str] = []
 
 
 class LibraryResponse(BaseModel):

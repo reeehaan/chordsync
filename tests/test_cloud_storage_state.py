@@ -73,6 +73,10 @@ def test_cloud_job_serialization_round_trip_contains_only_metadata():
         "declared_size_bytes",
         "upload_expires_at",
         "source_etag",
+        "artist",
+        "genres",
+        "genre_source",
+        "superseded_by",
     }
     assert "timeline" not in payload
     assert "audio" not in payload

@@ -694,7 +694,12 @@ class CloudAnalysisApplication:
 
     def _finished(self, job_id: str) -> CloudJobRecord:
         job = self._repository.get(job_id)
-        if job is None or job.status is not CloudJobStatus.COMPLETED or not is_catalogue_job(job):
+        if (
+            job is None
+            or job.status is not CloudJobStatus.COMPLETED
+            or job.superseded_by
+            or not is_catalogue_job(job)
+        ):
             raise JobNotFoundError(job_id)  # a private analysis looks like a missing song
         return job
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from analysis.genre.genres import GENRES
 
 
 class CloudJobStatus(str, Enum):
@@ -83,6 +85,15 @@ class CloudJobRecord:
     source_etag: str | None = None
     declared_size_bytes: int | None = None
     upload_expires_at: datetime | None = None
+    # What kind of music this is: up to three of ChordSync's genres, who the
+    # artist is, and where the answer came from ("file_tag", "lookup", "review"
+    # or "user"). Added later, so older songs have none.
+    artist: str | None = None
+    genres: list[str] = field(default_factory=list)
+    genre_source: str | None = None
+    # Set when this song is a duplicate of another saved analysis (the id of the
+    # copy that replaces it). The song is hidden from lists but nothing is deleted.
+    superseded_by: str | None = None
 
     def validate(self) -> None:
         if (
@@ -150,6 +161,10 @@ class CloudJobRecord:
             "upload_expires_at": (
                 self.upload_expires_at.isoformat() if self.upload_expires_at else None
             ),
+            "artist": self.artist,
+            "genres": list(self.genres),
+            "genre_source": self.genre_source,
+            "superseded_by": self.superseded_by,
         }
 
     @classmethod
@@ -193,6 +208,10 @@ class CloudJobRecord:
                 else None
             ),
             source_etag=_optional_text(value.get("source_etag")),
+            artist=_optional_text(value.get("artist")),
+            genres=_known_genres(value.get("genres")),
+            genre_source=_optional_text(value.get("genre_source")),
+            superseded_by=_optional_text(value.get("superseded_by")),
         )
         record.validate()
         return record
@@ -222,3 +241,11 @@ def _validate_object_key(value: str) -> None:
         or ".." in path.parts
     ):
         raise ValueError("Artifact references must be safe logical object keys")
+
+
+def _known_genres(value: Any) -> list[str]:
+    """The stored genres that are on ChordSync's list, in order. Anything else in
+    the stored value is ignored, so a bad item can never break reading a song."""
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [genre for genre in value if isinstance(genre, str) and genre in GENRES]
