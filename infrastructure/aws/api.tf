@@ -126,11 +126,15 @@ locals {
     # A signed-in user's own songs: read-only, answered only for their own account.
     "GET /analysis/mine",
     "GET /analysis/mine/{job_id}/audio",
+    # The signed-in person's own profile (name, birth year, genres, level).
+    "GET /me/profile",
+    "PUT /me/profile",
   ]
   api_write_routes = [
     "POST /analysis/jobs",
     "POST /analysis/jobs/{job_id}/confirm-upload",
     "POST /analysis/jobs/{job_id}/cancel",
+    "PUT /me/profile",
   ]
 }
 
@@ -260,6 +264,18 @@ data "aws_iam_policy_document" "api_lambda" {
     resources = [aws_dynamodb_table.jobs.arn]
   }
 
+  # Profiles: read one item and change one item, nothing else, and only when
+  # accounts are on.
+  dynamic "statement" {
+    for_each = local.cognito_on ? [1] : []
+
+    content {
+      sid       = "Profiles"
+      actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
+      resources = [aws_dynamodb_table.profiles[0].arn]
+    }
+  }
+
   statement {
     sid       = "QueueAnalysis"
     actions   = ["sqs:SendMessage"]
@@ -317,6 +333,7 @@ resource "aws_lambda_function" "api" {
       CHORDSYNC_DEMO_TOKEN_PARAMETER       = var.demo_token_parameter_name
       CHORDSYNC_COGNITO_USER_POOL_ID       = local.cognito_on ? aws_cognito_user_pool.users[0].id : ""
       CHORDSYNC_COGNITO_CLIENT_ID          = local.cognito_on ? aws_cognito_user_pool_client.app[0].id : ""
+      CHORDSYNC_DYNAMODB_PROFILE_TABLE     = local.cognito_on ? aws_dynamodb_table.profiles[0].name : ""
       CHORDSYNC_WORKER_DISPATCHER_FUNCTION = aws_lambda_function.dispatcher[0].function_name
     }
   }

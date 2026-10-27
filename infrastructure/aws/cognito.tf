@@ -120,3 +120,36 @@ resource "aws_cognito_user_pool_client" "app" {
   read_attributes  = ["email", "email_verified"]
   write_attributes = ["email"]
 }
+
+# --- Profiles: what a person told us at sign-up -------------------------------
+#
+# One item per account, keyed by the owner id ("cognito:<sub>"). Holds the
+# name, birth year, favourite genres and guitar level. On-demand billing, so it
+# costs nothing while empty. It is people's data, so it cannot be destroyed by
+# accident and has point-in-time recovery.
+
+resource "aws_dynamodb_table" "profiles" {
+  count        = local.cognito_on ? 1 : 0
+  name         = "${local.name_prefix}-profiles"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "owner_id"
+
+  attribute {
+    name = "owner_id"
+    type = "S"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  deletion_protection_enabled = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}

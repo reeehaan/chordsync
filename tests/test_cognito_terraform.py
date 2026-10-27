@@ -100,3 +100,33 @@ def test_testers_can_be_added_while_ses_is_in_the_sandbox():
     recipient = _block(COGNITO, 'resource "aws_ses_email_identity" "test_recipient"')
     assert "local.cognito_on ? toset(var.cognito_test_recipient_emails) : toset([])" in recipient
     assert "sender" not in recipient  # never confused with the one sender identity
+
+
+PROFILES = _code(_block(COGNITO, 'resource "aws_dynamodb_table" "profiles"'))
+
+
+def test_the_profile_table_is_protected_and_only_exists_with_accounts():
+    assert "count        = local.cognito_on ? 1 : 0" in PROFILES
+    assert 'hash_key     = "owner_id"' in PROFILES
+    assert 'billing_mode = "PAY_PER_REQUEST"' in PROFILES
+    assert "deletion_protection_enabled = true" in PROFILES
+    assert "prevent_destroy = true" in PROFILES
+    assert "point_in_time_recovery" in PROFILES and "server_side_encryption" in PROFILES
+
+
+def test_the_api_can_only_get_and_update_profiles():
+    statement = _code(_block(API, 'dynamic "statement" {\n    for_each = local.cognito_on'))
+    assert 'sid       = "Profiles"' in statement
+    actions = re.search(r"actions\s*=\s*\[(.*?)\]", statement, re.S).group(1)
+    assert set(re.findall(r'"([\w:]+)"', actions)) == {"dynamodb:GetItem", "dynamodb:UpdateItem"}
+    assert "aws_dynamodb_table.profiles[0].arn" in statement
+    assert "local.cognito_on ? [1] : []" in statement  # no accounts, no permission
+
+
+def test_profile_saving_is_throttled_like_the_other_writes_and_the_api_knows_the_table():
+    writes = re.search(r"api_write_routes = \[(.*?)\]", API, re.S).group(1)
+    assert '"PUT /me/profile"' in writes and '"GET /me/profile"' not in writes
+    assert re.search(
+        r"CHORDSYNC_DYNAMODB_PROFILE_TABLE\s+= local.cognito_on \? aws_dynamodb_table.profiles\[0\].name : \"\"",
+        _block(API, "environment {"),
+    )

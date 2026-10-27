@@ -111,16 +111,23 @@ def test_the_api_policy_is_exactly_the_intended_set():
         "kms:Decrypt",  # only inside the optional customer-managed-key statement
         # Scan is read-only and only lists finished songs for the shared library.
         "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Scan",
+        # UpdateItem only for saving a profile, on the profiles table (see below).
+        "dynamodb:UpdateItem",
         "sqs:SendMessage",
         "lambda:InvokeFunction",
         "logs:CreateLogStream", "logs:PutLogEvents",
     }
     for forbidden in (
-        "s3:*", "ecs:", "iam:", "models/", "UpdateItem", "lambda:*",
+        "s3:*", "ecs:", "iam:", "models/", "lambda:*",
         "ssm:*", "GetParametersByPath", "GetParameters\"", "secretsmanager", "kms:*",
     ):
         assert forbidden not in policy, forbidden
     assert 'resources = ["*"]' not in policy
+    # UpdateItem exists once, in the Profiles statement, and only for that table.
+    assert policy.count("UpdateItem") == 1
+    profiles = _block(policy, 'dynamic "statement" {\n    for_each = local.cognito_on')
+    assert "dynamodb:UpdateItem" in profiles and "aws_dynamodb_table.profiles[0].arn" in profiles
+    assert "aws_dynamodb_table.jobs" not in profiles
     # source prefix: the object statement and the ListBucket prefix condition
     assert policy.count("jobs/*/source/*") == 2 and policy.count("jobs/*/results/*") == 1
     # The shared library signs download links for playback audio, read-only and
@@ -148,7 +155,7 @@ def test_api_gateway_is_a_plain_https_http_api():
 
 
 def test_only_the_hosted_routes_are_exposed():
-    routes = set(re.findall(r'^\s+"((?:GET|POST) [^"]+)",', _list(API, "api_routes = ["), re.MULTILINE))
+    routes = set(re.findall(r'^\s+"((?:GET|POST|PUT) [^"]+)",', _list(API, "api_routes = ["), re.MULTILINE))
     assert routes == {
         "GET /",
         "GET /health",
@@ -162,6 +169,8 @@ def test_only_the_hosted_routes_are_exposed():
         "GET /analysis/library/{job_id}/audio",
         "GET /analysis/mine",
         "GET /analysis/mine/{job_id}/audio",
+        "GET /me/profile",
+        "PUT /me/profile",
     }
     assert "$default" not in _list(API, "api_routes = [")  # no catch-all route
     assert "audio/upload" not in API  # the legacy multipart route never reaches Lambda
