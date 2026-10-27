@@ -8,9 +8,17 @@ import 'package:chordsync/features/analysis/data/analysis_job.dart';
 import 'package:chordsync/features/analysis/data/analyzed_session_library.dart';
 import 'package:chordsync/features/analysis/data/cloud_library_api.dart';
 import 'package:chordsync/features/analysis/presentation/library_home.dart';
+import 'package:chordsync/features/auth/application/auth_controller.dart';
+import 'package:chordsync/features/auth/application/profile_controller.dart';
+import 'package:chordsync/features/auth/data/auth_token_store.dart';
+import 'package:chordsync/features/auth/data/profile_api.dart';
+import 'package:chordsync/features/auth/data/profile_store.dart';
+import 'package:chordsync/features/auth/data/user_profile.dart';
 import 'package:chordsync/features/practice_timeline/data/shared_timeline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../auth/fake_cognito.dart';
 
 const _sudu = '11111111-aaaa-4bbb-8ccc-000000000001';
 const _tum = '22222222-aaaa-4bbb-8ccc-000000000002';
@@ -101,7 +109,30 @@ void main() {
     }
   }
 
-  Future<void> pump(WidgetTester tester, {bool withCloud = true}) async {
+  /// Scrolls the page itself (not a sideways shelf) until [finder] can be tapped.
+  Future<void> bringIntoView(WidgetTester tester, Finder finder) async {
+    final page = find.byType(ListView).first;
+    final screen =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    for (var i = 0; i < 60 && tester.getCenter(finder).dy > screen - 90; i++) {
+      await tester.drag(page, const Offset(0, -150));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+  }
+
+  /// Brings a tile into view, then taps it (the shelves are below the fold).
+  Future<void> tapTile(WidgetTester tester, Finder finder) async {
+    await bringIntoView(tester, finder);
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pump(
+    WidgetTester tester, {
+    bool withCloud = true,
+    ProfileController? profile,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -114,6 +145,7 @@ void main() {
                 onOpen: (_) {},
                 onAddSong: () {},
                 cloud: withCloud ? cloud : null,
+                profile: profile,
               );
             },
           ),
@@ -123,38 +155,123 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('lists the cloud songs under "From the cloud"', (tester) async {
+  testWidgets('shows the cloud songs to discover, with a banner', (
+    tester,
+  ) async {
     await pump(tester);
 
     expect(api.listCalls, 1);
-    expect(find.text('From the cloud'), findsOneWidget);
+    expect(find.text('Discover'), findsOneWidget);
+    expect(find.byKey(const ValueKey('heroBanner')), findsOneWidget);
+    expect(find.text('Picked for you'), findsOneWidget);
+    // These songs have no genre yet, so they sit on one "More songs" shelf.
+    expect(find.byKey(const ValueKey('shelf-more')), findsOneWidget);
     expect(find.text('Sudu Gawuma'), findsOneWidget);
     expect(find.text('La Signore'), findsOneWidget);
-    expect(find.text('3:36'), findsNWidgets(3));
-    expect(find.byKey(ValueKey('downloadCloudSong-$_sudu')), findsOneWidget);
+    expect(find.byKey(ValueKey('cloudSong-$_sudu')), findsOneWidget);
+    expect(
+      find.text('Browse all genres'),
+      findsNothing,
+    ); // there are no genres to browse
   });
 
-  testWidgets('a tagged song shows its genres and the server\'s artist', (
-    tester,
-  ) async {
-    api.songs = [
-      CloudSong(
-        jobId: 'tagged',
-        title: 'Duvet',
-        createdAt: DateTime.utc(2026, 10, 23),
-        durationSeconds: 215.5,
-        artist: 'Bôa',
-        genres: const ['Rock', 'Indie'],
-      ),
-      _song('plain', 'Lemon'),
-    ];
-    await pump(tester);
+  testWidgets(
+    'each genre gets a shelf and a tile, and songs sit on every shelf they belong to',
+    (tester) async {
+      api.songs = _tagged();
+      await pump(tester);
 
-    expect(find.text('Bôa'), findsOneWidget);
-    expect(find.text('Rock · Indie'), findsOneWidget);
-    expect(find.byKey(const ValueKey('cloudGenres-tagged')), findsOneWidget);
-    expect(find.byKey(const ValueKey('cloudGenres-plain')), findsNothing);
-  });
+      for (final genre in ['Sinhala', 'Pop', 'Rock']) {
+        expect(
+          find.byKey(ValueKey('shelf-$genre'), skipOffstage: false),
+          findsOneWidget,
+        );
+      }
+      final pop = find.descendant(
+        of: find.byKey(const ValueKey('shelf-Pop'), skipOffstage: false),
+        matching: find.byType(GestureDetector),
+        skipOffstage: false,
+      );
+      expect(pop, findsWidgets);
+      await bringIntoView(tester, find.byKey(const ValueKey('genreTile-Rock')));
+      expect(find.text('Browse all genres'), findsOneWidget);
+      expect(find.byKey(const ValueKey('genreTile-Rock')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    '"See all" opens the genre page with a banner and every song of the genre',
+    (tester) async {
+      api.songs = _tagged();
+      await pump(tester);
+
+      await tapTile(tester, find.byKey(const ValueKey('seeAll-Sinhala')));
+
+      expect(find.text('Sinhala'), findsWidgets);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('genreCount'))).data,
+        '2 songs',
+      );
+      expect(
+        find.text('Sinhala · Pop'),
+        findsOneWidget,
+      ); // a song in two genres
+      expect(find.text('Wonderwall'), findsNothing); // a Rock song is not here
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Discover'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'the person\'s favourite genres come first, and the banner says why',
+    (tester) async {
+      api.songs = _tagged();
+      final taste = await _profile(['Rock', 'Pop']);
+      await pump(tester, profile: taste);
+
+      expect(find.text('Because you like Rock and Pop'), findsOneWidget);
+      final rock = tester.getTopLeft(find.byKey(const ValueKey('shelf-Rock')));
+      final pop = tester.getTopLeft(find.byKey(const ValueKey('shelf-Pop')));
+      final sinhala = tester.getTopLeft(
+        find.byKey(const ValueKey('shelf-Sinhala'), skipOffstage: false),
+      );
+      expect(rock.dy, lessThan(pop.dy));
+      expect(pop.dy, lessThan(sinhala.dy));
+    },
+  );
+
+  testWidgets(
+    'a tagged song shows the server\'s artist, and its genres in the sheet',
+    (tester) async {
+      api.songs = [
+        CloudSong(
+          jobId: 'tagged',
+          title: 'Duvet',
+          createdAt: DateTime.utc(2026, 10, 23),
+          durationSeconds: 215.5,
+          artist: 'Bôa',
+          genres: const ['Rock', 'Indie'],
+        ),
+      ];
+      await pump(tester);
+
+      expect(find.text('Bôa'), findsWidgets);
+      await tapTile(
+        tester,
+        find.byKey(const ValueKey('cloudSong-tagged')).first,
+      );
+
+      expect(find.text('Duvet'), findsWidgets);
+      expect(find.widgetWithText(Chip, 'Rock'), findsOneWidget);
+      expect(find.widgetWithText(Chip, 'Indie'), findsOneWidget);
+      expect(find.text('3:36'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('downloadCloudSong-tagged')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('search finds cloud songs by genre', (tester) async {
     sessions = [
@@ -186,6 +303,64 @@ void main() {
     expect(find.byKey(const ValueKey('cloudSong-b')), findsNothing);
   });
 
+  testWidgets(
+    'a long list of your own songs shows five, with a button for the rest',
+    (tester) async {
+      sessions = [
+        for (var i = 1; i <= 7; i++)
+          _session(documents, '4444444$i-aaaa-4bbb-8ccc-00000000000$i'),
+      ];
+      api.songs = [];
+      await pump(tester);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('toggleAllSaved')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Show all 7 songs'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w.key.toString().contains('savedPractice-'),
+          skipOffstage: false,
+        ),
+        findsNWidgets(5),
+      );
+
+      await tester.ensureVisible(find.byKey(const ValueKey('toggleAllSaved')));
+      await tester.tap(find.byKey(const ValueKey('toggleAllSaved')));
+      await tester.pumpAndSettle();
+      // Seven songs are listed now, so the button has moved further down.
+      await tester.scrollUntilVisible(
+        find.text('Show fewer'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Show fewer'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w.key.toString().contains('savedPractice-'),
+          skipOffstage: false,
+        ),
+        findsNWidgets(7),
+      );
+    },
+  );
+
+  testWidgets('five songs or fewer need no button', (tester) async {
+    sessions = [
+      for (var i = 1; i <= 5; i++)
+        _session(documents, '5555555$i-aaaa-4bbb-8ccc-00000000000$i'),
+    ];
+    api.songs = [];
+    await pump(tester);
+
+    expect(
+      find.byKey(const ValueKey('toggleAllSaved'), skipOffstage: false),
+      findsNothing,
+    );
+  });
+
   testWidgets('songs already on the phone are not offered again', (
     tester,
   ) async {
@@ -204,6 +379,7 @@ void main() {
     downloader.gate = Completer<void>();
     await pump(tester);
 
+    await tapTile(tester, find.byKey(ValueKey('cloudSong-$_sudu')));
     await tester.tap(find.byKey(ValueKey('downloadCloudSong-$_sudu')));
     await tester.pump();
     await tester.pump();
@@ -212,28 +388,39 @@ void main() {
 
     downloader.gate!.complete();
     await letFilesSettle(tester);
+    await tester.pumpAndSettle();
 
     expect(sessions.single.job.jobId, _sudu);
     expect(sessions.single.audioFile.existsSync(), isTrue);
-    expect(find.byKey(ValueKey('cloudSong-$_sudu')), findsNothing);
+    expect(
+      find.byKey(ValueKey('cloudProgress-$_sudu')),
+      findsNothing,
+    ); // the sheet closed
+    expect(
+      find.byKey(ValueKey('cloudSong-$_sudu')),
+      findsNothing,
+    ); // off the shelf
     expect(find.byKey(ValueKey('savedPractice-$_sudu')), findsOneWidget);
   });
 
-  testWidgets('a failed download says so and offers a retry', (tester) async {
+  testWidgets('a failed download says so and offers to try again', (
+    tester,
+  ) async {
     downloader.error = const SocketException('offline');
     await pump(tester);
 
+    await tapTile(tester, find.byKey(ValueKey('cloudSong-$_sudu')));
     await tester.tap(find.byKey(ValueKey('downloadCloudSong-$_sudu')));
     await letFilesSettle(tester);
 
     expect(find.byKey(ValueKey('cloudError-$_sudu')), findsOneWidget);
     expect(sessions, isEmpty);
-    // The song is still offered, now as Retry.
-    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget); // the sheet stays open
 
     downloader.error = null;
     await tester.tap(find.byKey(ValueKey('downloadCloudSong-$_sudu')));
     await letFilesSettle(tester);
+    await tester.pumpAndSettle();
     expect(sessions.single.job.jobId, _sudu);
   });
 
@@ -284,9 +471,78 @@ void main() {
   testWidgets('no cloud section when the app has no cloud', (tester) async {
     await pump(tester, withCloud: false);
 
-    expect(find.text('From the cloud'), findsNothing);
+    expect(find.text('Discover'), findsNothing);
+    expect(find.byKey(const ValueKey('heroBanner')), findsNothing);
     expect(api.listCalls, 0);
   });
+}
+
+/// Five songs: two Sinhala (one also Pop), a Pop one, a Rock one, and a Rock-Indie one.
+List<CloudSong> _tagged() => [
+  CloudSong(
+    jobId: 's1',
+    title: 'Sandapana Wage',
+    createdAt: DateTime.utc(2026, 10, 1),
+    genres: const ['Sinhala'],
+  ),
+  CloudSong(
+    jobId: 's2',
+    title: 'Pem Lowe',
+    createdAt: DateTime.utc(2026, 10, 2),
+    genres: const ['Sinhala', 'Pop'],
+  ),
+  CloudSong(
+    jobId: 'p1',
+    title: 'Lemon',
+    createdAt: DateTime.utc(2026, 10, 3),
+    genres: const ['Pop'],
+  ),
+  CloudSong(
+    jobId: 'r1',
+    title: 'Wonderwall',
+    createdAt: DateTime.utc(2026, 10, 4),
+    genres: const ['Rock', 'Indie'],
+  ),
+  CloudSong(
+    jobId: 'r2',
+    title: 'Duvet',
+    createdAt: DateTime.utc(2026, 10, 5),
+    genres: const ['Rock'],
+  ),
+];
+
+class _SavedProfileApi implements ProfileApi {
+  _SavedProfileApi(this.profile);
+  final UserProfile profile;
+  @override
+  Future<UserProfile?> fetch() async => profile;
+  @override
+  Future<UserProfile> save(UserProfile profile) async => profile;
+}
+
+/// A signed-in person whose profile lists these favourite genres.
+Future<ProfileController> _profile(List<String> genres) async {
+  final cognito = FakeCognito();
+  final auth = AuthController(
+    api: cognito,
+    store: MemoryAuthTokenStore(cognito.tokens('kim@example.com')),
+    clock: () => DateTime.utc(2026, 1, 1, 0, 10),
+  );
+  final controller = ProfileController(
+    api: _SavedProfileApi(
+      UserProfile(
+        name: 'Kim',
+        birthYear: 2000,
+        genres: genres,
+        experience: GuitarExperience.beginner,
+      ),
+    ),
+    store: MemoryProfileStore(),
+    auth: auth,
+  );
+  await auth.restore();
+  await controller.sync();
+  return controller;
 }
 
 CloudSong _song(String id, String title) => CloudSong(

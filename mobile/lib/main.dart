@@ -245,6 +245,7 @@ class _MyAppState extends State<MyApp> {
           practiceSessionFactory: widget.sessionFactory,
           sessionLibrary: _sessionLibrary,
           cloudLibrary: _cloudLibrary,
+          profile: _profileController,
           accountButton: _auth == null
               ? null
               : AccountButton(auth: _auth!, profile: _profileController),

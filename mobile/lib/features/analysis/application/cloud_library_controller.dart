@@ -20,6 +20,7 @@ class CloudLibraryController extends ChangeNotifier {
   List<CloudSong> _songs = const [];
   final Map<String, double> _progress = {};
   final Map<String, String> _errors = {};
+  final Set<String> _saved = {};
   bool _disposed = false;
 
   CloudLibraryStatus get status => _status;
@@ -29,6 +30,10 @@ class CloudLibraryController extends ChangeNotifier {
   double? progressOf(String jobId) => _progress[jobId];
   bool isDownloading(String jobId) => _progress.containsKey(jobId);
   String? errorOf(String jobId) => _errors[jobId];
+
+  /// True once the song has been saved on this phone from here, so lists stop
+  /// offering it even before the saved-songs list has caught up.
+  bool isSaved(String jobId) => _saved.contains(jobId);
 
   Future<void> refresh() async {
     if (_status == CloudLibraryStatus.loading) return;
@@ -57,6 +62,7 @@ class CloudLibraryController extends ChangeNotifier {
         },
       );
       _progress.remove(song.jobId);
+      _saved.add(song.jobId);
       _notify();
       onDownloaded?.call(session);
     } on Object {

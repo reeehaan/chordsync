@@ -10,6 +10,9 @@ import '../application/analyzed_practice_session.dart';
 import '../application/cloud_library_controller.dart';
 import '../data/cloud_library_api.dart';
 import '../data/embedded_cover_art.dart';
+import '../../auth/application/profile_controller.dart';
+import 'cover_tile.dart';
+import 'discover_section.dart';
 import 'upload_theme.dart';
 
 /// The "Your songs" tab listing previously analyzed practice sessions.
@@ -21,6 +24,7 @@ class LibraryHome extends StatefulWidget {
     required this.onAddSong,
     this.cloud,
     this.accountButton,
+    this.profile,
   });
 
   final List<AnalyzedPracticeSession> sessions;
@@ -34,6 +38,9 @@ class LibraryHome extends StatefulWidget {
   /// Shown beside the title when the app has accounts; null otherwise.
   final Widget? accountButton;
 
+  /// The signed-in person's profile, for ordering the genre shelves by their taste.
+  final ProfileController? profile;
+
   @override
   State<LibraryHome> createState() => _LibraryHomeState();
 }
@@ -41,6 +48,10 @@ class LibraryHome extends StatefulWidget {
 class _LibraryHomeState extends State<LibraryHome> {
   final TextEditingController _search = TextEditingController();
   String _query = '';
+  bool _showAllSaved = false;
+
+  /// How many of the person's own songs show before "Show all".
+  static const _recentCount = 5;
 
   @override
   void initState() {
@@ -77,6 +88,14 @@ class _LibraryHomeState extends State<LibraryHome> {
       .where((word) => word.isNotEmpty)
       .toList();
 
+  /// The genres the person picked at sign-up, in the order they chose them.
+  List<String> get _favourites => widget.profile?.profile?.genres ?? const [];
+
+  /// Changes in the cloud list or in the person's profile redraw the shelves.
+  Listenable _tasteAnd(CloudLibraryController cloud) => widget.profile == null
+      ? cloud
+      : Listenable.merge([cloud, widget.profile!]);
+
   /// Cloud songs not already on this phone that match the search.
   List<CloudSong> _cloudMatches(CloudLibraryController cloud) {
     final onPhone = {for (final s in widget.sessions) s.job.jobId};
@@ -84,6 +103,7 @@ class _LibraryHomeState extends State<LibraryHome> {
     return [
       for (final song in cloud.songs)
         if (!onPhone.contains(song.jobId) &&
+            !cloud.isSaved(song.jobId) &&
             _containsAll(_cloudHaystack(song), words))
           song,
     ];
@@ -147,6 +167,18 @@ class _LibraryHomeState extends State<LibraryHome> {
             ).textTheme.bodyLarge?.copyWith(color: UploadPalette.secondaryText),
           ),
           const SizedBox(height: 20),
+          if (widget.cloud case final cloud? when !searching)
+            ListenableBuilder(
+              listenable: _tasteAnd(cloud),
+              builder: (context, _) => Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: DiscoverHero(
+                  songs: _cloudMatches(cloud),
+                  cloud: cloud,
+                  favourites: _favourites,
+                ),
+              ),
+            ),
           if (sessions.isNotEmpty) ...[
             TextField(
               key: const ValueKey('songSearchField'),
@@ -232,7 +264,11 @@ class _LibraryHomeState extends State<LibraryHome> {
                   ),
                 ),
               ),
-            for (final (index, session) in matches.indexed)
+            for (final (index, session)
+                in (searching || _showAllSaved
+                        ? matches
+                        : matches.take(_recentCount))
+                    .indexed)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: StaggeredEntrance(
@@ -248,15 +284,36 @@ class _LibraryHomeState extends State<LibraryHome> {
                   ),
                 ),
               ),
+            if (!searching && matches.length > _recentCount)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const ValueKey('toggleAllSaved'),
+                  onPressed: () =>
+                      setState(() => _showAllSaved = !_showAllSaved),
+                  child: Text(
+                    _showAllSaved
+                        ? 'Show fewer'
+                        : 'Show all ${matches.length} songs',
+                  ),
+                ),
+              ),
           ],
           if (widget.cloud case final cloud?)
             ListenableBuilder(
-              listenable: cloud,
-              builder: (context, _) => _CloudSection(
-                cloud: cloud,
-                songs: _cloudMatches(cloud),
-                searching: searching,
-              ),
+              listenable: _tasteAnd(cloud),
+              builder: (context, _) => searching
+                  ? _CloudSection(
+                      cloud: cloud,
+                      songs: _cloudMatches(cloud),
+                      searching: searching,
+                    )
+                  : DiscoverSection(
+                      cloud: cloud,
+                      songs: _cloudMatches(cloud),
+                      favourites: _favourites,
+                      showHero: false,
+                    ),
             ),
         ],
       ),
@@ -312,7 +369,7 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Row(
             children: [
-              _CoverTile(future: _cover, seed: identity.title),
+              CoverTile(future: _cover, seed: identity.title),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -428,73 +485,6 @@ class _ChordChip extends StatelessWidget {
   }
 }
 
-/// The song's embedded cover art, or a coloured tile with its first letter
-/// when it has none.
-class _CoverTile extends StatelessWidget {
-  const _CoverTile({required this.future, required this.seed});
-
-  final Future<Uint8List?> future;
-  final String seed;
-
-  static const size = 64.0;
-
-  // Warm tones from the Golden Hour theme, so a missing cover still fits.
-  static const _tones = [
-    Color(0xFFA8502A),
-    Color(0xFFD98A33),
-    Color(0xFF6E5A4B),
-    Color(0xFF8C6A3F),
-    Color(0xFFB4663A),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: FutureBuilder<Uint8List?>(
-          future: future,
-          builder: (context, snapshot) {
-            final bytes = snapshot.data;
-            if (bytes == null) return _fallback(context);
-            return Image.memory(
-              bytes,
-              key: const ValueKey('coverArt'),
-              fit: BoxFit.cover,
-              cacheWidth: (size * 3).round(),
-              gaplessPlayback: true,
-              errorBuilder: (context, error, stack) => _fallback(context),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _fallback(BuildContext context) {
-    final letter = seed.trim().isEmpty
-        ? '♪'
-        : String.fromCharCode(seed.trim().runes.first).toUpperCase();
-    final tone =
-        _tones[seed.codeUnits.fold(0, (a, b) => a + b) % _tones.length];
-    return ColoredBox(
-      key: const ValueKey('coverFallback'),
-      color: tone,
-      child: Center(
-        child: Text(
-          letter,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// The songs in the shared library that are not on this phone yet.
 class _CloudSection extends StatelessWidget {
   const _CloudSection({
@@ -597,7 +587,7 @@ class _CloudSongCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            _CoverTile(future: Future.value(null), seed: identity.title),
+            CoverTile(future: Future.value(null), seed: identity.title),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

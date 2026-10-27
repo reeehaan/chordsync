@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../design_system/chordsync_design_system.dart';
 import '../../practice_timeline/application/practice_session_factory.dart';
 import '../../practice_timeline/presentation/practice_screen.dart';
+import '../../auth/application/profile_controller.dart';
 import '../application/analyzed_practice_session.dart';
 import '../application/cloud_library_controller.dart';
 import '../data/analyzed_session_library.dart';
@@ -26,6 +27,7 @@ class AudioImportScreen extends StatefulWidget {
     this.sessionLibrary,
     this.cloudLibrary,
     this.accountButton,
+    this.profile,
     this.bannerInset,
   });
 
@@ -34,6 +36,9 @@ class AudioImportScreen extends StatefulWidget {
 
   /// The account button for the Library header, when the app has accounts.
   final Widget? accountButton;
+
+  /// The signed-in person's profile; their favourite genres order the shelves.
+  final ProfileController? profile;
 
   /// How far the progress banner hangs below the safe area, so the pages can
   /// make room for it.
@@ -228,6 +233,7 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
                   onAddSong: () => _selectTab(1),
                   cloud: widget.cloudLibrary,
                   accountButton: widget.accountButton,
+                  profile: widget.profile,
                 ),
                 _uploadPage(),
                 const TunerHome(),
