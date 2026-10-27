@@ -156,3 +156,9 @@ variable "cognito_sender_email" {
   type        = string
   default     = ""
 }
+
+variable "cognito_test_recipient_emails" {
+  description = "Addresses that may receive sign-in codes while SES is in the sandbox (testers). Each one gets a verification email to click once. Not needed after SES production access."
+  type        = list(string)
+  default     = []
+}

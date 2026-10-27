@@ -92,3 +92,11 @@ def test_the_api_role_gets_no_cognito_permissions_because_it_only_reads_public_k
 def test_only_public_ids_are_exported():
     assert "cognito_user_pool_id" in OUTPUTS and "cognito_app_client_id" in OUTPUTS
     assert "client_secret" not in COGNITO
+
+
+def test_testers_can_be_added_while_ses_is_in_the_sandbox():
+    variable = _block(VARIABLES, 'variable "cognito_test_recipient_emails"')
+    assert "type        = list(string)" in variable and "default     = []" in variable
+    recipient = _block(COGNITO, 'resource "aws_ses_email_identity" "test_recipient"')
+    assert "local.cognito_on ? toset(var.cognito_test_recipient_emails) : toset([])" in recipient
+    assert "sender" not in recipient  # never confused with the one sender identity

@@ -19,6 +19,13 @@ resource "aws_ses_email_identity" "sender" {
   email = var.cognito_sender_email
 }
 
+# While SES is in the sandbox it only delivers to verified addresses, so each
+# tester's address is verified too. This list can be emptied after production access.
+resource "aws_ses_email_identity" "test_recipient" {
+  for_each = local.cognito_on ? toset(var.cognito_test_recipient_emails) : toset([])
+  email    = each.value
+}
+
 resource "aws_cognito_user_pool" "users" {
   count = local.cognito_on ? 1 : 0
   name  = local.cognito_name
