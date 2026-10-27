@@ -247,7 +247,9 @@ class DioCognitoApi implements CognitoApi {
     try {
       response = await _dio.post<Object?>(
         '',
-        data: body,
+        // Sent as ready-made JSON text: Dio only encodes bodies for the plain
+        // "application/json" type, and Cognito rejects anything else.
+        data: jsonEncode(body),
         options: Options(
           // Cognito's content type is not "application/json", so Dio would leave
           // the body as text; it is decoded below.

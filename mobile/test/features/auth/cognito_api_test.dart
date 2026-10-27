@@ -34,7 +34,12 @@ class _Adapter implements HttpClientAdapter {
     }
     targets.add('${options.headers['X-Amz-Target']}');
     contentTypes.add(options.contentType);
-    bodies.add(Map<String, Object?>.from(options.data as Map));
+    // The real service reads JSON text; anything else is a SerializationException.
+    final data = options.data;
+    if (data is! String) {
+      throw StateError('body must be JSON text, was ${data.runtimeType}');
+    }
+    bodies.add(Map<String, Object?>.from(jsonDecode(data) as Map));
     final reply = replies.removeAt(0);
     return ResponseBody.fromString(
       jsonEncode(reply.body),
