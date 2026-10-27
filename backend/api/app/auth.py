@@ -7,7 +7,8 @@ The server keeps only SHA-256 hashes of the tokens, in one SSM parameter:
 
     {"version": 1, "tokens": [{"id": "tester-1", "sha256": "<64 hex>"}]}
 
-A token's owner id is "demo:<id>".
+A token's owner id is "demo:<id>". A signed-in user's Cognito access token (a
+three-part JWT) gives "cognito:<sub>" instead; see cognito_auth.py.
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ from typing import Any, Callable, Mapping, Protocol
 logger = logging.getLogger(__name__)
 
 MAX_TOKEN_CHARS = 256
+# A Cognito access token is a signed JWT of about a kilobyte.
+MAX_JWT_CHARS = 4096
 MIN_TOKEN_CHARS = 16
 DEFAULT_CACHE_SECONDS = 300
 DEFAULT_FAILURE_BACKOFF_SECONDS = 5
@@ -79,9 +82,16 @@ def bearer_token(authorization: str | None) -> str:
     if len(parts) != 2 or parts[0].casefold() != "bearer":
         raise AuthenticationRequiredError
     token = parts[1]
-    if not MIN_TOKEN_CHARS <= len(token) <= MAX_TOKEN_CHARS or not _TOKEN_PATTERN.fullmatch(token):
+    longest = MAX_JWT_CHARS if looks_like_jwt(token) else MAX_TOKEN_CHARS
+    if not MIN_TOKEN_CHARS <= len(token) <= longest or not _TOKEN_PATTERN.fullmatch(token):
         raise AuthenticationRequiredError
     return token
+
+
+def looks_like_jwt(token: str) -> bool:
+    """Three non-empty dot-separated parts. Demo tokens never contain a dot."""
+    parts = token.split(".")
+    return len(parts) == 3 and all(parts)
 
 
 def authenticate(authorization: str | None, provider: VerifierProvider) -> AuthenticatedPrincipal:
@@ -234,6 +244,38 @@ class CachedVerifierProvider:
             raise AuthUnavailableError("verifier unavailable") from error
         logger.error("auth verifier unavailable (%s)", error)
         raise AuthUnavailableError("verifier unavailable") from error
+
+
+class RoutingVerifierProvider:
+    """Sends a JWT-shaped token to the Cognito verifier and anything else to the
+    demo-token verifier. Either side may be absent (None): a token for an absent
+    side is simply not recognised (401). A side that exists but cannot load its
+    keys or verifiers raises AuthUnavailableError (503), as before.
+    """
+
+    def __init__(
+        self,
+        *,
+        demo: VerifierProvider | None,
+        cognito: TokenVerifier | None,
+    ) -> None:
+        if demo is None and cognito is None:
+            raise AuthUnavailableError("no authentication method configured")
+        self._verifier = _RoutingVerifier(demo, cognito)
+
+    def get(self) -> TokenVerifier:
+        return self._verifier
+
+
+class _RoutingVerifier:
+    def __init__(self, demo: VerifierProvider | None, cognito: TokenVerifier | None) -> None:
+        self._demo = demo
+        self._cognito = cognito
+
+    def verify(self, token: str) -> AuthenticatedPrincipal | None:
+        if looks_like_jwt(token):
+            return self._cognito.verify(token) if self._cognito is not None else None
+        return self._demo.get().verify(token) if self._demo is not None else None
 
 
 class SsmDocumentLoader:

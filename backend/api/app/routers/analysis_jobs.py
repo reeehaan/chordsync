@@ -11,10 +11,17 @@ from backend.api.app.auth import (
     AuthUnavailableError,
     CachedVerifierProvider,
     DemoTokenVerifier,
+    RoutingVerifierProvider,
     SsmDocumentLoader,
     StaticVerifierProvider,
     VerifierProvider,
     authenticate,
+)
+from backend.api.app.cognito_auth import (
+    CognitoTokenVerifier,
+    JwksCache,
+    fetch_jwks,
+    issuer_for,
 )
 from backend.api.app.models.analysis_job import (
     AnalysisJobCreateRequest,
@@ -119,18 +126,29 @@ def _auth_provider(hosting: ApiHostingConfig) -> VerifierProvider | None:
 
     Hosted mode always has one. The SSM client is created on first use.
     """
+    demo: VerifierProvider | None = None
     if hosting.demo_token_parameter:
         try:
             import boto3
         except ImportError as error:
             raise AuthUnavailableError("boto3 is unavailable") from error
         client = boto3.session.Session().client("ssm")
-        return CachedVerifierProvider(SsmDocumentLoader(client, hosting.demo_token_parameter))
-    if hosting.demo_token_verifier_document and not hosting.is_hosted:
-        return StaticVerifierProvider(
+        demo = CachedVerifierProvider(SsmDocumentLoader(client, hosting.demo_token_parameter))
+    elif hosting.demo_token_verifier_document and not hosting.is_hosted:
+        demo = StaticVerifierProvider(
             DemoTokenVerifier.from_document(hosting.demo_token_verifier_document)
         )
-    return None
+    cognito = None
+    if hosting.cognito_user_pool_id and hosting.cognito_client_id:
+        issuer = issuer_for(hosting.cognito_user_pool_id)
+        cognito = CognitoTokenVerifier(
+            issuer, hosting.cognito_client_id, JwksCache(lambda: fetch_jwks(issuer))
+        )
+    if demo is None and cognito is None:
+        return None
+    if cognito is None:
+        return demo
+    return RoutingVerifierProvider(demo=demo, cognito=cognito)
 
 
 def get_principal(

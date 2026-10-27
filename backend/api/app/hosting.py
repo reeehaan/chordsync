@@ -13,6 +13,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Mapping
 
+from backend.api.app.cognito_auth import _CLIENT_PATTERN, issuer_for
+
 
 LAMBDA_WRITABLE_ROOT = Path("/tmp")
 DEFAULT_LAMBDA_STAGING_ROOT = LAMBDA_WRITABLE_ROOT / "chordsync-api"
@@ -41,11 +43,17 @@ class ApiHostingConfig:
     demo_token_parameter: str | None = None
     # Local only: the verifier document inline. Ignored when hosted.
     demo_token_verifier_document: str | None = None
+    # Cognito sign-in: the user pool id (such as "ap-southeast-1_AbCdEf123") and
+    # the app client id. Both are set, or neither is.
+    cognito_user_pool_id: str | None = None
+    cognito_client_id: str | None = None
 
     @property
     def auth_enabled(self) -> bool:
         return self.is_hosted or bool(
-            self.demo_token_parameter or self.demo_token_verifier_document
+            self.demo_token_parameter
+            or self.demo_token_verifier_document
+            or self.cognito_user_pool_id
         )
 
     @property
@@ -74,6 +82,7 @@ class ApiHostingConfig:
                 demo_token_verifier_document=(
                     values.get("CHORDSYNC_DEMO_TOKEN_VERIFIER") or None
                 ),
+                **_cognito_settings(values),
             )
 
         runtime_mode = values.get("CHORDSYNC_RUNTIME_MODE", "").strip().casefold()
@@ -91,10 +100,33 @@ class ApiHostingConfig:
             upload_url_ttl_seconds=_upload_ttl(
                 values.get("CHORDSYNC_UPLOAD_URL_TTL_SECONDS")
             ),
+            # The demo-token parameter stays optional once Cognito is set up, so
+            # demo tokens can be switched off for good. Never both absent.
             demo_token_parameter=_parameter_name(
-                values.get("CHORDSYNC_DEMO_TOKEN_PARAMETER"), required=True
+                values.get("CHORDSYNC_DEMO_TOKEN_PARAMETER"),
+                required=not _cognito_settings(values),
             ),
+            **_cognito_settings(values),
         )
+
+
+def _cognito_settings(values: Mapping[str, str]) -> dict[str, str]:
+    """The two Cognito settings, validated, or an empty dict if neither is set."""
+    pool = (values.get("CHORDSYNC_COGNITO_USER_POOL_ID") or "").strip()
+    client = (values.get("CHORDSYNC_COGNITO_CLIENT_ID") or "").strip()
+    if not pool and not client:
+        return {}
+    if not pool or not client:
+        raise HostingConfigurationError(
+            "CHORDSYNC_COGNITO_USER_POOL_ID and CHORDSYNC_COGNITO_CLIENT_ID go together"
+        )
+    try:
+        issuer_for(pool)
+    except ValueError as error:
+        raise HostingConfigurationError("CHORDSYNC_COGNITO_USER_POOL_ID is not valid") from error
+    if not _CLIENT_PATTERN.fullmatch(client):
+        raise HostingConfigurationError("CHORDSYNC_COGNITO_CLIENT_ID is not valid")
+    return {"cognito_user_pool_id": pool, "cognito_client_id": client}
 
 
 _PARAMETER_NAME = re.compile(r"^/?[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
