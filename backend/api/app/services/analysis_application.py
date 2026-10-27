@@ -636,9 +636,9 @@ class CloudAnalysisApplication:
 
     # --- shared library ---
     #
-    # There are no user accounts yet, so every finished song is visible to every
-    # holder of an app token: the library ignores which token created a job.
-    # Once users can sign in, these three methods are where to filter by user.
+    # The shared library is the catalogue: songs analysed before accounts existed.
+    # A signed-in user's own analyses are private (see is_catalogue_job), and these
+    # three methods are the only ones that serve a song to someone other than its owner.
 
     def library(self) -> list[CloudJobRecord]:
         """Finished catalogue songs with a result, newest first. A signed-in

@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import http.client
 import json
+import threading
+import urllib.error
 
 import pytest
 
 from backend.api.app import auth
 from backend.api.app import cognito_auth as ca
 from backend.api.app.hosting import ApiHostingConfig, HostingConfigurationError
+from backend.api.app.routers import analysis_jobs
+from tests import auth_helpers
 from tests import auth_helpers
 
 # Two throwaway 2048-bit RSA keys made for these tests only. They protect nothing.
@@ -93,6 +98,9 @@ def test_a_valid_access_token_gives_a_cognito_principal():
         "only.two",
         "a.b.c.d",
         "..",
+        _b64(b"[" * 3000) + "." + _b64(b"{}") + "." + _b64(b"x"),  # nested JSON must not crash
+        make_token(exp=float("nan")),
+        make_token(exp=float("inf")),
     ],
 )
 def test_every_wrong_token_is_just_not_signed_in(token):
@@ -259,3 +267,189 @@ def test_cognito_settings_come_as_a_pair_and_can_replace_the_demo_parameter():
     ):
         with pytest.raises(HostingConfigurationError):
             ApiHostingConfig.from_env(env)
+
+
+# --- downloading and caching the keys ---
+
+
+class _FakeResponse:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, limit: int = -1) -> bytes:
+        if isinstance(self._body, Exception):
+            raise self._body
+        return self._body if limit < 0 else self._body[:limit]
+
+
+def _serve(monkeypatch, outcome):
+    """Make fetch_jwks see ``outcome``: a body, or an exception raised by the opener."""
+
+    class Opener:
+        def open(self, url, timeout=None):
+            assert url == ISSUER + "/.well-known/jwks.json" and timeout == ca.JWKS_TIMEOUT_SECONDS
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return _FakeResponse(outcome)
+
+    monkeypatch.setattr(ca.urllib.request, "build_opener", lambda *handlers: Opener())
+
+
+def _jwks_body() -> bytes:
+    return json.dumps({"keys": [{
+        "kid": "kid-1", "kty": "RSA", "use": "sig", "alg": "RS256",
+        "n": _b64(KEYS["k1"][0].to_bytes(256, "big")), "e": _b64(E.to_bytes(3, "big")),
+    }]}).encode()
+
+
+def test_a_good_download_gives_the_keys(monkeypatch):
+    _serve(monkeypatch, _jwks_body())
+
+    assert set(ca.fetch_jwks(ISSUER)) == {"kid-1"}
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        urllib.error.HTTPError("u", 302, "redirect refused", {}, None),
+        urllib.error.URLError("no route"),
+        TimeoutError(),
+        http.client.IncompleteRead(b"x"),
+        http.client.BadStatusLine("junk"),
+        b"x" * (ca.JWKS_MAX_BYTES + 1),
+        b"not json",
+        b"[]",
+        b'{"keys": [1]}',
+        b'{"keys": "nope"}',
+        b"[" * 100_000,
+    ],
+)
+def test_a_failed_or_odd_download_is_a_503_never_a_crash(monkeypatch, outcome):
+    _serve(monkeypatch, outcome)
+
+    with pytest.raises(auth.AuthUnavailableError):
+        ca.fetch_jwks(ISSUER)
+
+
+def test_a_failed_first_load_is_retried_after_a_few_seconds_not_minutes():
+    clock = [0.0]
+    attempts = []
+
+    def load():
+        attempts.append(clock[0])
+        if len(attempts) == 1:
+            raise auth.AuthUnavailableError("down")
+        return rsa_keys(**{"kid-1": "k1"})
+
+    cache = ca.JwksCache(load, clock=lambda: clock[0])
+    with pytest.raises(auth.AuthUnavailableError):
+        cache.key("kid-1")
+    clock[0] = 1.0
+    with pytest.raises(auth.AuthUnavailableError):
+        cache.key("kid-1")
+    assert attempts == [0.0]  # backed off, no second download yet
+    clock[0] = 6.0
+    assert cache.key("kid-1") is not None and attempts == [0.0, 6.0]
+
+
+def test_requests_do_not_wait_while_one_caller_refreshes_the_keys():
+    clock = [0.0]
+    entered, release = threading.Event(), threading.Event()
+    loads = []
+
+    def load():
+        loads.append(1)
+        if len(loads) > 1:
+            entered.set()
+            assert release.wait(5)
+        return rsa_keys(**{"kid-1": "k1"})
+
+    cache = ca.JwksCache(load, clock=lambda: clock[0])
+    assert cache.key("kid-1") is not None
+    clock[0] = 4000.0  # stale: the next call refreshes
+    refresher = threading.Thread(target=lambda: cache.key("kid-1"))
+    refresher.start()
+    assert entered.wait(5)
+    try:
+        assert cache.key("kid-1") is not None  # served from the old keys, no waiting
+        assert len(loads) == 2
+    finally:
+        release.set()
+        refresher.join(5)
+
+
+def test_many_first_requests_cause_one_download():
+    loads = []
+    started = threading.Barrier(8)
+
+    def load():
+        loads.append(1)
+        return rsa_keys(**{"kid-1": "k1"})
+
+    cache = ca.JwksCache(load, clock=lambda: 0.0)
+    results = []
+
+    def request():
+        started.wait(5)
+        results.append(cache.key("kid-1"))
+
+    threads = [threading.Thread(target=request) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(5)
+
+    assert len(loads) == 1 and len(results) == 8 and all(results)
+
+
+def test_a_header_with_an_empty_part_is_not_a_jwt():
+    assert auth.looks_like_jwt(make_token())
+    for token in ("a..c", ".b.c", "a.b.", "a.b", "a.b.c.d", ""):
+        assert not auth.looks_like_jwt(token)
+
+
+# --- how the app builds its verifier from settings ---
+
+
+def _config(**values) -> ApiHostingConfig:
+    from backend.api.app.hosting import HostingMode
+
+    return ApiHostingConfig(HostingMode.LAMBDA, **values)
+
+
+@pytest.fixture
+def clear_provider_cache():
+    analysis_jobs._auth_provider.cache_clear()
+    yield
+    analysis_jobs._auth_provider.cache_clear()
+
+
+def test_the_app_builds_the_right_verifier_for_each_configuration(monkeypatch, clear_provider_cache):
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-southeast-1")
+    cognito = {"cognito_user_pool_id": POOL, "cognito_client_id": CLIENT}
+    parameter = "/chordsync/test/demo-tokens"
+
+    both = analysis_jobs._auth_provider(_config(demo_token_parameter=parameter, **cognito))
+    only_cognito = analysis_jobs._auth_provider(_config(**cognito))
+    only_demo = analysis_jobs._auth_provider(_config(demo_token_parameter=parameter))
+    neither = analysis_jobs._auth_provider(_config())
+
+    assert isinstance(both, auth.RoutingVerifierProvider)
+    assert isinstance(only_cognito, auth.RoutingVerifierProvider)
+    assert isinstance(only_demo, auth.CachedVerifierProvider)  # unchanged from before
+    assert neither is None  # hosted with no method is refused later with a 503
+    assert only_cognito.get().verify(auth_helpers.TOKEN_A) is None  # demo tokens are off
+
+
+def test_hosted_with_no_method_configured_answers_503_not_open_access(monkeypatch, clear_provider_cache):
+    from fastapi import Request
+
+    request = Request({"type": "http", "headers": [], "app": type("A", (), {"state": type("S", (), {"hosting": _config()})()})()})
+    with pytest.raises(auth.AuthUnavailableError):
+        analysis_jobs.get_principal(request, authorization=None)

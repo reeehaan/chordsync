@@ -23,7 +23,9 @@ import binascii
 import hashlib
 import hmac
 import json
+import http.client
 import logging
+import math
 import re
 import threading
 import time
@@ -41,6 +43,7 @@ JWKS_UNKNOWN_KEY_REFRESH_SECONDS = 300
 JWKS_MAX_STALE_SECONDS = 24 * 3600
 JWKS_TIMEOUT_SECONDS = 5
 JWKS_MAX_BYTES = 64 * 1024
+JWKS_FAILURE_BACKOFF_SECONDS = 5
 MIN_MODULUS_BITS = 2048
 CLOCK_SKEW_SECONDS = 60
 MAX_TOKEN_LIFETIME_SECONDS = 24 * 3600
@@ -68,6 +71,10 @@ def issuer_for(user_pool_id: str) -> str:
     if match is None:
         raise ValueError("user pool id is malformed")
     return f"https://cognito-idp.{match.group(1)}.amazonaws.com/{user_pool_id}"
+
+
+def is_valid_client_id(value: str) -> bool:
+    return bool(_CLIENT_PATTERN.fullmatch(value))
 
 
 def _b64url(value: str) -> bytes:
@@ -127,18 +134,25 @@ def fetch_jwks(issuer: str) -> dict[str, RsaKey]:
     try:
         with opener.open(url, timeout=JWKS_TIMEOUT_SECONDS) as response:  # noqa: S310 - https only
             body = response.read(JWKS_MAX_BYTES + 1)
-    except (urllib.error.URLError, OSError, ValueError) as error:
+    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as error:
         raise AuthUnavailableError(type(error).__name__) from error
     if len(body) > JWKS_MAX_BYTES:
         raise AuthUnavailableError("jwks too large")
     try:
         return parse_jwks(body)
-    except (ValueError, KeyError, TypeError, binascii.Error) as error:
+    except (
+        ValueError, KeyError, TypeError, AttributeError, OverflowError, RecursionError, binascii.Error
+    ) as error:
         raise AuthUnavailableError("jwks malformed") from error
 
 
 class JwksCache:
-    """Holds the keys. A failed refresh keeps the last good keys for a day."""
+    """Holds the keys. A failed refresh keeps the last good keys for a day.
+
+    Requests never wait on a download while there are keys to use: one caller
+    refreshes, the others carry on with the keys they have. Only the very first
+    load makes callers wait, because there is nothing to serve before it.
+    """
 
     def __init__(
         self,
@@ -148,32 +162,55 @@ class JwksCache:
     ) -> None:
         self._load = load
         self._clock = clock
-        self._lock = threading.Lock()
+        self._refresh_lock = threading.Lock()
         self._keys: dict[str, RsaKey] = {}
         self._loaded_at = 0.0
         self._last_attempt = float("-inf")
+        self._last_failure = float("-inf")
 
     def key(self, kid: str) -> RsaKey | None:
         now = self._clock()
-        with self._lock:
-            fresh = self._keys and now - self._loaded_at < JWKS_CACHE_SECONDS
-            if fresh and kid in self._keys:
-                return self._keys[kid]
-            # Reload when stale, or when the key id is unknown (rotation), but
-            # not more than once every few minutes.
-            if now - self._last_attempt >= JWKS_UNKNOWN_KEY_REFRESH_SECONDS:
-                self._last_attempt = now
-                try:
-                    self._keys = self._load()
-                    self._loaded_at = now
-                except AuthUnavailableError as error:
-                    if not self._keys or now - self._loaded_at > JWKS_MAX_STALE_SECONDS:
-                        self._keys = {}
-                        raise
-                    logger.warning("jwks refresh failed (%s); keeping the last good keys", error)
-            elif not self._keys:
-                raise AuthUnavailableError("jwks unavailable")
+        keys, loaded_at = self._keys, self._loaded_at
+        if keys and now - loaded_at < JWKS_CACHE_SECONDS and kid in keys:
+            return keys[kid]
+        if not keys:
+            return self._first_load(kid, now)
+        # Stale, or an unknown key id (rotation): reload, but not more than once
+        # every few minutes, and never with more than one caller at a time.
+        if now - self._last_attempt < JWKS_UNKNOWN_KEY_REFRESH_SECONDS:
+            return keys.get(kid)
+        if not self._refresh_lock.acquire(blocking=False):
+            return keys.get(kid)
+        try:
+            self._last_attempt = now
+            try:
+                self._store(self._load(), now)
+            except AuthUnavailableError as error:
+                if now - loaded_at > JWKS_MAX_STALE_SECONDS:
+                    self._keys = {}
+                    raise
+                logger.warning("jwks refresh failed (%s); keeping the last good keys", error)
             return self._keys.get(kid)
+        finally:
+            self._refresh_lock.release()
+
+    def _first_load(self, kid: str, now: float) -> RsaKey | None:
+        with self._refresh_lock:  # nothing to serve yet, so callers wait for the one fetch
+            if self._keys:
+                return self._keys.get(kid)
+            if now - self._last_failure < JWKS_FAILURE_BACKOFF_SECONDS:
+                raise AuthUnavailableError("jwks unavailable")
+            try:
+                self._store(self._load(), now)
+            except AuthUnavailableError:
+                self._last_failure = now
+                raise
+            return self._keys.get(kid)
+
+    def _store(self, keys: dict[str, RsaKey], now: float) -> None:
+        self._keys = keys
+        self._loaded_at = now
+        self._last_attempt = now
 
 
 class CognitoTokenVerifier:
@@ -185,7 +222,7 @@ class CognitoTokenVerifier:
         *,
         clock: Callable[[], float] = time.time,
     ) -> None:
-        if not issuer.startswith("https://") or not _CLIENT_PATTERN.fullmatch(client_id):
+        if not issuer.startswith("https://") or not is_valid_client_id(client_id):
             raise ValueError("cognito settings are malformed")
         self._issuer = issuer
         self._client_id = client_id
@@ -200,8 +237,8 @@ class CognitoTokenVerifier:
             header = json.loads(_b64url(header_part))
             payload = json.loads(_b64url(payload_part))
             signature = _b64url(signature_part)
-        except (ValueError, UnicodeDecodeError, binascii.Error):
-            return None
+        except (ValueError, UnicodeDecodeError, binascii.Error, RecursionError):
+            return None  # RecursionError: absurdly nested JSON from an anonymous caller
         if not isinstance(header, dict) or not isinstance(payload, dict):
             return None
         if header.get("alg") != "RS256":  # never "none", never HS256
@@ -239,4 +276,8 @@ class CognitoTokenVerifier:
 
 
 def _is_number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )

@@ -13,7 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Mapping
 
-from backend.api.app.cognito_auth import _CLIENT_PATTERN, issuer_for
+from backend.api.app.cognito_auth import is_valid_client_id, issuer_for
 
 
 LAMBDA_WRITABLE_ROOT = Path("/tmp")
@@ -124,7 +124,7 @@ def _cognito_settings(values: Mapping[str, str]) -> dict[str, str]:
         issuer_for(pool)
     except ValueError as error:
         raise HostingConfigurationError("CHORDSYNC_COGNITO_USER_POOL_ID is not valid") from error
-    if not _CLIENT_PATTERN.fullmatch(client):
+    if not is_valid_client_id(client):
         raise HostingConfigurationError("CHORDSYNC_COGNITO_CLIENT_ID is not valid")
     return {"cognito_user_pool_id": pool, "cognito_client_id": client}
 
