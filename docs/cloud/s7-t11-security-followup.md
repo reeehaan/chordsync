@@ -229,3 +229,30 @@ the guard was attached to group `admin` next to `AdministratorAccess`; the trust
 `ChordSyncTerraformProvisioningPolicy`; user `rehan` has one device,
 `iam-rehan-authenticator`.
 
+
+## Deployment of the code fixes (2026-10-27)
+
+All seven committed fixes (through `ca3dfdf`) are live. Applied by the project owner's
+approval, with MFA entered by the owner.
+
+| Item | Value |
+| --- | --- |
+| API image | `api-ca3dfdf`, `sha256:704743415a6df5583ed8ed9fd237fe380c542046ecbef33cbfa7b65b22da81a0` (was `a89c4d77…`) |
+| Worker image | `worker-ca3dfdf`, `sha256:cc39d58c13931c6788b224dc0670e0c4738c97b42723c831b5d581676bf39191` (was `9977fda8…`) |
+| Worker task definition | revision 21 (was 20) |
+| Plan | 1 to add (a read-only quota lookup), 1 to change (API image), 1 to destroy (task definition revision 20 replaced) |
+| Drift afterwards | 0 to add, 0 to change, 0 to destroy |
+| ECR scan | API 0 CRITICAL / 3 HIGH; worker 2 CRITICAL / 14 HIGH, same as before |
+| Container exceptions | re-bound to the new worker digest; dates unchanged (see `docs/security/container-exceptions.md`) |
+
+Smoke test: the synthetic fixture `tests/fixtures/audio/synthetic_c_am_f_g.wav` through the
+hosted API (job `a0f14f47-d99e-4ba9-825c-367605ada138`): create 201, upload 200, confirm
+202, `completed` about 163 s after confirm, result 200. No errors in the worker log.
+
+Rollback: apply with `api_image_digest=sha256:a89c4d77…` and
+`worker_image_digest=sha256:9977fda8…` (both images are kept in ECR).
+
+Image cleanup the same day: ECR keeps the current image and the two before it
+(worker `worker-ca3dfdf`, `worker-e974aff`, `worker-6d3b1b3`; API `api-ca3dfdf`,
+`api-5ccbd47-library`, `api-e0f82a3`). Twelve older worker images and one API image were
+deleted. The local Docker images and build cache were trimmed the same way.
