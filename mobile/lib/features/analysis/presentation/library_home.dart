@@ -20,6 +20,7 @@ class LibraryHome extends StatefulWidget {
     required this.onOpen,
     required this.onAddSong,
     this.cloud,
+    this.accountButton,
   });
 
   final List<AnalyzedPracticeSession> sessions;
@@ -29,6 +30,9 @@ class LibraryHome extends StatefulWidget {
   /// The shared library in the cloud. Null when the app has no cloud to ask
   /// (local development), and the section is then left out.
   final CloudLibraryController? cloud;
+
+  /// Shown beside the title when the app has accounts; null otherwise.
+  final Widget? accountButton;
 
   @override
   State<LibraryHome> createState() => _LibraryHomeState();
@@ -122,7 +126,18 @@ class _LibraryHomeState extends State<LibraryHome> {
           32 + MediaQuery.paddingOf(context).bottom,
         ),
         children: [
-          Text('Your songs', style: Theme.of(context).textTheme.displayMedium),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  'Your songs',
+                  style: Theme.of(context).textTheme.displayMedium,
+                ),
+              ),
+              if (widget.accountButton != null) widget.accountButton!,
+            ],
+          ),
           const SizedBox(height: 8),
           Text(
             'Pick up where you left off.',

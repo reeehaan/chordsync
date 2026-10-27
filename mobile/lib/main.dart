@@ -17,6 +17,13 @@ import 'features/analysis/data/sample_song.dart';
 import 'features/analysis/presentation/analysis_progress_banner.dart';
 import 'features/analysis/presentation/audio_file_selector.dart';
 import 'features/analysis/presentation/page_route_tracker.dart';
+import 'features/auth/application/auth_controller.dart';
+import 'features/auth/data/auth_token_store.dart';
+import 'features/auth/data/cognito_api.dart';
+import 'features/auth/data/cognito_config.dart';
+import 'features/auth/data/profile_store.dart';
+import 'features/auth/presentation/account_button.dart';
+import 'features/auth/presentation/auth_gate.dart';
 import 'features/splash/chordsync_splash_screen.dart';
 import 'features/splash/splash_sound.dart';
 import 'features/analysis/presentation/audio_import_controller.dart';
@@ -44,7 +51,15 @@ class MyApp extends StatefulWidget {
     this.fileSelector,
     this.showSplash = false,
     this.splashSound,
+    this.authController,
+    this.profileStore,
   });
+
+  /// Signs people in. Made from the build settings when null, and only when the
+  /// build names a Cognito app client; without one the app opens straight on
+  /// the home screen, as before.
+  final AuthController? authController;
+  final ProfileStore? profileStore;
 
   /// Plays the opening animation before the first screen. Off by default so
   /// tests and fixtures open straight on their screen.
@@ -68,6 +83,9 @@ class _MyAppState extends State<MyApp> {
   AudioImportController? _importController;
   AnalyzedSessionLibrary? _sessionLibrary;
   CloudLibraryController? _cloudLibrary;
+  AuthController? _auth;
+  late final ProfileStore _profiles =
+      widget.profileStore ?? SecureProfileStore();
 
   bool get _usesPracticeFixture =>
       widget.audioPlayer != null || widget.analyzedSession != null;
@@ -76,10 +94,27 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     if (!_usesPracticeFixture) {
+      _auth = widget.authController ?? _createAuthController();
       _sessionLibrary = _withSample(LocalAnalyzedSessionLibrary());
       _importController = widget.importController ?? _createImportController();
       _cloudLibrary = _createCloudLibrary();
     }
+  }
+
+  AuthController? _createAuthController() {
+    const cognito = CognitoConfig.fromEnvironment;
+    if (!cognito.isConfigured) return null;
+    return AuthController(
+      api: DioCognitoApi(config: cognito),
+      store: SecureAuthTokenStore(),
+    )..restore();
+  }
+
+  /// The token each API request carries: the signed-in person's own when the
+  /// app has sign-in, otherwise the build-time demo token.
+  Future<String?> Function() _tokenProvider(AnalysisApiConfig config) {
+    final auth = _auth;
+    return auth == null ? () async => config.authToken : auth.accessToken;
   }
 
   /// The shared library only exists on the hosted API; local development has
@@ -91,7 +126,7 @@ class _MyAppState extends State<MyApp> {
       service: CloudLibraryService(
         api: DioHostedAnalysisApi(
           baseUrl: config.baseUrl,
-          tokenProvider: () => config.authToken,
+          tokenProvider: _tokenProvider(config),
         ),
         library: _sessionLibrary!,
       ),
@@ -140,7 +175,7 @@ class _MyAppState extends State<MyApp> {
     return HostedAnalysisClient(
       api: DioHostedAnalysisApi(
         baseUrl: config.baseUrl,
-        tokenProvider: () => config.authToken,
+        tokenProvider: _tokenProvider(config),
       ),
       // A separate plain client: the bearer token must never reach storage.
       uploader: DioPresignedUploader(),
@@ -167,6 +202,7 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     _importController?.dispose();
     _cloudLibrary?.dispose();
+    if (widget.authController == null) _auth?.dispose();
     _bannerInset.dispose();
     super.dispose();
   }
@@ -188,8 +224,17 @@ class _MyAppState extends State<MyApp> {
           practiceSessionFactory: widget.sessionFactory,
           sessionLibrary: _sessionLibrary,
           cloudLibrary: _cloudLibrary,
+          accountButton: _auth == null ? null : AccountButton(auth: _auth!),
           bannerInset: _bannerInset,
         );
+
+  /// With sign-in set up, the app opens on the welcome screens until someone
+  /// signs in.
+  Widget _gated(Widget home) {
+    final auth = _auth;
+    if (auth == null) return home;
+    return AuthGate(auth: auth, profiles: _profiles, signedIn: home);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +283,7 @@ class _MyAppState extends State<MyApp> {
           child: AnimatedSwitcher(
             duration: ChordSyncMotion.of(context, ChordSyncMotion.quick),
             child: _splashDone
-                ? _home()
+                ? _gated(_home())
                 : ChordSyncSplashScreen(
                     sound: _splashSound,
                     onFinished: () => setState(() => _splashDone = true),

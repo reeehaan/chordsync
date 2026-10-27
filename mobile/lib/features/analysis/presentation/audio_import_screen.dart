@@ -25,11 +25,15 @@ class AudioImportScreen extends StatefulWidget {
     this.practiceSessionFactory,
     this.sessionLibrary,
     this.cloudLibrary,
+    this.accountButton,
     this.bannerInset,
   });
 
   /// The shared library in the cloud, or null when the app has none.
   final CloudLibraryController? cloudLibrary;
+
+  /// The account button for the Library header, when the app has accounts.
+  final Widget? accountButton;
 
   /// How far the progress banner hangs below the safe area, so the pages can
   /// make room for it.
@@ -223,6 +227,7 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
                   onOpen: _openSavedPractice,
                   onAddSong: () => _selectTab(1),
                   cloud: widget.cloudLibrary,
+                  accountButton: widget.accountButton,
                 ),
                 _uploadPage(),
                 const TunerHome(),
