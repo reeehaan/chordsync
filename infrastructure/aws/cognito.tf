@@ -35,8 +35,13 @@ resource "aws_cognito_user_pool" "users" {
     case_sensitive = false
   }
 
+  # AWS refuses a pool without PASSWORD here ("Password should be configured as
+  # one of the allowed first auth factors"). Accounts are created without a
+  # password and the app only ever asks for EMAIL_OTP, so nobody has a password
+  # unless they run Cognito's forgot-password flow, which also needs a code sent
+  # to their own inbox.
   sign_in_policy {
-    allowed_first_auth_factors = ["EMAIL_OTP"]
+    allowed_first_auth_factors = ["PASSWORD", "EMAIL_OTP"]
   }
 
   # Anyone with the app can create an account; nobody is created by an admin.

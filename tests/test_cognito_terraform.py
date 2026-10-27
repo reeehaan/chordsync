@@ -38,8 +38,10 @@ def test_accounts_are_off_unless_asked_for_so_existing_plans_do_not_change():
         assert re.search(rf'resource "{resource}" "\w+" \{{\s+count\s+= local.cognito_on \? 1 : 0', COGNITO)
 
 
-def test_sign_in_is_an_email_code_with_no_password_and_no_admin_only_signup():
-    assert 'allowed_first_auth_factors = ["EMAIL_OTP"]' in POOL
+def test_sign_in_is_an_email_code_and_accounts_are_created_without_a_password():
+    # AWS requires PASSWORD in the list; EMAIL_OTP is what the app uses.
+    assert 'allowed_first_auth_factors = ["PASSWORD", "EMAIL_OTP"]' in POOL
+    assert "SMS_OTP" not in POOL and "WEB_AUTHN" not in POOL
     assert 'user_pool_tier      = "ESSENTIALS"' in POOL  # email codes need Essentials or higher
     assert 'username_attributes      = ["email"]' in POOL
     assert 'auto_verified_attributes = ["email"]' in POOL
