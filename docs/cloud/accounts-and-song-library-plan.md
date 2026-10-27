@@ -151,3 +151,36 @@ Findings from building it:
 
 Still to do in Phase 1: the app's sign-in screens, secure token storage and sign-out; a real
 sign-in test; then switching the demo token off.
+
+## Genres for songs (decided 2026-10-27)
+
+Every analysed song gets `genres` (from our fixed list of 20, the same list people pick
+from at sign-up), `artist` and `genre_source` (`file_tag`, `lookup`, `fingerprint` or
+`user`). The source is tried cheapest first, and the person can always correct the result
+when the analysis finishes ("We think this is Pop. Change?").
+
+1. **The file's own tags.** The worker already runs `ffprobe`, which reads artist, title
+   and genre from MP3 and M4A files. Free, but genre is often missing or odd.
+2. **A text lookup.** With an artist and title, ask MusicBrainz for the song's genre tags.
+   Only text is sent, never audio, with the same size and time limits as the lyrics lookup.
+3. **A fingerprint lookup**, for files with no tags. The Chromaprint fingerprint already
+   planned for duplicate matching is sent to AcoustID, which names the song. This is the
+   same step as the duplicate check.
+4. **The person decides.** The genre chips from sign-up, shown at the end of the analysis.
+
+Free labels ("alternative rock") are mapped onto the fixed list. A machine-learning
+classifier on the audio is not planned: it is heavy, often wrong, and the best free models
+are non-commercial. MusicBrainz tags and AcoustID are non-commercial too, so the licence is
+reviewed before any paid launch.
+
+**Back-fill for the songs already in the catalogue (84 at 2026-10-27).** The lookup in step 2
+is also used by a one-off script. Before it runs, take an on-demand backup of the jobs
+table (point-in-time recovery is already on). The script first only writes a report (song,
+suggested genres, how sure the match is) for the owner to review and correct. Then it adds
+the `genres` field to each song with an update that touches nothing else, so nothing is
+rewritten and nothing can be lost. It is safe to run twice, and removing the field undoes
+it. Titles come from file names, so unclear ones are listed as "needs your help" rather than
+guessed.
+
+Order: deploy the profile service; file tags plus "Change genre" in the app; the MusicBrainz
+lookup together with the back-fill; fingerprint matching with the duplicate check.
