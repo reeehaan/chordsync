@@ -641,11 +641,12 @@ class CloudAnalysisApplication:
     # Once users can sign in, these three methods are where to filter by user.
 
     def library(self) -> list[CloudJobRecord]:
-        """Finished songs with a result, newest first."""
+        """Finished catalogue songs with a result, newest first. A signed-in
+        user's own analyses are private and never listed here."""
         return [
             job
             for job in self._repository.list_completed()
-            if job.timeline_object_key and job.playback_object_key
+            if job.timeline_object_key and job.playback_object_key and is_catalogue_job(job)
         ]
 
     def library_result(self, job_id: str) -> SharedTimeline:
@@ -666,9 +667,15 @@ class CloudAnalysisApplication:
 
     def _finished(self, job_id: str) -> CloudJobRecord:
         job = self._repository.get(job_id)
-        if job is None or job.status is not CloudJobStatus.COMPLETED:
-            raise JobNotFoundError(job_id)
+        if job is None or job.status is not CloudJobStatus.COMPLETED or not is_catalogue_job(job):
+            raise JobNotFoundError(job_id)  # a private analysis looks like a missing song
         return job
+
+
+def is_catalogue_job(job: CloudJobRecord) -> bool:
+    """Songs analysed before accounts existed (no owner, or a demo-token owner)
+    form the shared catalogue. A job owned by a signed-in account is private."""
+    return job.owner_id is None or job.owner_id.startswith("demo:")
 
 
 _CANCELLABLE = frozenset(
