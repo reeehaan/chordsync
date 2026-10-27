@@ -15,32 +15,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MINIMUM_AGE = 13
 MAX_NAME_CHARACTERS = 60
-MAX_GENRES = 20
 
 # The same list the app offers. Anything else is refused, so the profile cannot
 # be used to store free text.
-GENRES = (
-    "Rock",
-    "Pop",
-    "Indie",
-    "Jazz",
-    "Hip-Hop",
-    "Classical",
-    "Country",
-    "Folk",
-    "Blues",
-    "R&B",
-    "Metal",
-    "Reggae",
-    "Soul",
-    "Punk",
-    "Electronic",
-    "Latin",
-    "Bollywood",
-    "K-Pop",
-    "Gospel",
-    "Other",
-)
+# One list for people's taste and for songs' genres (analysis/genre/genres.py).
+from analysis.genre.genres import GENRES  # noqa: E402
+
+MAX_GENRES = len(GENRES)  # a person may pick every one
 Experience = Literal["beginner", "little", "intermediate", "advanced"]
 
 

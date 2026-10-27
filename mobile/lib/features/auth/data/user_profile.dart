@@ -100,5 +100,6 @@ const musicGenres = [
   'Bollywood',
   'K-Pop',
   'Gospel',
+  'Sinhala',
   'Other',
 ];
