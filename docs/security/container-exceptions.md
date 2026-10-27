@@ -7,16 +7,16 @@ not claim that the CVE is fixed or absent from its source package.
 
 ## Scope and approval
 
-- Bound image: `worker-e974aff` (chord-extensions image)
-- ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
-- ECR scan completed: 2026-10-23
+- Bound image: `worker-ca3dfdf` (security-fix image)
+- ECR digest: `sha256:cc39d58c13931c6788b224dc0670e0c4738c97b42723c831b5d581676bf39191`
+- ECR scan completed: 2026-10-27
 - ECR scan result: 2 CRITICAL, 14 HIGH, 16 MEDIUM, 4 LOW, 1 UNDEFINED (the TIFF
   and Brotli findings are the two CRITICAL; see the 2026-10-23 re-binding record).
   Earlier scan result, kept for the record, for `worker-d9ef4a3-runtime2`: 1 CRITICAL, 17 HIGH, 17 MEDIUM, 4 LOW. The scanner no
   longer reports the two GnuTLS CVEs, but the installed GnuTLS package is
   unchanged and Debian still lists it as vulnerable, so both GnuTLS exceptions
   remain bound. See the 2026-10-13 re-binding record.
-- Previously bound images, superseded: `worker-d9ef4a3-runtime2`
+- Previously bound images, superseded: `worker-e974aff` (`sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`), `worker-d9ef4a3-runtime2`
   (`sha256:0330563b60f5113395906467c0d1b7dfad6a654675e22f4c56ff928bd53c99aa`), `worker-f548bd0-runtime1`
   (`sha256:b41c778494574f09fa4e1072ec34ee73a4acd9f9d8e8c586b387cc16794fe06c`) and `worker-24025ef0-guard2`
   (`sha256:9c027714e07bad4bb1916f364c04c5ea2ce8545d5be41babfecdcbcbd65f11c5`).
@@ -57,8 +57,8 @@ or the worker becomes public or multi-user.
 ## CVE-2026-52490 — TIFF tiffcrop
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-e974aff`
-- Bound ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- Bound image: `worker-ca3dfdf`
+- Bound ECR digest: `sha256:cc39d58c13931c6788b224dc0670e0c4738c97b42723c831b5d581676bf39191`
 - Scan date: 2026-10-23 (re-bound; first assessed 2026-10-10)
 - Source package: `tiff`
 - Installed binary package: `libtiff6:arm64 4.7.0-3+deb13u3`
@@ -105,8 +105,8 @@ Authoritative status:
 ## CVE-2026-95210 — GnuTLS certificate validation
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-e974aff`
-- Bound ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- Bound image: `worker-ca3dfdf`
+- Bound ECR digest: `sha256:cc39d58c13931c6788b224dc0670e0c4738c97b42723c831b5d581676bf39191`
 - Scan date: 2026-10-23 (re-bound; first assessed 2026-10-10)
 - Source package: `gnutls28`
 - Installed binary package: `libgnutls30t64:arm64 3.8.9-3+deb13u4`
@@ -160,8 +160,8 @@ Authoritative status:
 ## CVE-2026-88647 — GnuTLS hostname verification
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-e974aff`
-- Bound ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- Bound image: `worker-ca3dfdf`
+- Bound ECR digest: `sha256:cc39d58c13931c6788b224dc0670e0c4738c97b42723c831b5d581676bf39191`
 - Scan date: 2026-10-23 (re-bound; first assessed 2026-10-10)
 - Source package: `gnutls28`
 - Installed binary package: `libgnutls30t64:arm64 3.8.9-3+deb13u4`
@@ -212,8 +212,8 @@ Upstream behavior:
 ## CVE-2026-111497 — Brotli decoder buffer overflow
 
 - Scanner severity: CRITICAL
-- Bound image: `worker-e974aff`
-- Bound ECR digest: `sha256:9977fda803e3eec3ca8bc470d600b8e67ae54b8456ec7b8ebf3800ab699efc34`
+- Bound image: `worker-ca3dfdf`
+- Bound ECR digest: `sha256:cc39d58c13931c6788b224dc0670e0c4738c97b42723c831b5d581676bf39191`
 - Scan date: 2026-10-23 (first assessed 2026-10-23)
 - Source package: `brotli`
 - Installed binary package: `libbrotli1:arm64 1.1.0-2+b7`
@@ -237,8 +237,9 @@ Upstream behavior:
 - Supported fix availability: not established on 2026-10-23. The installed
   version is inside the affected range. Check the Debian tracker below and
   rebuild the image when a fixed trixie package is published.
-- Compensating controls: the container runs as a non-root user; one-shot
-  container per job; no network for the analysis steps; narrow task role
+- Compensating controls: the container runs as a non-root user; a fresh work folder per job that is removed after the job
+  (the worker is a warm worker that serves several jobs in one container, so the
+  earlier "one-shot container" control no longer holds and is not relied on); no network for the analysis steps; narrow task role
   (read of `models/*` and its own job objects, job-state writes, queue); subprocess
   arguments are fixed lists with no shell; only holders of the demo token can
   upload audio.
@@ -265,6 +266,39 @@ Authoritative status:
 <https://nvd.nist.gov/vuln/detail/CVE-2026-111497>
 
 ## Re-binding record
+
+### 2026-10-27 — `worker-e974aff` → `worker-ca3dfdf` (security fixes)
+
+The TIFF, GnuTLS and Brotli exceptions were re-bound to the new digest without any
+change to scope, rationale, approval dates or expiry (TIFF and GnuTLS 2026-11-09,
+Brotli 2026-11-22). The project owner approved re-approving them on 2026-10-27,
+after being shown that warm workers are live.
+
+- New digest: `sha256:cc39d58c13931c6788b224dc0670e0c4738c97b42723c831b5d581676bf39191` (linux/arm64, user `chordsync`)
+- Image changes: rebuilt from the committed code at `ca3dfdf` (clean `git archive`
+  export) with the same Dockerfile and digest-pinned base images. The application
+  layers add: ffmpeg and ffprobe open local files only (protocol whitelist) with
+  deadlines; LRCLIB responses capped, redirects refused; the per-job folders of
+  the worker and the processor removed after every job; failed-stage logs reduced
+  to a short, defanged tail; and a refusal of an uploaded file whose ETag changed
+  after confirmation.
+- Correction to the compensating controls: the worker is a warm worker (linger 300 s,
+  initial wait 120 s) that serves several jobs in one container. The "one-shot
+  container per job" control recorded for Brotli was therefore not true. It is
+  replaced by the per-job folder removal above; it is not relied on.
+- Installed packages identical to the previous record: `libtiff6 4.7.0-3+deb13u3`,
+  `libgnutls30t64 3.8.9-3+deb13u4`, `libbrotli1 1.1.0-2+b7`. `tiff-tools`,
+  `libtiffxx6` and `tiffcrop` are still absent.
+- Scan evidence: ECR scan COMPLETE 2026-10-27: 2 CRITICAL (CVE-2026-52490 tiff,
+  CVE-2026-111497 brotli), 14 HIGH, 16 MEDIUM, 4 LOW, 1 UNDEFINED, the same counts
+  as `worker-e974aff`. One HIGH differs: CVE-2026-95127 (libass 0.17.3, subtitle
+  rendering denial of service) appears and CVE-2025-52290 no longer does. The base
+  images are unchanged, so this is the scanner database moving. Not CRITICAL, so it
+  needs no exception; ChordSync renders no subtitles. The API image scan is
+  0 CRITICAL, 3 HIGH, 9 MEDIUM, 3 LOW, unchanged.
+- Exact-image checks: the worker consumer and ffprobe 7.1.5 start; the API image
+  runs as uid 10001 and refuses to start without its token setting.
+- Deployment: pending the Terraform plan and the owner's approval of that plan.
 
 ### 2026-10-23 — `worker-6d3b1b3` → `worker-e974aff` (chord extensions)
 
