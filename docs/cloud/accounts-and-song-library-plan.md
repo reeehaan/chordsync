@@ -184,3 +184,22 @@ guessed.
 
 Order: deploy the profile service; file tags plus "Change genre" in the app; the MusicBrainz
 lookup together with the back-fill; fingerprint matching with the duplicate check.
+
+## Profile service (live 2026-10-27)
+
+| Item | Value |
+| --- | --- |
+| API image | `api-a3a3d40`, `sha256:52b30fa719d113eae20e80bfd9eb78f2fb84a4b19fb7c7f63b6e6284fdff8913` (0 critical, 3 high) |
+| Routes | `GET /me/profile`, `PUT /me/profile` (the PUT is on the stricter write throttle) |
+| Table | `chordsync-demo-profiles`, key `owner_id`, pay per request, encrypted, point-in-time recovery, deletion protection |
+| API permission | `dynamodb:GetItem` and `dynamodb:UpdateItem` on that table only; the other nine statements are unchanged |
+| Terraform | `cognito_test_recipient_emails` lists the testers SES may deliver to while in the sandbox (`rehan221104@gmail.com`) |
+
+The profile holds the name, birth year (not the full date), favourite genres and guitar
+level. Only an account can have one: demo tokens get 403 and signed-out callers 401. The
+server re-checks every field (age limit, fixed genre list, name characters, no extra fields).
+The app sends the sign-up answers after the first sign-in, kept on the phone under the
+sign-up email until then, and logging out wipes the phone's copy.
+
+Live inputs for the next plan: add `-var 'cognito_test_recipient_emails=["rehan221104@gmail.com"]'`
+and use the API digest above.
