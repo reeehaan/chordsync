@@ -41,6 +41,7 @@ dependencies:
   path: ^1.9.1
   flutter_svg: ^2.3.0
   wakelock_plus: ^1.8.2
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:
@@ -74,6 +75,7 @@ flutter:
     - assets/icons/source_providers/
     - assets/icons/chordsync_icon.svg
     - assets/audio/splash_harmonics.wav
+    - assets/auth/
 
   # Golden Hour theme fonts (SIL Open Font License; texts beside the files).
   # Static weights cut from the Google Fonts variable fonts.
