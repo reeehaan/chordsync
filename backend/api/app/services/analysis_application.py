@@ -51,6 +51,7 @@ from backend.api.app.services.cloud_job import (
 from backend.api.app.services.cloud_job_repository import (
     CloudJobRepository,
     JobWriteConflictError,
+    is_catalogue_owner,
 )
 from backend.api.app.services.source_upload_store import (
     ACCEPTED_ENCRYPTIONS,
@@ -645,16 +646,42 @@ class CloudAnalysisApplication:
         user's own analyses are private and never listed here."""
         return [
             job
-            for job in self._repository.list_completed()
+            for job in self._repository.list_completed(catalogue_only=True)
             if job.timeline_object_key and job.playback_object_key and is_catalogue_job(job)
         ]
+
+    def my_songs(self, owner_id: str | None) -> list[CloudJobRecord]:
+        """The caller's own finished analyses, newest first. Private to them."""
+        if owner_id is None:
+            raise AuthenticationRequiredError
+        if is_catalogue_owner(owner_id):
+            return []  # the old catalogue songs belong to nobody's own list
+        return [
+            job
+            for job in self._repository.list_completed(owner_id=owner_id)
+            if job.owner_id == owner_id and job.timeline_object_key and job.playback_object_key
+        ]
+
+    def my_audio(self, job_id: str, owner_id: str | None) -> tuple[str, int, str | None]:
+        """A short-lived download link for the caller's own analysis."""
+        job = self._repository.get(job_id)
+        if (
+            job is None
+            or job.status is not CloudJobStatus.COMPLETED
+            or is_catalogue_job(job)
+            or not self._visible_to(job, owner_id)
+        ):
+            raise JobNotFoundError(job_id)
+        return self._playback_link(job)
 
     def library_result(self, job_id: str) -> SharedTimeline:
         return self._read_timeline(self._finished(job_id))
 
     def library_audio(self, job_id: str) -> tuple[str, int, str | None]:
         """A short-lived download link for the song's playback audio."""
-        job = self._finished(job_id)
+        return self._playback_link(self._finished(job_id))
+
+    def _playback_link(self, job: CloudJobRecord) -> tuple[str, int, str | None]:
         if not job.playback_object_key:
             raise ResultArtifactMissingError
         if self._uploads is None:
@@ -673,9 +700,8 @@ class CloudAnalysisApplication:
 
 
 def is_catalogue_job(job: CloudJobRecord) -> bool:
-    """Songs analysed before accounts existed (no owner, or a demo-token owner)
-    form the shared catalogue. A job owned by a signed-in account is private."""
-    return job.owner_id is None or job.owner_id.startswith("demo:")
+    """See ``is_catalogue_owner``: a job owned by a signed-in account is private."""
+    return is_catalogue_owner(job.owner_id)
 
 
 _CANCELLABLE = frozenset(

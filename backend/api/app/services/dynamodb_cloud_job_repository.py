@@ -9,7 +9,11 @@ from backend.api.app.services.aws_errors import (
     translate_provider_error,
 )
 from backend.api.app.services.cloud_job import CloudJobRecord, CloudJobStatus
-from backend.api.app.services.cloud_job_repository import JobWriteConflictError
+from backend.api.app.services.cloud_job_repository import (
+    DEMO_OWNER_PREFIX,
+    JobWriteConflictError,
+    _check_scope,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -71,7 +75,30 @@ class DynamoDbCloudJobRepository:
                 break
         return jobs[:limit]
 
-    def list_completed(self, *, limit: int = 200) -> list[CloudJobRecord]:
+    def list_completed(
+        self,
+        *,
+        limit: int = 200,
+        owner_id: str | None = None,
+        catalogue_only: bool = False,
+    ) -> list[CloudJobRecord]:
+        _check_scope(owner_id, catalogue_only)
+        condition = "#status = :completed"
+        names = {"#status": "status"}
+        values: dict[str, Any] = {":completed": CloudJobStatus.COMPLETED.value}
+        if owner_id is not None:
+            condition += " AND #owner = :owner"
+            names["#owner"] = "owner_id"
+            values[":owner"] = owner_id
+        elif catalogue_only:
+            # No owner (missing or stored as null), or a demo-token owner.
+            condition += (
+                " AND (attribute_not_exists(#owner) OR attribute_type(#owner, :null)"
+                " OR begins_with(#owner, :demo))"
+            )
+            names["#owner"] = "owner_id"
+            values[":null"] = "NULL"
+            values[":demo"] = DEMO_OWNER_PREFIX
         # A scan: the table holds a few hundred jobs at most. Move this to an
         # index on status if it ever grows well beyond that.
         jobs: list[CloudJobRecord] = []
@@ -79,11 +106,9 @@ class DynamoDbCloudJobRepository:
         pages = 0
         while True:
             request: dict[str, Any] = {
-                "FilterExpression": "#status = :completed",
-                "ExpressionAttributeNames": {"#status": "status"},
-                "ExpressionAttributeValues": {
-                    ":completed": CloudJobStatus.COMPLETED.value,
-                },
+                "FilterExpression": condition,
+                "ExpressionAttributeNames": names,
+                "ExpressionAttributeValues": values,
             }
             if start_key:
                 request["ExclusiveStartKey"] = start_key

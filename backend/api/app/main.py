@@ -12,6 +12,7 @@ from backend.api.app.routers.analysis_jobs import (
     get_hosted_analysis_application,
     hosted_router,
     library_router,
+    mine_router,
 )
 from backend.api.app.routers.analysis_jobs import router as analysis_jobs_router
 from backend.api.app.routers.audio import router as audio_router
@@ -96,8 +97,9 @@ def create_app(hosting: ApiHostingConfig | None = None) -> FastAPI:
         application.add_exception_handler(RequestValidationError, _invalid_request)
         # Create-upload + confirm; no route accepts audio bytes.
         application.include_router(hosted_router)
-        # Finished songs for every token holder; no account system yet.
+        # The shared catalogue, and each signed-in user's own private songs.
         application.include_router(library_router)
+        application.include_router(mine_router)
     else:
         application.include_router(audio_router)
         application.include_router(analysis_jobs_router)

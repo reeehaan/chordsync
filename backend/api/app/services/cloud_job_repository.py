@@ -21,8 +21,17 @@ class CloudJobRepository(Protocol):
 
     def pending_dispatch(self, *, limit: int = 100) -> list[CloudJobRecord]: ...
 
-    def list_completed(self, *, limit: int = 200) -> list[CloudJobRecord]:
-        """Finished jobs, newest first, at most [limit]."""
+    def list_completed(
+        self,
+        *,
+        limit: int = 200,
+        owner_id: str | None = None,
+        catalogue_only: bool = False,
+    ) -> list[CloudJobRecord]:
+        """Finished jobs, newest first, at most [limit]. ``owner_id`` keeps only that
+        owner's jobs; ``catalogue_only`` keeps only the shared catalogue (jobs with
+        no owner or a demo-token owner). Filtering happens before ``limit``, so one
+        group's jobs can never push another group's out of the list."""
         ...
 
     def save(
@@ -31,6 +40,30 @@ class CloudJobRepository(Protocol):
         *,
         expected_status: CloudJobStatus,
     ) -> None: ...
+
+
+DEMO_OWNER_PREFIX = "demo:"
+
+
+def _check_scope(owner_id: str | None, catalogue_only: bool) -> None:
+    if owner_id is not None and catalogue_only:
+        raise ValueError("choose one owner or the catalogue, not both")
+    if owner_id is not None and not owner_id:
+        raise ValueError("owner id is empty")
+
+
+def is_catalogue_owner(owner_id: str | None) -> bool:
+    """Songs analysed before accounts existed (no owner, or a demo-token owner)
+    form the shared catalogue. A job owned by a signed-in account is private."""
+    return owner_id is None or owner_id.startswith(DEMO_OWNER_PREFIX)
+
+
+def in_scope(job: CloudJobRecord, owner_id: str | None, catalogue_only: bool) -> bool:
+    if owner_id is not None:
+        return job.owner_id == owner_id
+    if catalogue_only:
+        return is_catalogue_owner(job.owner_id)
+    return True
 
 
 class InMemoryCloudJobRepository:
@@ -59,12 +92,19 @@ class InMemoryCloudJobRepository:
             ]
         return jobs[:limit]
 
-    def list_completed(self, *, limit: int = 200) -> list[CloudJobRecord]:
+    def list_completed(
+        self,
+        *,
+        limit: int = 200,
+        owner_id: str | None = None,
+        catalogue_only: bool = False,
+    ) -> list[CloudJobRecord]:
+        _check_scope(owner_id, catalogue_only)
         with self._lock:
             jobs = [
                 deepcopy(job)
                 for job in self._jobs.values()
-                if job.status is CloudJobStatus.COMPLETED
+                if job.status is CloudJobStatus.COMPLETED and in_scope(job, owner_id, catalogue_only)
             ]
         jobs.sort(key=lambda job: job.created_at, reverse=True)
         return jobs[:limit]
@@ -131,13 +171,24 @@ class SqliteCloudJobRepository:
         jobs = [CloudJobRecord.from_dict(json.loads(row[0])) for row in rows]
         return [job for job in jobs if job.dispatch_pending][:limit]
 
-    def list_completed(self, *, limit: int = 200) -> list[CloudJobRecord]:
+    def list_completed(
+        self,
+        *,
+        limit: int = 200,
+        owner_id: str | None = None,
+        catalogue_only: bool = False,
+    ) -> list[CloudJobRecord]:
+        _check_scope(owner_id, catalogue_only)
         with self._connect() as connection:
             rows = connection.execute(
                 "SELECT payload FROM analysis_jobs WHERE status = ?",
                 (CloudJobStatus.COMPLETED.value,),
             ).fetchall()
-        jobs = [CloudJobRecord.from_dict(json.loads(row[0])) for row in rows]
+        jobs = [
+            job
+            for job in (CloudJobRecord.from_dict(json.loads(row[0])) for row in rows)
+            if in_scope(job, owner_id, catalogue_only)
+        ]
         jobs.sort(key=lambda job: job.created_at, reverse=True)
         return jobs[:limit]
 

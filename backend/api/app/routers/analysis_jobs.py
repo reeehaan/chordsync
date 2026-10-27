@@ -226,6 +226,9 @@ router = APIRouter(
 library_router = APIRouter(
     prefix="/analysis/library", tags=["Shared library"], dependencies=[Depends(get_principal)]
 )
+mine_router = APIRouter(
+    prefix="/analysis/mine", tags=["Your songs"], dependencies=[Depends(get_principal)]
+)
 hosted_router = APIRouter(
     prefix="/analysis/jobs", tags=["Analysis jobs"], dependencies=[Depends(get_principal)]
 )
@@ -568,6 +571,45 @@ def get_library_audio(
     """A short-lived link to download the song's audio."""
     try:
         url, expires_in, file_type = application.library_audio(job_id)
+    except JobNotFoundError:
+        return error_response(404, "song_not_found", "Song was not found.")
+    except ResultArtifactMissingError:
+        return error_response(409, "audio_unavailable", "Song audio is unavailable.")
+    except UploadNotConfiguredError:
+        return error_response(500, "audio_unavailable", "Song audio is unavailable.")
+    return LibraryAudioResponse(url=url, expires_in_seconds=expires_in, file_type=file_type)
+
+
+@mine_router.get("", response_model=LibraryResponse, responses={503: {"model": AnalysisJobErrorResponse}})
+def list_my_songs(
+    principal: AuthenticatedPrincipal | None = Depends(get_principal),
+    application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
+) -> LibraryResponse:
+    """The caller's own finished analyses, newest first. Nobody else's."""
+    return LibraryResponse(
+        songs=[
+            LibrarySong(
+                job_id=job.job_id,
+                title=job.title,
+                created_at=job.created_at,
+                duration_seconds=job.duration_seconds,
+            )
+            for job in application.my_songs(_owner(principal))
+        ]
+    )
+
+
+@mine_router.get(
+    "/{job_id}/audio", response_model=LibraryAudioResponse, responses=_LIBRARY_ERRORS
+)
+def get_my_audio(
+    job_id: str,
+    principal: AuthenticatedPrincipal | None = Depends(get_principal),
+    application: CloudAnalysisApplication = Depends(get_hosted_analysis_application),
+) -> LibraryAudioResponse | Response:
+    """A short-lived link to download the audio of the caller's own analysis."""
+    try:
+        url, expires_in, file_type = application.my_audio(job_id, _owner(principal))
     except JobNotFoundError:
         return error_response(404, "song_not_found", "Song was not found.")
     except ResultArtifactMissingError:
