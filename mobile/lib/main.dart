@@ -21,6 +21,8 @@ import 'features/auth/application/auth_controller.dart';
 import 'features/auth/data/auth_token_store.dart';
 import 'features/auth/data/cognito_api.dart';
 import 'features/auth/data/cognito_config.dart';
+import 'features/auth/application/profile_controller.dart';
+import 'features/auth/data/profile_api.dart';
 import 'features/auth/data/profile_store.dart';
 import 'features/auth/presentation/account_button.dart';
 import 'features/auth/presentation/auth_gate.dart';
@@ -84,6 +86,7 @@ class _MyAppState extends State<MyApp> {
   AnalyzedSessionLibrary? _sessionLibrary;
   CloudLibraryController? _cloudLibrary;
   AuthController? _auth;
+  ProfileController? _profileController;
   late final ProfileStore _profiles =
       widget.profileStore ?? SecureProfileStore();
 
@@ -95,6 +98,7 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     if (!_usesPracticeFixture) {
       _auth = widget.authController ?? _createAuthController();
+      _profileController = _createProfileController();
       _sessionLibrary = _withSample(LocalAnalyzedSessionLibrary());
       _importController = widget.importController ?? _createImportController();
       _cloudLibrary = _createCloudLibrary();
@@ -108,6 +112,22 @@ class _MyAppState extends State<MyApp> {
       api: DioCognitoApi(config: cognito),
       store: SecureAuthTokenStore(),
     )..restore();
+  }
+
+  /// Keeps the signed-in person's profile; only when the app has sign-in and
+  /// talks to the hosted API.
+  ProfileController? _createProfileController() {
+    final auth = _auth;
+    final config = AnalysisApiConfig.development;
+    if (auth == null || !config.isHosted) return null;
+    return ProfileController(
+      api: DioProfileApi(
+        baseUrl: config.baseUrl,
+        tokenProvider: auth.accessToken,
+      ),
+      store: _profiles,
+      auth: auth,
+    );
   }
 
   /// The token each API request carries: the signed-in person's own when the
@@ -202,6 +222,7 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     _importController?.dispose();
     _cloudLibrary?.dispose();
+    _profileController?.dispose();
     if (widget.authController == null) _auth?.dispose();
     _bannerInset.dispose();
     super.dispose();
@@ -224,7 +245,9 @@ class _MyAppState extends State<MyApp> {
           practiceSessionFactory: widget.sessionFactory,
           sessionLibrary: _sessionLibrary,
           cloudLibrary: _cloudLibrary,
-          accountButton: _auth == null ? null : AccountButton(auth: _auth!),
+          accountButton: _auth == null
+              ? null
+              : AccountButton(auth: _auth!, profile: _profileController),
           bannerInset: _bannerInset,
         );
 

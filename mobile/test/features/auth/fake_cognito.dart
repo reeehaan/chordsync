@@ -64,7 +64,7 @@ class FakeCognito implements CognitoApi {
     refreshCount++;
     final failure = refreshFailure;
     if (failure != null) throw AuthException(failure);
-    await Future<void>.delayed(Duration.zero);
+    await Future<void>.value();
     return current.withAccess('access-2', DateTime.utc(2026, 1, 1, 2));
   }
 

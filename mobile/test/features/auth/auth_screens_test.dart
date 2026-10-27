@@ -234,10 +234,7 @@ void main() {
       expect(saved.name, 'Kim Lee');
       expect(saved.genres, ['Pop', 'Jazz']);
       expect(saved.experience, GuitarExperience.intermediate);
-      expect(
-        UserProfile.ageOn(saved.birthDate, _today),
-        greaterThanOrEqualTo(13),
-      );
+      expect(_today.year - saved.birthYear, greaterThanOrEqualTo(13));
     },
   );
 

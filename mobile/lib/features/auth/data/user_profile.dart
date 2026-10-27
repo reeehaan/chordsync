@@ -12,11 +12,12 @@ enum GuitarExperience {
 }
 
 /// What the person tells us when they create an account. It shapes which songs
-/// are suggested, and nothing else.
+/// are suggested, and nothing else. Only the birth year is kept: the full date
+/// is used once, to check the age limit.
 class UserProfile {
   const UserProfile({
     required this.name,
-    required this.birthDate,
+    required this.birthYear,
     required this.genres,
     required this.experience,
   });
@@ -25,7 +26,7 @@ class UserProfile {
   static const minimumAge = 13;
 
   final String name;
-  final DateTime birthDate;
+  final int birthYear;
   final List<String> genres;
   final GuitarExperience experience;
 
@@ -45,7 +46,7 @@ class UserProfile {
 
   Map<String, Object?> toJson() => {
     'name': name,
-    'birthDate': _date(birthDate),
+    'birthYear': birthYear,
     'genres': genres,
     'experience': experience.name,
   };
@@ -53,21 +54,21 @@ class UserProfile {
   static UserProfile? tryFromJson(Object? value) {
     if (value is! Map) return null;
     final name = value['name'];
-    final birth = DateTime.tryParse('${value['birthDate']}');
+    final birth = value['birthYear'];
     final genres = value['genres'];
     final experience = GuitarExperience.values
         .where((e) => e.name == value['experience'])
         .firstOrNull;
     if (name is! String ||
         name.trim().isEmpty ||
-        birth == null ||
+        birth is! int ||
         genres is! List ||
         experience == null) {
       return null;
     }
     return UserProfile(
       name: name,
-      birthDate: birth,
+      birthYear: birth,
       genres: [
         for (final genre in genres)
           if (genre is String) genre,
@@ -75,11 +76,6 @@ class UserProfile {
       experience: experience,
     );
   }
-
-  static String _date(DateTime date) =>
-      '${date.year.toString().padLeft(4, '0')}-'
-      '${date.month.toString().padLeft(2, '0')}-'
-      '${date.day.toString().padLeft(2, '0')}';
 }
 
 /// The music styles to choose from. Plain labels, so they can be matched to

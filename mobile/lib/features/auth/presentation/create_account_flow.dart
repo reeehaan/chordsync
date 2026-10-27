@@ -123,14 +123,18 @@ class _CreateAccountFlowState extends State<CreateAccountFlow> {
 
   Future<void> _sendCode() async {
     FocusScope.of(context).unfocus();
-    final profile = UserProfile(
-      name: _name.text.trim(),
-      birthDate: _birthDate!,
-      genres: _genres.toList(),
-      experience: _experience ?? GuitarExperience.beginner,
-    );
-    // Kept on this phone first, so signing in can never lose what was typed.
-    await widget.profiles.write(profile);
+    final email = AuthController.normalizeEmail(_email.text);
+    if (email != null) {
+      final profile = UserProfile(
+        name: _name.text.trim(),
+        birthYear: _birthDate!.year,
+        genres: _genres.toList(),
+        experience: _experience ?? GuitarExperience.beginner,
+      );
+      // Kept on this phone first, under this email, so signing in can never
+      // lose what was typed. It is sent to the account once signed in.
+      await widget.profiles.write(profile, email: email);
+    }
     await widget.auth.beginSignUp(_email.text);
   }
 
