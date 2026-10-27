@@ -7,6 +7,8 @@ class CloudSong {
     required this.title,
     required this.createdAt,
     this.durationSeconds,
+    this.artist,
+    this.genres = const [],
   });
 
   factory CloudSong.fromJson(Map<String, dynamic> json) => CloudSong(
@@ -14,12 +16,26 @@ class CloudSong {
     title: json['title'] as String,
     createdAt: DateTime.parse(json['created_at'] as String),
     durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
+    artist: json['artist'] as String?,
+    genres: _genres(json['genres']),
   );
 
   final String jobId;
   final String title;
   final DateTime createdAt;
   final double? durationSeconds;
+
+  /// Who made the song, once the song has been tagged. Null before that.
+  final String? artist;
+
+  /// What kind of music it is (up to three), once the song has been tagged.
+  final List<String> genres;
+
+  static List<String> _genres(Object? value) => [
+    if (value is List)
+      for (final genre in value)
+        if (genre is String && genre.isNotEmpty) genre,
+  ];
 }
 
 /// A short-lived link to a song's audio. It carries its own permission, so it

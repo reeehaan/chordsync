@@ -51,6 +51,42 @@ void main() {
     },
   );
 
+  test('reads each song\'s artist and genres when it has them', () async {
+    final adapter = RecordingHttpAdapter(
+      (_) => jsonBody({
+        'songs': [
+          {
+            'job_id': 'tagged',
+            'title': 'Wonderwall - Oasis',
+            'created_at': '2026-10-23T07:45:03+00:00',
+            'artist': 'Oasis',
+            'genres': ['Rock', 'Indie'],
+          },
+          {
+            'job_id': 'old',
+            'title': 'Duvet',
+            'created_at': '2026-10-17T17:14:37+00:00',
+          },
+          {
+            'job_id': 'odd',
+            'title': 'Odd',
+            'created_at': '2026-10-17T17:14:37+00:00',
+            'artist': null,
+            'genres': ['Pop', 5, '', null],
+          },
+        ],
+      }, 200),
+    );
+
+    final songs = await _api(adapter).listSongs();
+
+    expect(songs[0].artist, 'Oasis');
+    expect(songs[0].genres, ['Rock', 'Indie']);
+    expect(songs[1].artist, isNull);
+    expect(songs[1].genres, isEmpty); // not tagged yet
+    expect(songs[2].genres, ['Pop']); // anything that is not a name is dropped
+  });
+
   test('reads a song timeline and its audio link', () async {
     final adapter = RecordingHttpAdapter((request) {
       if (request.uri.path.endsWith('/result')) {

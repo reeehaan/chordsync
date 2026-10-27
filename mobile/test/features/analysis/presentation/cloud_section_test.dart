@@ -134,6 +134,58 @@ void main() {
     expect(find.byKey(ValueKey('downloadCloudSong-$_sudu')), findsOneWidget);
   });
 
+  testWidgets('a tagged song shows its genres and the server\'s artist', (
+    tester,
+  ) async {
+    api.songs = [
+      CloudSong(
+        jobId: 'tagged',
+        title: 'Duvet',
+        createdAt: DateTime.utc(2026, 10, 23),
+        durationSeconds: 215.5,
+        artist: 'Bôa',
+        genres: const ['Rock', 'Indie'],
+      ),
+      _song('plain', 'Lemon'),
+    ];
+    await pump(tester);
+
+    expect(find.text('Bôa'), findsOneWidget);
+    expect(find.text('Rock · Indie'), findsOneWidget);
+    expect(find.byKey(const ValueKey('cloudGenres-tagged')), findsOneWidget);
+    expect(find.byKey(const ValueKey('cloudGenres-plain')), findsNothing);
+  });
+
+  testWidgets('search finds cloud songs by genre', (tester) async {
+    sessions = [
+      _session(documents, _tum),
+    ]; // the search box shows once a song is saved
+    api.songs = [
+      CloudSong(
+        jobId: 'a',
+        title: 'Sandapana Wage',
+        createdAt: DateTime.utc(2026, 10, 23),
+        genres: const ['Sinhala'],
+      ),
+      CloudSong(
+        jobId: 'b',
+        title: 'Wonderwall',
+        createdAt: DateTime.utc(2026, 10, 23),
+        genres: const ['Rock', 'Indie'],
+      ),
+    ];
+    await pump(tester);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('songSearchField')),
+      'sinhala',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('cloudSong-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('cloudSong-b')), findsNothing);
+  });
+
   testWidgets('songs already on the phone are not offered again', (
     tester,
   ) async {

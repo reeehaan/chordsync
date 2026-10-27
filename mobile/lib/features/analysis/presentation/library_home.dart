@@ -91,7 +91,8 @@ class _LibraryHomeState extends State<LibraryHome> {
 
   static String _cloudHaystack(CloudSong song) {
     final identity = SongIdentity.fromFileName(song.title);
-    return '${identity.title} ${identity.artist ?? ''} ${song.title}'
+    return '${identity.title} ${identity.artist ?? ''} ${song.title} '
+            '${song.artist ?? ''} ${song.genres.join(' ')}'
         .toLowerCase();
   }
 
@@ -583,6 +584,9 @@ class _CloudSongCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final identity = SongIdentity.fromFileName(song.title);
+    // The server's artist, once the song has been tagged, beats the one guessed
+    // from the file name.
+    final artist = song.artist ?? identity.artist;
     final textTheme = Theme.of(context).textTheme;
     final progress = cloud.progressOf(song.jobId);
     final error = cloud.errorOf(song.jobId);
@@ -605,14 +609,25 @@ class _CloudSongCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: _cardTitle(textTheme),
                   ),
-                  if (identity.artist != null)
+                  if (artist != null)
                     Text(
-                      identity.artist!,
+                      artist,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.bodyMedium?.copyWith(
                         color: _cardSecondary,
                         fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  if (song.genres.isNotEmpty)
+                    Text(
+                      song.genres.join(' · '),
+                      key: ValueKey('cloudGenres-${song.jobId}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: ChordSyncColors.brand,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   if (seconds != null)
