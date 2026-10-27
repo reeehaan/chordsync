@@ -144,3 +144,15 @@ variable "worker_linger_seconds" {
     error_message = "worker_linger_seconds must be between 0 and 3600."
   }
 }
+
+variable "cognito_enabled" {
+  description = "Create the Cognito user pool and app client (email one-time-code sign-in) and give the API their ids."
+  type        = bool
+  default     = false
+}
+
+variable "cognito_sender_email" {
+  description = "The address sign-in codes are sent from. Terraform asks SES to verify it, and a verification email must be clicked once. Required when cognito_enabled."
+  type        = string
+  default     = ""
+}

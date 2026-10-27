@@ -123,6 +123,9 @@ locals {
     "GET /analysis/library",
     "GET /analysis/library/{job_id}/result",
     "GET /analysis/library/{job_id}/audio",
+    # A signed-in user's own songs: read-only, answered only for their own account.
+    "GET /analysis/mine",
+    "GET /analysis/mine/{job_id}/audio",
   ]
   api_write_routes = [
     "POST /analysis/jobs",
@@ -312,6 +315,8 @@ resource "aws_lambda_function" "api" {
       CHORDSYNC_DYNAMODB_JOB_TABLE         = aws_dynamodb_table.jobs.name
       CHORDSYNC_SQS_ANALYSIS_QUEUE_URL     = aws_sqs_queue.analysis.url
       CHORDSYNC_DEMO_TOKEN_PARAMETER       = var.demo_token_parameter_name
+      CHORDSYNC_COGNITO_USER_POOL_ID       = local.cognito_on ? aws_cognito_user_pool.users[0].id : ""
+      CHORDSYNC_COGNITO_CLIENT_ID          = local.cognito_on ? aws_cognito_user_pool_client.app[0].id : ""
       CHORDSYNC_WORKER_DISPATCHER_FUNCTION = aws_lambda_function.dispatcher[0].function_name
     }
   }

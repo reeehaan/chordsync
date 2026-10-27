@@ -37,3 +37,13 @@ output "worker_ecr_repository_url" {
   description = "Private worker image repository URL."
   value       = aws_ecr_repository.worker.repository_url
 }
+
+output "cognito_user_pool_id" {
+  description = "Public id of the Cognito user pool (not a secret); empty when accounts are off."
+  value       = local.cognito_on ? aws_cognito_user_pool.users[0].id : ""
+}
+
+output "cognito_app_client_id" {
+  description = "Public id of the mobile app client (not a secret); empty when accounts are off."
+  value       = local.cognito_on ? aws_cognito_user_pool_client.app[0].id : ""
+}
