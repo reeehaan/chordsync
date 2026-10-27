@@ -5,6 +5,7 @@ import 'package:chordsync/features/auth/data/profile_store.dart';
 import 'package:chordsync/features/auth/data/user_profile.dart';
 import 'package:chordsync/features/auth/presentation/account_button.dart';
 import 'package:chordsync/features/auth/presentation/auth_gate.dart';
+import 'package:flutter/cupertino.dart' show CupertinoDatePicker;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -204,7 +205,7 @@ void main() {
       await _enter(tester, 'Full name', 'Kim Lee');
       await _openBirthdayPicker(tester);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('OK'));
+      await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       await _tap(tester, 'Next');
 
@@ -263,10 +264,11 @@ void main() {
     await _openBirthdayPicker(tester);
     await tester.pumpAndSettle();
 
-    final picker = tester.widget<CalendarDatePicker>(
-      find.byType(CalendarDatePicker),
+    final picker = tester.widget<CupertinoDatePicker>(
+      find.byType(CupertinoDatePicker),
     );
-    expect(picker.lastDate, DateTime(2013, 10, 27));
+    expect(picker.maximumDate, DateTime(2013, 10, 27));
+    expect(picker.initialDateTime.isAfter(DateTime(2013, 10, 27)), isFalse);
   });
 
   testWidgets('step 2 needs a choice, or can be skipped', (tester) async {
@@ -275,7 +277,7 @@ void main() {
     await _enter(tester, 'Full name', 'Kim Lee');
     await _openBirthdayPicker(tester);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     await _tap(tester, 'Next');
 
@@ -293,7 +295,7 @@ void main() {
     await _enter(tester, 'Full name', 'Kim Lee');
     await _openBirthdayPicker(tester);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     await _tap(tester, 'Next');
     expect(find.text('2 / 4'), findsOneWidget);
@@ -313,7 +315,7 @@ void main() {
       await _enter(tester, 'Full name', 'Kim Lee');
       await _openBirthdayPicker(tester);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('OK'));
+      await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       await _tap(tester, 'Next');
       await _tap(tester, 'Skip for now');
@@ -363,5 +365,46 @@ void main() {
     expect(auth.status, AuthStatus.signedOut);
     expect(tokens.tokens, isNull);
     expect(api.calls, ['revoke']);
+  });
+
+  testWidgets('the genre box stays small and scrolls to the rest of the genres', (
+    tester,
+  ) async {
+    await _open(tester);
+    await _tap(tester, 'Create account');
+    await _enter(tester, 'Full name', 'Kim Lee');
+    await _openBirthdayPicker(tester);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    await _tap(tester, 'Next');
+
+    final box = find.byWidgetPredicate(
+      (widget) => widget is SizedBox && widget.height == 184,
+    );
+    expect(box, findsOneWidget);
+    expect(tester.getSize(box).height, 184);
+    expect(tester.getSize(box).height, lessThan(844 / 3));
+
+    final lastGenre = find.text('Other');
+    expect(
+      tester.getTopLeft(lastGenre).dy,
+      greaterThan(tester.getBottomLeft(box).dy),
+    );
+    // Every chip is built, so scroll by dragging until the last one is in the box.
+    for (var i = 0; i < 40; i++) {
+      if (tester.getTopLeft(lastGenre).dy < tester.getBottomLeft(box).dy) break;
+      await tester.drag(box, const Offset(0, -120));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(
+      tester.getTopLeft(lastGenre).dy,
+      lessThan(tester.getBottomLeft(box).dy),
+    );
+
+    await tester.tap(lastGenre);
+    await tester.pumpAndSettle();
+    await _tap(tester, 'Next');
+    expect(find.text('3 / 4'), findsOneWidget);
   });
 }

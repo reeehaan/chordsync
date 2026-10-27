@@ -96,5 +96,13 @@ const musicGenres = [
   'Blues',
   'R&B',
   'Metal',
+  'Reggae',
+  'Soul',
+  'Punk',
+  'Electronic',
+  'Latin',
+  'Bollywood',
+  'K-Pop',
+  'Gospel',
   'Other',
 ];

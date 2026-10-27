@@ -1,3 +1,11 @@
+import 'package:flutter/cupertino.dart'
+    show
+        CupertinoDatePicker,
+        CupertinoDatePickerMode,
+        CupertinoTextThemeData,
+        CupertinoTheme,
+        CupertinoThemeData,
+        DatePickerDateOrder;
 import 'package:flutter/material.dart';
 
 import '../../../design_system/chordsync_design_system.dart';
@@ -96,13 +104,13 @@ class _CreateAccountFlowState extends State<CreateAccountFlow> {
   Future<void> _pickBirthDate() async {
     FocusScope.of(context).unfocus();
     final latest = UserProfile.youngestBirthDate(_today);
-    final picked = await showDatePicker(
+    final picked = await showModalBottomSheet<DateTime>(
       context: context,
-      initialDate: _birthDate ?? DateTime(latest.year - 5, 6, 15),
-      firstDate: DateTime(1900),
-      lastDate: latest,
-      helpText: 'Date of birth',
-      initialEntryMode: DatePickerEntryMode.calendarOnly,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _BirthdaySheet(
+        initial: _birthDate ?? DateTime(latest.year - 5, 6, 15),
+        latest: latest,
+      ),
     );
     if (picked != null && mounted) {
       setState(() {
@@ -212,20 +220,12 @@ class _CreateAccountFlowState extends State<CreateAccountFlow> {
             label: 'Skip for now',
             onPressed: () => _go(2),
           ),
-          child: Wrap(
-            spacing: ChordSyncSpace.sm,
-            runSpacing: ChordSyncSpace.sm,
-            children: [
-              for (final genre in musicGenres)
-                _GenreChip(
-                  label: genre,
-                  selected: _genres.contains(genre),
-                  onTap: () => setState(() {
-                    Haptics.selection();
-                    if (!_genres.remove(genre)) _genres.add(genre);
-                  }),
-                ),
-            ],
+          child: _GenreBox(
+            selected: _genres,
+            onToggle: (genre) => setState(() {
+              Haptics.selection();
+              if (!_genres.remove(genre)) _genres.add(genre);
+            }),
           ),
         );
       case 2:
@@ -460,8 +460,8 @@ class _GenreChip extends StatelessWidget {
             onTap: onTap,
             child: AnimatedContainer(
               duration: ChordSyncMotion.of(context, ChordSyncMotion.quick),
-              constraints: const BoxConstraints(minHeight: 48, minWidth: 88),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              constraints: const BoxConstraints(minHeight: 44, minWidth: 64),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: selected ? AuthColors.peach : AuthColors.field,
@@ -552,6 +552,142 @@ class _ExperienceOption extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The genres in a small, fixed-height box. It scrolls inside, so a long list
+/// never pushes the button off the screen.
+class _GenreBox extends StatefulWidget {
+  const _GenreBox({required this.selected, required this.onToggle});
+
+  final Set<String> selected;
+  final ValueChanged<String> onToggle;
+
+  @override
+  State<_GenreBox> createState() => _GenreBoxState();
+}
+
+class _GenreBoxState extends State<_GenreBox> {
+  static const _height = 184.0;
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _height,
+      child: ShaderMask(
+        // A soft fade at the bottom hints that there is more to scroll to.
+        shaderCallback: (bounds) => const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Colors.white, Color(0x00FFFFFF)],
+          stops: [0, 0.82, 1],
+        ).createShader(bounds),
+        blendMode: BlendMode.dstIn,
+        child: Scrollbar(
+          controller: _scroll,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _scroll,
+            padding: const EdgeInsets.only(bottom: 24, right: 8),
+            child: Wrap(
+              spacing: ChordSyncSpace.sm,
+              runSpacing: ChordSyncSpace.sm,
+              children: [
+                for (final genre in musicGenres)
+                  _GenreChip(
+                    label: genre,
+                    selected: widget.selected.contains(genre),
+                    onTap: () => widget.onToggle(genre),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A spinning date wheel in a dark sheet: scroll the day, month and year.
+class _BirthdaySheet extends StatefulWidget {
+  const _BirthdaySheet({required this.initial, required this.latest});
+
+  final DateTime initial;
+  final DateTime latest;
+
+  @override
+  State<_BirthdaySheet> createState() => _BirthdaySheetState();
+}
+
+class _BirthdaySheetState extends State<_BirthdaySheet> {
+  late DateTime _chosen = widget.initial.isAfter(widget.latest)
+      ? widget.latest
+      : widget.initial;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Color(0xFF1F140E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            ChordSyncSpace.lg,
+            ChordSyncSpace.md,
+            ChordSyncSpace.lg,
+            ChordSyncSpace.md,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                header: true,
+                child: const Text('Date of birth', style: AuthText.label),
+              ),
+              SizedBox(
+                height: 216,
+                child: CupertinoTheme(
+                  data: const CupertinoThemeData(
+                    brightness: Brightness.dark,
+                    textTheme: CupertinoTextThemeData(
+                      dateTimePickerTextStyle: TextStyle(
+                        fontFamily: 'DM Sans',
+                        fontSize: 22,
+                        color: AuthColors.cream,
+                      ),
+                    ),
+                  ),
+                  child: CupertinoDatePicker(
+                    mode: CupertinoDatePickerMode.date,
+                    dateOrder: DatePickerDateOrder.dmy,
+                    initialDateTime: _chosen,
+                    minimumDate: DateTime(1900),
+                    maximumDate: widget.latest,
+                    onDateTimeChanged: (date) => _chosen = date,
+                  ),
+                ),
+              ),
+              const SizedBox(height: ChordSyncSpace.sm),
+              AuthPrimaryButton(
+                label: 'Done',
+                showArrow: false,
+                onPressed: () => Navigator.of(context).pop(_chosen),
+              ),
+            ],
           ),
         ),
       ),
