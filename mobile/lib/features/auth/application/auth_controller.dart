@@ -79,12 +79,13 @@ class AuthController extends ChangeNotifier {
     return _signingUp ? beginSignUp(email) : beginLogIn(email);
   }
 
-  /// Checks the typed code. True when the person is now signed in.
+  /// Checks the typed code (Cognito emails 8 digits; 6 is accepted too). True
+  /// when the person is now signed in.
   Future<bool> submitCode(String code) async {
     final challenge = _challenge;
     final trimmed = code.trim();
     if (challenge == null || _busy) return false;
-    if (!RegExp(r'^\d{6}$').hasMatch(trimmed)) {
+    if (!RegExp(r'^\d{6,8}$').hasMatch(trimmed)) {
       _failure = AuthFailure.wrongCode;
       notifyListeners();
       return false;

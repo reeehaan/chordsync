@@ -94,7 +94,14 @@ void main() {
       await controller.beginLogIn('kim@example.com');
       api.calls.clear();
 
-      for (final bad in ['', '12345', '1234567', 'abcdef', '12 456']) {
+      for (final bad in [
+        '',
+        '12345',
+        '123456789',
+        'abcdef',
+        '12 456',
+        '1234 678',
+      ]) {
         expect(await controller.submitCode(bad), isFalse);
         expect(controller.failure, AuthFailure.wrongCode);
       }
@@ -134,6 +141,12 @@ void main() {
     await controller.beginLogIn('kim@example.com');
     await controller.resendCode();
     expect(api.calls.last, 'startSignIn:kim@example.com');
+  });
+
+  test('both 6 and 8 digit codes are sent on', () async {
+    await controller.beginLogIn('kim@example.com');
+    expect(await controller.submitCode('12345678'), isTrue);
+    expect(api.calls.last, 'verify:12345678');
   });
 
   test('the access token is used as it is while it has time left', () async {

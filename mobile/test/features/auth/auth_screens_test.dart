@@ -103,11 +103,11 @@ void main() {
 
     expect(find.text('Check your email'), findsOneWidget);
     expect(find.textContaining('kim@example.com'), findsOneWidget);
-    await _enter(tester, 'Your code', '123456'); // the sixth digit signs in
+    await _enter(tester, 'Your code', '12345678'); // the last digit signs in
     await tester.pumpAndSettle();
 
     expect(find.text('THE APP'), findsOneWidget);
-    expect(api.calls, ['startSignIn:kim@example.com', 'verify:123456']);
+    expect(api.calls, ['startSignIn:kim@example.com', 'verify:12345678']);
     expect(tokens.tokens?.email, 'kim@example.com');
   });
 
@@ -131,15 +131,51 @@ void main() {
     await _tap(tester, 'Send me a code');
     api.failNext = AuthFailure.wrongCode;
 
-    await _enter(tester, 'Your code', '000000');
+    await _enter(tester, 'Your code', '00000000');
     await tester.pumpAndSettle();
 
     expect(find.textContaining("isn't right"), findsOneWidget);
     expect(find.text('THE APP'), findsNothing);
 
-    await _enter(tester, 'Your code', '123456');
+    await _enter(tester, 'Your code', '12345678');
     await tester.pumpAndSettle();
     expect(find.text('THE APP'), findsOneWidget);
+  });
+
+  testWidgets('a six digit code is sent with the Verify button', (
+    tester,
+  ) async {
+    await _open(tester);
+    await _tap(tester, 'Log in');
+    await _enter(tester, 'Email', 'kim@example.com');
+    await _tap(tester, 'Send me a code');
+
+    await _enter(tester, 'Your code', '123456');
+    expect(
+      find.text('THE APP'),
+      findsNothing,
+    ); // not yet: more digits could follow
+    await _tap(tester, 'Verify');
+
+    expect(find.text('THE APP'), findsOneWidget);
+    expect(api.calls.last, 'verify:123456');
+  });
+
+  testWidgets('the code field takes at most 8 digits and only digits', (
+    tester,
+  ) async {
+    await _open(tester);
+    await _tap(tester, 'Log in');
+    await _enter(tester, 'Email', 'kim@example.com');
+    await _tap(tester, 'Send me a code');
+
+    api.failNext =
+        AuthFailure.wrongCode; // keeps the field on screen after the last digit
+    await _enter(tester, 'Your code', '12ab-34567890');
+    await tester.pumpAndSettle();
+
+    expect(find.text('12345678'), findsOneWidget);
+    expect(api.calls.last, 'verify:12345678');
   });
 
   testWidgets('back on the code step returns to the email step', (
@@ -188,11 +224,11 @@ void main() {
       await _enter(tester, 'Email', 'kim@example.com');
       await _tap(tester, 'Send me a code');
       expect(find.text('Check your email'), findsOneWidget);
-      await _enter(tester, 'Your code', '123456');
+      await _enter(tester, 'Your code', '12345678');
       await tester.pumpAndSettle();
 
       expect(find.text('THE APP'), findsOneWidget);
-      expect(api.calls, ['signUp:kim@example.com', 'confirm:123456']);
+      expect(api.calls, ['signUp:kim@example.com', 'confirm:12345678']);
       final saved = profiles.profile!;
       expect(saved.name, 'Kim Lee');
       expect(saved.genres, ['Pop', 'Jazz']);

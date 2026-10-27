@@ -88,7 +88,7 @@ class _CodeEntryState extends State<CodeEntry> {
           TextSpan(
             style: AuthText.lead,
             children: [
-              const TextSpan(text: 'We sent a 6-digit code to '),
+              const TextSpan(text: 'We sent a code to '),
               TextSpan(
                 text: auth.pendingEmail ?? '',
                 style: const TextStyle(fontWeight: FontWeight.w700),
@@ -101,19 +101,19 @@ class _CodeEntryState extends State<CodeEntry> {
         AuthField(
           label: 'Your code',
           controller: _code,
-          hint: '••••••',
+          hint: '••••••••',
           autofocus: true,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.oneTimeCode],
-          maxLength: 6,
+          maxLength: codeLength,
           inputFormatters: codeInputFormatters,
           textAlign: TextAlign.center,
-          letterSpacing: 10,
+          letterSpacing: 8,
           autocorrect: false,
           onChanged: (value) {
-            // Sign in as soon as the sixth digit arrives (or is autofilled).
-            if (value.length == 6 && !auth.busy) unawaited(_verify());
+            // Sign in as soon as the last digit arrives (or is autofilled).
+            if (value.length == codeLength && !auth.busy) unawaited(_verify());
           },
           onSubmitted: (_) => _verify(),
         ),
@@ -143,8 +143,11 @@ class _CodeEntryState extends State<CodeEntry> {
   }
 }
 
-/// Digits only, at most six: for any field that takes the code.
+/// The length of the code Cognito emails.
+const codeLength = 8;
+
+/// Digits only, no more than the code length: for any field that takes the code.
 final codeInputFormatters = <TextInputFormatter>[
   FilteringTextInputFormatter.digitsOnly,
-  LengthLimitingTextInputFormatter(6),
+  LengthLimitingTextInputFormatter(codeLength),
 ];
