@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from backend.api.app.auth import AuthenticationRequiredError, AuthUnavailableError
 from backend.api.app.hosting import ApiHostingConfig
+from backend.api.app.routers.profile import router as profile_router
 from backend.api.app.routers.analysis_jobs import (
     error_response,
     get_analysis_application_service,
@@ -100,6 +101,7 @@ def create_app(hosting: ApiHostingConfig | None = None) -> FastAPI:
         # The shared catalogue, and each signed-in user's own private songs.
         application.include_router(library_router)
         application.include_router(mine_router)
+        application.include_router(profile_router)
     else:
         application.include_router(audio_router)
         application.include_router(analysis_jobs_router)
