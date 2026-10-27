@@ -203,3 +203,17 @@ sign-up email until then, and logging out wipes the phone's copy.
 
 Live inputs for the next plan: add `-var 'cognito_test_recipient_emails=["rehan221104@gmail.com"]'`
 and use the API digest above.
+
+## Catalogue clean-up and genres (done 2026-10-27)
+
+- The 86 saved catalogue songs were 52 different songs. For each song the newest analysis
+  was kept and the older copies were removed for good (records and files; 34 copies, 71
+  files, 292 MB), together with the synthetic deployment-check song. The library has 51
+  songs and no repeats. A jobs-table backup named `before-duplicate-removal-2026-10-27`
+  restores the records only: the stored files are not versioned.
+- Each of the 51 songs got `genres` (one to three of the 21 genres, "Sinhala" added for
+  Sri Lankan songs) and, for 47, an `artist`, written by `scripts/apply_song_genres.py` after
+  the owner reviewed the table (MusicBrainz knew 12 of the 52 songs; the rest were suggested
+  by hand and reviewed). `genre_source` is `review`. Backup: `before-genres-2026-10-27`.
+- Tools: `scripts/genre_report.py` (read-only review report), `scripts/remove_duplicate_songs.py`
+  (dry run by default, checks every copy and the copy that stays), `scripts/apply_song_genres.py`.
