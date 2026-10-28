@@ -7,7 +7,7 @@ import '../application/cloud_library_controller.dart';
 import '../application/genre_shelves.dart';
 import '../data/cloud_library_api.dart';
 import '../../practice_timeline/data/song_identity.dart';
-import 'cover_tile.dart';
+import 'song_cover.dart';
 import 'genre_style.dart';
 import 'upload_theme.dart';
 
@@ -326,9 +326,6 @@ class _SongTile extends StatelessWidget {
     final identity = SongIdentity.fromFileName(song.title);
     final artist = song.artist ?? identity.artist;
     final textTheme = Theme.of(context).textTheme;
-    final tone = song.genres.isEmpty
-        ? null
-        : GenreStyle.of(song.genres.first).light;
     return Semantics(
       button: true,
       label: '${identity.title}${artist == null ? '' : ', $artist'}',
@@ -343,11 +340,12 @@ class _SongTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CoverTile(
-                    future: Future.value(null),
+                  SongCover(
                     seed: identity.title,
+                    coverUrl: song.coverUrl,
+                    genres: song.genres,
                     size: width,
-                    tone: tone,
+                    radius: 14,
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -575,9 +573,6 @@ class _SongRow extends StatelessWidget {
     final artist = song.artist ?? identity.artist;
     final textTheme = Theme.of(context).textTheme;
     final progress = cloud.progressOf(song.jobId);
-    final tone = song.genres.isEmpty
-        ? null
-        : GenreStyle.of(song.genres.first).light;
     return Card(
       child: InkWell(
         key: ValueKey('cloudSong-${song.jobId}'),
@@ -587,10 +582,10 @@ class _SongRow extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              CoverTile(
-                future: Future.value(null),
+              SongCover(
                 seed: identity.title,
-                tone: tone,
+                coverUrl: song.coverUrl,
+                genres: song.genres,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -674,9 +669,6 @@ class _SongSheet extends StatelessWidget {
     final identity = SongIdentity.fromFileName(song.title);
     final artist = song.artist ?? identity.artist;
     final textTheme = Theme.of(context).textTheme;
-    final tone = song.genres.isEmpty
-        ? null
-        : GenreStyle.of(song.genres.first).light;
     final seconds = song.durationSeconds;
     return SafeArea(
       child: Padding(
@@ -693,11 +685,12 @@ class _SongSheet extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CoverTile(
-                      future: Future.value(null),
+                    SongCover(
                       seed: identity.title,
+                      coverUrl: song.coverUrl,
+                      genres: song.genres,
                       size: 96,
-                      tone: tone,
+                      radius: 16,
                     ),
                     const SizedBox(width: 16),
                     Expanded(

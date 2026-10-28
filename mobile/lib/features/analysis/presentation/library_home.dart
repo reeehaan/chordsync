@@ -14,6 +14,7 @@ import '../data/embedded_cover_art.dart';
 import '../../auth/application/profile_controller.dart';
 import 'cover_tile.dart';
 import 'discover_section.dart';
+import 'song_cover.dart';
 import 'upload_theme.dart';
 
 /// The "Your songs" tab listing previously analyzed practice sessions.
@@ -779,7 +780,11 @@ class _CloudSongCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            CoverTile(future: Future.value(null), seed: identity.title),
+            SongCover(
+              seed: identity.title,
+              coverUrl: song.coverUrl,
+              genres: song.genres,
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

@@ -9,6 +9,7 @@ class CloudSong {
     this.durationSeconds,
     this.artist,
     this.genres = const [],
+    this.coverUrl,
   });
 
   factory CloudSong.fromJson(Map<String, dynamic> json) => CloudSong(
@@ -18,6 +19,7 @@ class CloudSong {
     durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
     artist: json['artist'] as String?,
     genres: _genres(json['genres']),
+    coverUrl: _httpsOrNull(json['cover_url']),
   );
 
   final String jobId;
@@ -30,6 +32,13 @@ class CloudSong {
 
   /// What kind of music it is (up to three), once the song has been tagged.
   final List<String> genres;
+
+  /// A short-lived link to the song's cover image, or null when it has none.
+  /// Only an https link is used: nothing is loaded in the clear.
+  final String? coverUrl;
+
+  static String? _httpsOrNull(Object? value) =>
+      value is String && Uri.tryParse(value)?.scheme == 'https' ? value : null;
 
   static List<String> _genres(Object? value) => [
     if (value is List)
