@@ -20,7 +20,7 @@ class MusicOnlyChordFocus extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.music_note_rounded,
                 size: 32,
                 color: PracticeStageColors.amber,
@@ -67,7 +67,7 @@ class MusicOnlyLyrics extends StatelessWidget {
             key: const ValueKey('musicOnlyLyrics'),
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 '♪ ',
                 style: TextStyle(
                   color: PracticeStageColors.amber,
@@ -86,7 +86,7 @@ class MusicOnlyLyrics extends StatelessWidget {
                     letterSpacing: 2,
                   ),
                 ),
-              const Text(
+              Text(
                 ' ♪',
                 style: TextStyle(
                   color: PracticeStageColors.amber,

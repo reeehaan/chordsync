@@ -162,14 +162,11 @@ class _RecordMark extends StatelessWidget {
           Container(
             width: 48,
             height: 48,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: ChordSyncColors.honey,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.music_note,
-              color: ChordSyncColors.brandDark,
-            ),
+            child: Icon(Icons.music_note, color: ChordSyncColors.brandDark),
           ),
         ],
       ),

@@ -26,9 +26,9 @@ Future<int?> showCapoSettingsSheet(
         );
         return SafeArea(
           child: DefaultTextStyle.merge(
-            style: const TextStyle(color: PracticeStageColors.textPrimary),
+            style: TextStyle(color: PracticeStageColors.textPrimary),
             child: IconTheme.merge(
-              data: const IconThemeData(color: PracticeStageColors.textPrimary),
+              data: IconThemeData(color: PracticeStageColors.textPrimary),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 child: Column(

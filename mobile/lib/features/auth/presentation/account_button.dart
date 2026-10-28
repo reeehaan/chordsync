@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../design_system/appearance_controller.dart';
 import '../../../design_system/chordsync_design_system.dart';
 import '../../../design_system/haptics.dart';
 import '../application/auth_controller.dart';
@@ -10,12 +11,20 @@ import '../data/user_profile.dart';
 /// A round button in the Library header that opens the account sheet: who is
 /// signed in, and how to log out.
 class AccountButton extends StatelessWidget {
-  const AccountButton({super.key, required this.auth, this.profile});
+  const AccountButton({
+    super.key,
+    required this.auth,
+    this.profile,
+    this.appearance,
+  });
 
   final AuthController auth;
 
   /// The person's profile, shown in the sheet when there is one.
   final ProfileController? profile;
+
+  /// The light/dark choice, offered in the sheet when given.
+  final AppearanceController? appearance;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +37,11 @@ class AccountButton extends StatelessWidget {
         showModalBottomSheet<void>(
           context: context,
           showDragHandle: true,
-          builder: (context) => _AccountSheet(auth: auth, profile: profile),
+          builder: (context) => _AccountSheet(
+            auth: auth,
+            profile: profile,
+            appearance: appearance,
+          ),
         );
       },
     );
@@ -36,10 +49,11 @@ class AccountButton extends StatelessWidget {
 }
 
 class _AccountSheet extends StatelessWidget {
-  const _AccountSheet({required this.auth, this.profile});
+  const _AccountSheet({required this.auth, this.profile, this.appearance});
 
   final AuthController auth;
   final ProfileController? profile;
+  final AppearanceController? appearance;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +133,30 @@ class _AccountSheet extends StatelessWidget {
                               _EditProfileSheet(controller: controller),
                         );
                       },
+                    ),
+                  ],
+                  if (appearance case final appearance?) ...[
+                    const SizedBox(height: ChordSyncSpace.md),
+                    Text('Appearance', style: textTheme.labelLarge),
+                    const SizedBox(height: ChordSyncSpace.sm),
+                    ListenableBuilder(
+                      listenable: appearance,
+                      builder: (context, _) => SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<Appearance>(
+                          showSelectedIcon: false,
+                          segments: [
+                            for (final choice in Appearance.values)
+                              ButtonSegment(
+                                value: choice,
+                                label: Text(choice.label),
+                              ),
+                          ],
+                          selected: {appearance.appearance},
+                          onSelectionChanged: (picked) =>
+                              appearance.select(picked.first),
+                        ),
+                      ),
                     ),
                   ],
                   const SizedBox(height: ChordSyncSpace.lg),

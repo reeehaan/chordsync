@@ -20,7 +20,7 @@ ThemeData practiceStageTheme(ThemeData baseTheme) {
       bodyColor: PracticeStageColors.textPrimary,
       displayColor: PracticeStageColors.textPrimary,
     ),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: PracticeStageColors.background,
       foregroundColor: PracticeStageColors.textPrimary,
       elevation: 0,

@@ -545,15 +545,13 @@ class _BeatSegment extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              const ColoredBox(color: PracticeStageColors.beatTrack),
+              ColoredBox(color: PracticeStageColors.beatTrack),
               Align(
                 alignment: Alignment.centerLeft,
                 child: FractionallySizedBox(
                   widthFactor: value,
                   heightFactor: 1,
-                  child: const ColoredBox(
-                    color: PracticeStageColors.amberBright,
-                  ),
+                  child: ColoredBox(color: PracticeStageColors.amberBright),
                 ),
               ),
             ],
@@ -591,9 +589,7 @@ class _ChordProgressBar extends StatelessWidget {
             value: value,
             minHeight: 5,
             backgroundColor: PracticeStageColors.beatTrack,
-            valueColor: const AlwaysStoppedAnimation(
-              PracticeStageColors.amberBright,
-            ),
+            valueColor: AlwaysStoppedAnimation(PracticeStageColors.amberBright),
           ),
         ),
       ),
@@ -631,7 +627,7 @@ class _StripIconButton extends StatelessWidget {
               child: Container(
                 width: _circle,
                 height: _circle,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: PracticeStageColors.surfaceRaised,
                   shape: BoxShape.circle,
                 ),

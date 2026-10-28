@@ -216,9 +216,10 @@ class _LibraryHomeState extends State<LibraryHome> {
   static bool _containsAll(String text, List<String> words) =>
       words.every(text.contains);
 
-  static String _haystack(AnalyzedPracticeSession session) {
+  String _haystack(AnalyzedPracticeSession session) {
     final identity = SongIdentity.fromFileName(session.title);
-    return '${identity.title} ${identity.artist ?? ''} ${session.title}'
+    return '${identity.title} ${identity.artist ?? ''} ${session.title} '
+            '${_genresOf(session).join(' ')}'
         .toLowerCase();
   }
 
@@ -432,7 +433,8 @@ class _LibraryHomeState extends State<LibraryHome> {
 
 /// Song names are set a little heavier, and their details a little darker,
 /// than the default text so cards read clearly on the parchment page.
-const _cardSecondary = Color(0xFF55473C);
+Color get _cardSecondary =>
+    ChordSyncColors.dark ? const Color(0xFFD3C1AD) : const Color(0xFF55473C);
 
 TextStyle? _cardTitle(TextTheme textTheme) => textTheme.titleMedium?.copyWith(
   fontWeight: FontWeight.w700,
@@ -538,7 +540,7 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
                 ),
               ),
               const SizedBox(width: 6),
-              const DecoratedBox(
+              DecoratedBox(
                 decoration: BoxDecoration(
                   color: ChordSyncColors.surfaceAlt,
                   shape: BoxShape.circle,
@@ -600,7 +602,7 @@ class _ChordChip extends StatelessWidget {
         child: Text(
           chord,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: ChordSyncColors.brandDark,
+            color: ChordSyncColors.textPrimary,
             fontWeight: FontWeight.w800,
           ),
         ),

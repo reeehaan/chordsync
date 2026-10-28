@@ -21,6 +21,7 @@ import 'features/auth/application/auth_controller.dart';
 import 'features/auth/data/auth_token_store.dart';
 import 'features/auth/data/cognito_api.dart';
 import 'features/auth/data/cognito_config.dart';
+import 'design_system/appearance_controller.dart';
 import 'features/auth/application/profile_controller.dart';
 import 'features/auth/data/profile_api.dart';
 import 'features/auth/data/profile_store.dart';
@@ -55,6 +56,7 @@ class MyApp extends StatefulWidget {
     this.splashSound,
     this.authController,
     this.profileStore,
+    this.appearanceStore,
   });
 
   /// Signs people in. Made from the build settings when null, and only when the
@@ -62,6 +64,9 @@ class MyApp extends StatefulWidget {
   /// the home screen, as before.
   final AuthController? authController;
   final ProfileStore? profileStore;
+
+  /// Keeps the light/dark choice. The phone's Keychain when null.
+  final AppearanceStore? appearanceStore;
 
   /// Plays the opening animation before the first screen. Off by default so
   /// tests and fixtures open straight on their screen.
@@ -81,7 +86,10 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  late final AppearanceController _appearance = AppearanceController(
+    store: widget.appearanceStore ?? SecureAppearanceStore(),
+  );
   AudioImportController? _importController;
   AnalyzedSessionLibrary? _sessionLibrary;
   CloudLibraryController? _cloudLibrary;
@@ -96,6 +104,9 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appearance.addListener(_appearanceChanged);
+    _appearance.load();
     if (!_usesPracticeFixture) {
       _auth = widget.authController ?? _createAuthController();
       _profileController = _createProfileController();
@@ -143,6 +154,7 @@ class _MyAppState extends State<MyApp> {
     final config = AnalysisApiConfig.development;
     if (!config.isHosted) return null;
     return CloudLibraryController(
+      syncMine: _auth != null,
       service: CloudLibraryService(
         api: DioHostedAnalysisApi(
           baseUrl: config.baseUrl,
@@ -218,8 +230,33 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  Brightness get _phoneBrightness =>
+      WidgetsBinding.instance.platformDispatcher.platformBrightness;
+
+  bool get _dark => _appearance.appearance.resolvesDark(_phoneBrightness);
+
+  @override
+  void didChangePlatformBrightness() => _appearanceChanged();
+
+  /// Colours are read when a widget is built, so a change of palette redraws
+  /// every widget, not only those that watch the theme.
+  void _appearanceChanged() {
+    ChordSyncColors.dark = _dark;
+    if (!mounted) return;
+    setState(() {});
+    void redraw(Element element) {
+      element.markNeedsBuild();
+      element.visitChildren(redraw);
+    }
+
+    (context as Element).visitChildren(redraw);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _appearance.removeListener(_appearanceChanged);
+    _appearance.dispose();
     _importController?.dispose();
     _cloudLibrary?.dispose();
     _profileController?.dispose();
@@ -248,7 +285,11 @@ class _MyAppState extends State<MyApp> {
           profile: _profileController,
           accountButton: _auth == null
               ? null
-              : AccountButton(auth: _auth!, profile: _profileController),
+              : AccountButton(
+                  auth: _auth!,
+                  profile: _profileController,
+                  appearance: _appearance,
+                ),
           bannerInset: _bannerInset,
         );
 
@@ -266,7 +307,7 @@ class _MyAppState extends State<MyApp> {
       navigatorKey: _navigatorKey,
       navigatorObservers: [_routes],
       title: 'ChordSync',
-      theme: ChordSyncTheme.light(),
+      theme: _dark ? ChordSyncTheme.dark() : ChordSyncTheme.light(),
       // Follow the person's text size setting (Dynamic Type), up to a size the
       // fixed-height rows (lyrics, chord cards) can still hold.
       builder: (context, child) {

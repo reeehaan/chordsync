@@ -481,7 +481,7 @@ class _SpinningDiscState extends State<_SpinningDisc>
           Container(
             width: 24,
             height: 24,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: ChordSyncColors.honey,
               shape: BoxShape.circle,
             ),

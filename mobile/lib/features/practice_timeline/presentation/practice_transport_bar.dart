@@ -219,7 +219,7 @@ class _SpeedSelector extends StatelessWidget {
       width: 56,
       height: 56,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: PracticeStageColors.player,
         shape: BoxShape.circle,
       ),

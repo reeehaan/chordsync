@@ -78,7 +78,7 @@ class SongSourceGrid extends StatelessWidget {
         badgeBuilder: (size) => _IconBadge(
           icon: cupertino ? CupertinoIcons.mic_fill : Icons.mic_rounded,
           foreground: Colors.white,
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [ChordSyncColors.brandAccent, ChordSyncColors.brand],
@@ -257,7 +257,7 @@ class _SourceCard extends StatelessWidget {
       color: UploadPalette.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(ChordSyncRadii.card),
-        side: const BorderSide(color: UploadPalette.border),
+        side: BorderSide(color: UploadPalette.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
