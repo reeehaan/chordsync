@@ -8,7 +8,7 @@ void main() {
   testWidgets('normal app entry opens on the song library', (tester) async {
     await tester.pumpWidget(const MyApp());
 
-    expect(find.text('Your songs'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
     expect(find.text('Upload'), findsNothing);
     expect(find.text('ChordSync Practice'), findsNothing);
 

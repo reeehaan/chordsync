@@ -361,6 +361,160 @@ void main() {
     );
   });
 
+  // --- the genre chips above the person's own songs ---
+
+  /// Two saved songs, whose genres the cloud knows by id.
+  Future<void> twoSavedSongs(
+    WidgetTester tester, {
+    ProfileController? profile,
+  }) async {
+    sessions = [
+      _sessionTitled(documents, _sudu, 'Sudu Gawuma - La Signore'),
+      _sessionTitled(documents, _lemon, 'Lemon - Kenshi Yonezu'),
+    ];
+    api.songs = [
+      CloudSong(
+        jobId: _sudu,
+        title: 'Sudu Gawuma - La Signore',
+        createdAt: DateTime.utc(2026, 10, 1),
+        genres: const ['Sinhala', 'Pop'],
+      ),
+      CloudSong(
+        jobId: _lemon,
+        title: 'Lemon - Kenshi Yonezu',
+        createdAt: DateTime.utc(2026, 10, 2),
+        genres: const ['Pop'],
+      ),
+    ];
+    await pump(tester, profile: profile);
+  }
+
+  testWidgets(
+    'your songs are labelled "Your songs" and filter by genre chips',
+    (tester) async {
+      await twoSavedSongs(tester);
+
+      expect(find.text('Your songs'), findsOneWidget);
+      expect(find.text('Previously analyzed'), findsNothing);
+      expect(find.text('All · 2'), findsOneWidget);
+      expect(
+        find.text('Pop · 2'),
+        findsOneWidget,
+      ); // a song in two genres counts in both
+      expect(find.text('Sinhala · 1'), findsOneWidget);
+      expect(find.byKey(ValueKey('card-$_sudu')), findsOneWidget);
+      expect(find.byKey(ValueKey('card-$_lemon')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('genreChip-Sinhala')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('card-$_sudu')), findsOneWidget);
+      expect(find.byKey(ValueKey('card-$_lemon')), findsNothing);
+      expect(find.text('1 of 2'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('genreChip-all')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('card-$_lemon')), findsOneWidget);
+      expect(find.text('2 saved'), findsOneWidget);
+    },
+  );
+
+  testWidgets('a saved card shows its genres', (tester) async {
+    await twoSavedSongs(tester);
+
+    expect(find.byKey(ValueKey('savedGenres-$_sudu')), findsOneWidget);
+    expect(find.text('Sinhala · Pop'), findsOneWidget);
+    expect(find.text('Pop'), findsWidgets);
+  });
+
+  testWidgets('a saved song whose copy was replaced is matched by its title', (
+    tester,
+  ) async {
+    sessions = [
+      _sessionTitled(
+        documents,
+        'old-copy-0000-aaaa-4bbb-8ccc-000000000009',
+        'Lemon - Kenshi Yonezu - Spotimate.app',
+      ),
+    ];
+    api.songs = [
+      CloudSong(
+        jobId: _lemon,
+        title: 'Lemon',
+        createdAt: DateTime.utc(2026, 10, 2),
+        genres: const ['Pop'],
+      ),
+    ];
+    await pump(tester);
+
+    expect(find.byKey(const ValueKey('genreChip-Pop')), findsOneWidget);
+  });
+
+  testWidgets('songs with no genre yet get their own chip', (tester) async {
+    sessions = [
+      _sessionTitled(documents, _sudu, 'Sudu Gawuma - La Signore'),
+      _sessionTitled(documents, _lemon, 'Some Home Recording'),
+    ];
+    api.songs = [
+      CloudSong(
+        jobId: _sudu,
+        title: 'Sudu Gawuma - La Signore',
+        createdAt: DateTime.utc(2026, 10, 1),
+        genres: const ['Sinhala'],
+      ),
+    ];
+    await pump(tester);
+
+    expect(find.text('No genre yet · 1'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('genreChip-\u0000none')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('card-$_lemon')), findsOneWidget);
+    expect(find.byKey(ValueKey('card-$_sudu')), findsNothing);
+  });
+
+  testWidgets('with no genres known there are no chips', (tester) async {
+    sessions = [_sessionTitled(documents, _sudu, 'Sudu Gawuma - La Signore')];
+    api.songs = [_song(_sudu, 'Sudu Gawuma - La Signore')]; // not tagged yet
+    await pump(tester);
+
+    expect(find.byKey(const ValueKey('genreChip-all')), findsNothing);
+    expect(find.text('Your songs'), findsOneWidget);
+    await pump(tester, withCloud: false);
+    expect(find.byKey(const ValueKey('genreChip-all')), findsNothing);
+  });
+
+  testWidgets(
+    'the chips step aside while searching, and the search covers every song',
+    (tester) async {
+      await twoSavedSongs(tester);
+      await tester.tap(find.byKey(const ValueKey('genreChip-Sinhala')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('songSearchField')),
+        'lemon',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('genreChip-all')), findsNothing);
+      expect(
+        find.byKey(ValueKey('card-$_lemon')),
+        findsOneWidget,
+      ); // found despite the Sinhala chip
+    },
+  );
+
+  testWidgets('the page says Home, or greets the person by first name', (
+    tester,
+  ) async {
+    await pump(tester);
+    expect(find.text('Home'), findsOneWidget);
+
+    final taste = await _profile(['Pop']);
+    await pump(tester, profile: taste);
+    expect(find.text('Hello, Kim'), findsOneWidget);
+    expect(find.text('Home'), findsNothing);
+  });
+
   testWidgets('songs already on the phone are not offered again', (
     tester,
   ) async {
@@ -561,6 +715,20 @@ SharedTimeline _timeline() => const SharedTimeline(
   bars: [],
   lyrics: [],
 );
+
+AnalyzedPracticeSession _sessionTitled(
+  Directory directory,
+  String id,
+  String title,
+) {
+  final base = _session(directory, id);
+  return AnalyzedPracticeSession(
+    title: title,
+    job: base.job,
+    audioFile: base.audioFile,
+    timeline: base.timeline,
+  );
+}
 
 AnalyzedPracticeSession _session(Directory directory, String id) {
   File('${directory.path}/$id.mp3').writeAsBytesSync([1]);

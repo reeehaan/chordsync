@@ -143,7 +143,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Previously analyzed'), findsOneWidget);
+    expect(find.text('Your songs'), findsOneWidget);
     expect(find.text('safe_song'), findsOneWidget);
     expect(find.text('1 saved'), findsOneWidget);
 
@@ -160,7 +160,7 @@ void main() {
     await pumpScreen(tester, openUpload: false);
 
     // The app opens on the song library.
-    expect(find.text('Your songs'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
     expect(find.text('Upload'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('bottomNav2')));
     await tester.pumpAndSettle();
@@ -169,7 +169,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('bottomNav0')));
     await tester.pumpAndSettle();
-    expect(find.text('Your songs'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
     expect(find.text('No analyzed songs yet'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('bottomNav1')));
@@ -277,7 +277,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('analysisBackButton')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Your songs'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(controller.isActive, isTrue);
       expect(controller.inBackground, isTrue);
       expect(preparation.cancellations.single.isCancelled, isFalse);
@@ -294,7 +294,7 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pumpAndSettle();
 
-      expect(find.text('Your songs'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(find.byKey(const ValueKey('currentChordValue')), findsNothing);
       expect(controller.phase, AudioImportPhase.ready);
       expect(controller.session, isNotNull);

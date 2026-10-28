@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../design_system/chordsync_design_system.dart';
+import '../../../design_system/haptics.dart';
 import '../../../design_system/pressable_scale.dart';
 import '../../../design_system/staggered_entrance.dart';
 import '../../practice_timeline/data/song_identity.dart';
@@ -50,12 +51,20 @@ class _LibraryHomeState extends State<LibraryHome> {
   String _query = '';
   bool _showAllSaved = false;
 
+  /// The genre chip chosen above the person's own songs; null shows them all.
+  String? _genreFilter;
+
+  /// The chip for songs whose genre is not known yet.
+  static const _noGenre = '\u0000none';
+
   /// How many of the person's own songs show before "Show all".
   static const _recentCount = 5;
 
   @override
   void initState() {
     super.initState();
+    widget.cloud?.addListener(_refresh);
+    widget.profile?.addListener(_refresh);
     final cloud = widget.cloud;
     if (cloud != null && cloud.status == CloudLibraryStatus.idle) {
       cloud.refresh();
@@ -63,7 +72,27 @@ class _LibraryHomeState extends State<LibraryHome> {
   }
 
   @override
+  void didUpdateWidget(LibraryHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.cloud != widget.cloud) {
+      oldWidget.cloud?.removeListener(_refresh);
+      widget.cloud?.addListener(_refresh);
+    }
+    if (oldWidget.profile != widget.profile) {
+      oldWidget.profile?.removeListener(_refresh);
+      widget.profile?.addListener(_refresh);
+    }
+  }
+
+  /// The cloud list or the profile changed: genres and the greeting may too.
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    widget.cloud?.removeListener(_refresh);
+    widget.profile?.removeListener(_refresh);
     _search.dispose();
     super.dispose();
   }
@@ -75,7 +104,17 @@ class _LibraryHomeState extends State<LibraryHome> {
         .split(RegExp(r'\s+'))
         .where((word) => word.isNotEmpty)
         .toList();
-    if (words.isEmpty) return widget.sessions;
+    if (words.isEmpty) {
+      final genre = _activeGenre(_genreChips);
+      if (genre == null) return widget.sessions;
+      return [
+        for (final session in widget.sessions)
+          if (genre == _noGenre
+              ? _genresOf(session).isEmpty
+              : _genresOf(session).contains(genre))
+            session,
+      ];
+    }
     return [
       for (final session in widget.sessions)
         if (_containsAll(_haystack(session), words)) session,
@@ -87,6 +126,61 @@ class _LibraryHomeState extends State<LibraryHome> {
       .split(RegExp(r'\s+'))
       .where((word) => word.isNotEmpty)
       .toList();
+
+  /// "Hello, Kim" once the profile is known, otherwise "Home" (the dock's name
+  /// for this page).
+  String get _pageTitle {
+    final name = widget.profile?.profile?.name.trim() ?? '';
+    final first = name.isEmpty ? '' : name.split(RegExp(r'\s+')).first;
+    return first.isEmpty ? 'Home' : 'Hello, $first';
+  }
+
+  /// The genres of one of the person's saved songs, taken from the same song in
+  /// the cloud library: by its id, or failing that by its title (a copy that was
+  /// replaced by a newer analysis has a different id).
+  List<String> _genresOf(AnalyzedPracticeSession session) {
+    final songs = widget.cloud?.songs ?? const <CloudSong>[];
+    for (final song in songs) {
+      if (song.jobId == session.job.jobId) return song.genres;
+    }
+    final key = _titleKey(session.title);
+    for (final song in songs) {
+      if (_titleKey(song.title) == key) return song.genres;
+    }
+    return const [];
+  }
+
+  static String _titleKey(String name) => SongIdentity.fromFileName(
+    name,
+  ).title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+
+  /// The genre chips for the person's songs: each genre with how many of their
+  /// songs it has, biggest first, and songs with no genre yet last.
+  List<(String, int)> get _genreChips {
+    final counts = <String, int>{};
+    var untagged = 0;
+    for (final session in widget.sessions) {
+      final genres = _genresOf(session);
+      if (genres.isEmpty) untagged++;
+      for (final genre in genres.toSet()) {
+        counts[genre] = (counts[genre] ?? 0) + 1;
+      }
+    }
+    if (counts.isEmpty) return const []; // nothing is tagged: no chips at all
+    final sorted = counts.entries.toList()
+      ..sort((a, b) {
+        final bySize = b.value.compareTo(a.value);
+        return bySize != 0 ? bySize : a.key.compareTo(b.key);
+      });
+    return [
+      for (final entry in sorted) (entry.key, entry.value),
+      if (untagged > 0) (_noGenre, untagged),
+    ];
+  }
+
+  /// The chip in effect: the chosen one, unless no song has that genre any more.
+  String? _activeGenre(List<(String, int)> chips) =>
+      chips.any((chip) => chip.$1 == _genreFilter) ? _genreFilter : null;
 
   /// The genres the person picked at sign-up, in the order they chose them.
   List<String> get _favourites => widget.profile?.profile?.genres ?? const [];
@@ -152,7 +246,7 @@ class _LibraryHomeState extends State<LibraryHome> {
             children: [
               Expanded(
                 child: Text(
-                  'Your songs',
+                  _pageTitle,
                   style: Theme.of(context).textTheme.displayMedium,
                 ),
               ),
@@ -237,12 +331,12 @@ class _LibraryHomeState extends State<LibraryHome> {
               children: [
                 Expanded(
                   child: Text(
-                    'Previously analyzed',
+                    'Your songs',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 Text(
-                  searching
+                  searching || _activeGenre(_genreChips) != null
                       ? '${matches.length} of ${sessions.length}'
                       : '${sessions.length} saved',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -251,6 +345,19 @@ class _LibraryHomeState extends State<LibraryHome> {
                 ),
               ],
             ),
+            if (!searching && _genreChips.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _GenreChips(
+                chips: _genreChips,
+                total: sessions.length,
+                selected: _activeGenre(_genreChips),
+                noGenre: _noGenre,
+                onSelected: (genre) => setState(() {
+                  _genreFilter = genre;
+                  _showAllSaved = false;
+                }),
+              ),
+            ],
             const SizedBox(height: 12),
             if (matches.isEmpty)
               Padding(
@@ -279,6 +386,7 @@ class _LibraryHomeState extends State<LibraryHome> {
                     child: _SavedPracticeCard(
                       key: ValueKey('card-${session.job.jobId}'),
                       session: session,
+                      genres: _genresOf(session),
                       onOpen: () => widget.onOpen(session),
                     ),
                   ),
@@ -335,9 +443,13 @@ class _SavedPracticeCard extends StatefulWidget {
     super.key,
     required this.session,
     required this.onOpen,
+    this.genres = const [],
   });
 
   final AnalyzedPracticeSession session;
+
+  /// What kind of music it is, when known.
+  final List<String> genres;
   final VoidCallback onOpen;
 
   @override
@@ -389,6 +501,17 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
                         style: textTheme.bodyMedium?.copyWith(
                           color: _cardSecondary,
                           fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    if (widget.genres.isNotEmpty)
+                      Text(
+                        widget.genres.join(' · '),
+                        key: ValueKey('savedGenres-${session.job.jobId}'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: ChordSyncColors.brand,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     const SizedBox(height: 4),
@@ -480,6 +603,75 @@ class _ChordChip extends StatelessWidget {
             fontWeight: FontWeight.w800,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A sideways row of pills above the person's songs: All, then each genre with
+/// how many of their songs it has.
+class _GenreChips extends StatelessWidget {
+  const _GenreChips({
+    required this.chips,
+    required this.total,
+    required this.selected,
+    required this.noGenre,
+    required this.onSelected,
+  });
+
+  final List<(String, int)> chips;
+  final int total;
+  final String? selected;
+  final String noGenre;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final all = <(String?, String, int)>[
+      (null, 'All', total),
+      for (final chip in chips)
+        (chip.$1, chip.$1 == noGenre ? 'No genre yet' : chip.$1, chip.$2),
+    ];
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: all.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final (value, label, count) = all[index];
+          final isSelected = value == selected;
+          return Semantics(
+            button: true,
+            selected: isSelected,
+            label: '$label, $count ${count == 1 ? 'song' : 'songs'}',
+            child: ExcludeSemantics(
+              child: ChoiceChip(
+                key: ValueKey('genreChip-${value ?? 'all'}'),
+                label: Text('$label · $count'),
+                selected: isSelected,
+                showCheckmark: false,
+                labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: isSelected
+                      ? Colors.white
+                      : ChordSyncColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+                selectedColor: ChordSyncColors.brand,
+                backgroundColor: ChordSyncColors.surface,
+                side: BorderSide(
+                  color: isSelected
+                      ? ChordSyncColors.brand
+                      : ChordSyncColors.cardEdge,
+                ),
+                onSelected: (_) {
+                  Haptics.selection();
+                  onSelected(value);
+                },
+              ),
+            ),
+          );
+        },
       ),
     );
   }

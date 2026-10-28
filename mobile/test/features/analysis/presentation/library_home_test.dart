@@ -112,7 +112,7 @@ void main() {
     expect(tester.testTextInput.isVisible, isTrue);
 
     // A tap on the page itself, not on any control.
-    await tester.tap(find.text('Your songs'));
+    await tester.tap(find.text('Home'));
     await tester.pump();
     expect(tester.testTextInput.isVisible, isFalse);
     expect(

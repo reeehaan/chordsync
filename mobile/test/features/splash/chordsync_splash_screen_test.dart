@@ -159,13 +159,13 @@ void main() {
       const MyApp(showSplash: true, splashSound: NoSplashSound()),
     );
     expect(find.bySemanticsLabel('ChordSync'), findsOneWidget);
-    expect(find.text('Your songs'), findsNothing);
+    expect(find.text('Home'), findsNothing);
 
     await tester.pump(ChordSyncSplashScreen.duration);
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.bySemanticsLabel('ChordSync'), findsNothing);
-    expect(find.text('Your songs'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
   });
 
   testWidgets('parchment sits behind the hand-over, so it cannot flash black', (
