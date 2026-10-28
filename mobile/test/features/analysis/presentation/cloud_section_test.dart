@@ -31,6 +31,7 @@ class _Api implements CloudLibraryApi {
     _song(_tum, 'Tum Hi Ho - Arijit Singh'),
     _song(_lemon, 'Lemon - Kenshi Yonezu'),
   ];
+  List<CloudSong> mine = [];
   int listCalls = 0;
 
   @override
@@ -41,15 +42,23 @@ class _Api implements CloudLibraryApi {
   }
 
   @override
-  Future<SharedTimeline> getSongTimeline(String jobId) async => _timeline();
+  Future<List<CloudSong>> listMySongs() async => mine;
 
   @override
-  Future<CloudAudioLink> getSongAudioLink(String jobId) async =>
-      const CloudAudioLink(
-        url: 'https://bucket.invalid/a.mp3?sig=1',
-        expiresInSeconds: 600,
-        fileType: 'mp3',
-      );
+  Future<SharedTimeline> getSongTimeline(
+    String jobId, {
+    bool mine = false,
+  }) async => _timeline();
+
+  @override
+  Future<CloudAudioLink> getSongAudioLink(
+    String jobId, {
+    bool mine = false,
+  }) async => const CloudAudioLink(
+    url: 'https://bucket.invalid/a.mp3?sig=1',
+    expiresInSeconds: 600,
+    fileType: 'mp3',
+  );
 }
 
 class _Downloader implements AudioDownloader {

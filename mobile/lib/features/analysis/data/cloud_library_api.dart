@@ -10,17 +10,20 @@ class CloudSong {
     this.artist,
     this.genres = const [],
     this.coverUrl,
+    this.mine = false,
   });
 
-  factory CloudSong.fromJson(Map<String, dynamic> json) => CloudSong(
-    jobId: json['job_id'] as String,
-    title: json['title'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
-    artist: json['artist'] as String?,
-    genres: _genres(json['genres']),
-    coverUrl: _httpsOrNull(json['cover_url']),
-  );
+  factory CloudSong.fromJson(Map<String, dynamic> json, {bool mine = false}) =>
+      CloudSong(
+        jobId: json['job_id'] as String,
+        title: json['title'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
+        artist: json['artist'] as String?,
+        genres: _genres(json['genres']),
+        coverUrl: _httpsOrNull(json['cover_url']),
+        mine: mine,
+      );
 
   final String jobId;
   final String title;
@@ -36,6 +39,10 @@ class CloudSong {
   /// A short-lived link to the song's cover image, or null when it has none.
   /// Only an https link is used: nothing is loaded in the clear.
   final String? coverUrl;
+
+  /// True for a song the signed-in person analysed themselves, which only they
+  /// can open. False for a song in the shared library.
+  final bool mine;
 
   static String? _httpsOrNull(Object? value) =>
       value is String && Uri.tryParse(value)?.scheme == 'https' ? value : null;
@@ -79,7 +86,10 @@ abstract interface class CloudLibraryApi {
   /// Every finished song, newest first.
   Future<List<CloudSong>> listSongs();
 
-  Future<SharedTimeline> getSongTimeline(String jobId);
+  /// The songs the signed-in person analysed, newest first. Nobody else's.
+  Future<List<CloudSong>> listMySongs();
 
-  Future<CloudAudioLink> getSongAudioLink(String jobId);
+  Future<SharedTimeline> getSongTimeline(String jobId, {bool mine = false});
+
+  Future<CloudAudioLink> getSongAudioLink(String jobId, {bool mine = false});
 }

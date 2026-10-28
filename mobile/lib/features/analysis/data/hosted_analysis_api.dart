@@ -143,10 +143,31 @@ class DioHostedAnalysisApi implements HostedAnalysisApi, CloudLibraryApi {
   }
 
   @override
-  Future<SharedTimeline> getSongTimeline(String jobId) async {
+  Future<List<CloudSong>> listMySongs() async {
+    final response = await _send(
+      () async =>
+          _dio.get<Object?>('/analysis/mine', options: await _authorized()),
+      malformed: 'Malformed song library response.',
+    );
+    return _parse(() {
+      final songs = analysisJsonMap(response.data)['songs'] as List<dynamic>;
+      return [
+        for (final song in songs)
+          CloudSong.fromJson(song as Map<String, dynamic>, mine: true),
+      ];
+    }, 'Malformed song library response.');
+  }
+
+  @override
+  Future<SharedTimeline> getSongTimeline(
+    String jobId, {
+    bool mine = false,
+  }) async {
     final response = await _send(
       () async => _dio.get<Object?>(
-        '/analysis/library/${Uri.encodeComponent(jobId)}/result',
+        mine
+            ? '/analysis/jobs/${Uri.encodeComponent(jobId)}/result'
+            : '/analysis/library/${Uri.encodeComponent(jobId)}/result',
         options: await _authorized(),
       ),
       malformed: 'Malformed SharedTimeline response.',
@@ -158,10 +179,15 @@ class DioHostedAnalysisApi implements HostedAnalysisApi, CloudLibraryApi {
   }
 
   @override
-  Future<CloudAudioLink> getSongAudioLink(String jobId) async {
+  Future<CloudAudioLink> getSongAudioLink(
+    String jobId, {
+    bool mine = false,
+  }) async {
     final response = await _send(
       () async => _dio.get<Object?>(
-        '/analysis/library/${Uri.encodeComponent(jobId)}/audio',
+        mine
+            ? '/analysis/mine/${Uri.encodeComponent(jobId)}/audio'
+            : '/analysis/library/${Uri.encodeComponent(jobId)}/audio',
         options: await _authorized(),
       ),
       malformed: 'Malformed song audio response.',

@@ -70,6 +70,13 @@ class CloudLibraryService {
 
   Future<List<CloudSong>> songs() => api.listSongs();
 
+  Future<List<CloudSong>> mySongs() => api.listMySongs();
+
+  /// The ids of the songs saved on this phone.
+  Future<Set<String>> savedIds() async => {
+    for (final session in await library.load()) session.job.jobId,
+  };
+
   Future<AnalyzedPracticeSession> download(
     CloudSong song, {
     void Function(double progress)? onProgress,
@@ -81,8 +88,8 @@ class CloudLibraryService {
     }
     // The timeline is small and the audio is big: fetch it first, so a failure
     // does not leave a large file behind.
-    final timeline = await api.getSongTimeline(song.jobId);
-    final link = await api.getSongAudioLink(song.jobId);
+    final timeline = await api.getSongTimeline(song.jobId, mine: song.mine);
+    final link = await api.getSongAudioLink(song.jobId, mine: song.mine);
 
     final documents = await documentsDirectory();
     final directory = Directory(p.join(documents.path, 'imported_audio'));

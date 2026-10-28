@@ -9,7 +9,15 @@ enum CloudLibraryStatus { idle, loading, ready, failed }
 /// What the "From the cloud" section shows: the songs in the shared library,
 /// and the progress of any being downloaded to this phone.
 class CloudLibraryController extends ChangeNotifier {
-  CloudLibraryController({required this.service, this.onDownloaded});
+  CloudLibraryController({
+    required this.service,
+    this.onDownloaded,
+    this.syncMine = false,
+  });
+
+  /// When true, the songs the person analysed (on any phone) are brought onto
+  /// this phone whenever the library refreshes, so a new install shows them.
+  final bool syncMine;
 
   final CloudLibraryService service;
 
@@ -22,6 +30,7 @@ class CloudLibraryController extends ChangeNotifier {
   final Map<String, String> _errors = {};
   final Set<String> _saved = {};
   bool _disposed = false;
+  bool _bringing = false;
 
   CloudLibraryStatus get status => _status;
   List<CloudSong> get songs => _songs;
@@ -46,6 +55,29 @@ class CloudLibraryController extends ChangeNotifier {
       _status = CloudLibraryStatus.failed;
     }
     _notify();
+    if (syncMine && _status == CloudLibraryStatus.ready) await _bringMySongs();
+  }
+
+  /// Downloads the person's own analyses that are not on this phone yet, one at
+  /// a time. A failure leaves the rest for the next refresh.
+  Future<void> _bringMySongs() async {
+    if (_bringing) return; // one pass at a time
+    _bringing = true;
+    try {
+      final mine = await service.mySongs();
+      final onPhone = await service.savedIds();
+      for (final song in mine) {
+        if (_disposed) return;
+        if (onPhone.contains(song.jobId) || _saved.contains(song.jobId)) {
+          continue;
+        }
+        await download(song);
+      }
+    } on Object {
+      // Offline, or signed in without an account: nothing to bring.
+    } finally {
+      _bringing = false;
+    }
   }
 
   Future<void> download(CloudSong song) async {

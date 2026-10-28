@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:chordsync/features/analysis/application/cloud_library_controller.dart';
 import 'package:chordsync/features/analysis/application/cloud_library_service.dart';
 import 'package:chordsync/features/analysis/data/analyzed_session_library.dart';
 import 'package:chordsync/features/analysis/data/cloud_library_api.dart';
@@ -16,20 +17,30 @@ class _FakeApi implements CloudLibraryApi {
     fileType: 'mp3',
   );
   Object? timelineError;
+  List<CloudSong> mineSongs = [];
 
   @override
   Future<List<CloudSong>> listSongs() async => [_song()];
 
   @override
-  Future<SharedTimeline> getSongTimeline(String jobId) async {
-    calls.add('timeline');
+  Future<List<CloudSong>> listMySongs() async => mineSongs;
+
+  @override
+  Future<SharedTimeline> getSongTimeline(
+    String jobId, {
+    bool mine = false,
+  }) async {
+    calls.add(mine ? 'timeline-mine' : 'timeline');
     if (timelineError != null) throw timelineError!;
     return _timeline();
   }
 
   @override
-  Future<CloudAudioLink> getSongAudioLink(String jobId) async {
-    calls.add('audio');
+  Future<CloudAudioLink> getSongAudioLink(
+    String jobId, {
+    bool mine = false,
+  }) async {
+    calls.add(mine ? 'audio-mine' : 'audio');
     return link;
   }
 }
@@ -99,6 +110,39 @@ void main() {
       expect(saved.single.audioFile.existsSync(), isTrue);
     },
   );
+
+  test('a song of your own is fetched from your own routes', () async {
+    final own = CloudSong(
+      jobId: _id,
+      title: 'Payphone - Maroon 5',
+      createdAt: DateTime.utc(2026, 10, 28),
+      mine: true,
+    );
+
+    await service.download(own);
+
+    expect(api.calls, ['timeline-mine', 'audio-mine']);
+  });
+
+  test('your own analyses are brought onto a new phone, once', () async {
+    api.mineSongs = [
+      CloudSong(
+        jobId: _id,
+        title: 'Payphone - Maroon 5',
+        createdAt: DateTime.utc(2026, 10, 28),
+        mine: true,
+      ),
+    ];
+    final cloud = CloudLibraryController(service: service, syncMine: true);
+    addTearDown(cloud.dispose);
+
+    await cloud.refresh();
+    expect((await library.load()).map((s) => s.job.jobId), [_id]);
+    expect(api.calls, ['timeline-mine', 'audio-mine']);
+
+    await cloud.refresh(); // already on the phone: nothing more is fetched
+    expect(api.calls, ['timeline-mine', 'audio-mine']);
+  });
 
   test('asks for the small timeline before the large audio', () async {
     await service.download(_song());
