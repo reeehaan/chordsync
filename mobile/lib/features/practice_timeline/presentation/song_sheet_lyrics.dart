@@ -13,7 +13,8 @@ import 'practice_stage_colors.dart';
 
 /// Words still to come: darker than the page's secondary text so they read
 /// clearly before they are sung.
-const _upcomingLyric = Color(0xFF4A3D33);
+Color get _upcomingLyric =>
+    ChordSyncColors.dark ? const Color(0xFFE8DAC7) : const Color(0xFF4A3D33);
 
 class SongSheetLyrics extends StatefulWidget {
   const SongSheetLyrics({
@@ -379,6 +380,7 @@ class _LyricChordWord extends StatelessWidget {
     final isActive =
         word.start <= playbackTime && playbackTime < word.end && !wholeLine;
     final lineDone = lineEnd <= playbackTime;
+    final sinhala = LyricScript.isSinhala(word.text);
     // In the line being sung every word that has been sung stays lit, and the
     // one being sung fills in; before and after the line it is dimmed.
     final lit = inLine && (wholeLine || word.start <= playbackTime);
@@ -436,8 +438,8 @@ class _LyricChordWord extends StatelessWidget {
                     : _upcomingLyric,
                 // One weight for every word: emphasising a word by making it
                 // bolder would widen it and push the line sideways.
-                fontWeight: FontWeight.w600,
-                fontSize: 20,
+                fontWeight: sinhala ? FontWeight.w700 : FontWeight.w600,
+                fontSize: sinhala ? 23 : 20,
                 height: 1.25,
               ),
               child: _SweptText(
@@ -488,11 +490,13 @@ class _SweptText extends StatelessWidget {
     return ShaderMask(
       blendMode: BlendMode.srcIn,
       shaderCallback: (bounds) => LinearGradient(
-        colors: const [
+        colors: [
           PracticeStageColors.amberBright,
           PracticeStageColors.amberBright,
-          PracticeStageColors.textSecondary,
-          PracticeStageColors.textSecondary,
+          // The part not yet sung keeps the colour of the words still to come,
+          // so a word does not turn grey while it is being sung.
+          _upcomingLyric,
+          _upcomingLyric,
         ],
         stops: [0, filled, (filled + _edge).clamp(filled, 1.0), 1],
       ).createShader(bounds),
@@ -641,7 +645,7 @@ class _CurrentLineIndicator extends StatelessWidget {
                     top: top,
                     width: _width,
                     height: barHeight,
-                    child: const DecoratedBox(
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: PracticeStageColors.amberBright,
                         borderRadius: BorderRadius.all(Radius.circular(2)),

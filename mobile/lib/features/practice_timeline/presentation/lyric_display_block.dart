@@ -26,6 +26,13 @@ abstract final class LyricScript {
   );
   static final _letter = RegExp(r'\p{L}', unicode: true);
 
+  static final _sinhala = RegExp(r'[\u0D80-\u0DFF]');
+
+  /// Whether [text] is written in Sinhala. The app's fonts have no Sinhala, so
+  /// the phone's own font draws it, smaller and lighter than the same size of
+  /// Latin text; the lyric sheet sets it a little larger to match.
+  static bool isSinhala(String text) => _sinhala.hasMatch(text);
+
   /// True when at least half of the letters are Han, kana or Hangul, so a
   /// name or loanword in an English line does not switch the whole line.
   static bool isCjk(String text) {
