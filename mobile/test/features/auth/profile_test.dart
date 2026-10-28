@@ -83,6 +83,34 @@ void main() {
     return controller;
   }
 
+  test(
+    'an edited profile is saved to the account and kept on the phone',
+    () async {
+      final controller = await build();
+      expect(controller.profile, isNull);
+
+      await controller.save(_kim);
+
+      expect(controller.profile?.name, 'Kim Lee');
+      expect(api.onServer?.name, 'Kim Lee');
+      expect(store.local?.profile.name, 'Kim Lee');
+    },
+  );
+
+  test('a failed save keeps the earlier profile', () async {
+    api = _FakeProfileApi()..onServer = _server;
+    final controller = await build();
+    api.onServer = _server;
+    await controller.sync();
+    api.offline = true;
+
+    await expectLater(
+      controller.save(_kim),
+      throwsA(isA<ProfileApiException>()),
+    );
+    expect(controller.profile?.name, _server.name);
+  });
+
   test('the profile on the account is shown and kept on the phone', () async {
     api = _FakeProfileApi()..onServer = _server;
     final controller = await build();

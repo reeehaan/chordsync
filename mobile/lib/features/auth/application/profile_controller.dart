@@ -82,6 +82,17 @@ class ProfileController extends ChangeNotifier {
     }
   }
 
+  /// Saves an edited profile to the account. Throws [ProfileApiException] when
+  /// the server cannot be reached, leaving the earlier profile in place.
+  Future<void> save(UserProfile next) async {
+    final email = _auth.email;
+    final saved = await _api.save(next);
+    if (email != null) await _store.write(saved, email: email);
+    _profile = saved;
+    _status = ProfileStatus.ready;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _auth.removeListener(_onAuthChanged);
