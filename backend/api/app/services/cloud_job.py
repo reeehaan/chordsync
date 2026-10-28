@@ -94,6 +94,8 @@ class CloudJobRecord:
     # Set when this song is a duplicate of another saved analysis (the id of the
     # copy that replaces it). The song is hidden from lists but nothing is deleted.
     superseded_by: str | None = None
+    # A small cover image kept next to the song's audio, when its file had one.
+    cover_object_key: str | None = None
 
     def validate(self) -> None:
         if (
@@ -108,6 +110,7 @@ class CloudJobRecord:
             self.source_object_key,
             self.playback_object_key,
             self.timeline_object_key,
+            self.cover_object_key,
         ):
             if key is not None:
                 _validate_object_key(key)
@@ -165,6 +168,7 @@ class CloudJobRecord:
             "genres": list(self.genres),
             "genre_source": self.genre_source,
             "superseded_by": self.superseded_by,
+            "cover_object_key": self.cover_object_key,
         }
 
     @classmethod
@@ -212,6 +216,7 @@ class CloudJobRecord:
             genres=_known_genres(value.get("genres")),
             genre_source=_optional_text(value.get("genre_source")),
             superseded_by=_optional_text(value.get("superseded_by")),
+            cover_object_key=_optional_text(value.get("cover_object_key")),
         )
         record.validate()
         return record

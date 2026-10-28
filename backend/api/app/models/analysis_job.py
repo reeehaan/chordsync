@@ -56,6 +56,8 @@ class LibrarySong(BaseModel):
     # What kind of music it is; empty for songs not tagged yet.
     artist: str | None = None
     genres: list[str] = []
+    # A short-lived link to the cover image; None when the song has no cover.
+    cover_url: str | None = None
 
 
 class LibraryResponse(BaseModel):

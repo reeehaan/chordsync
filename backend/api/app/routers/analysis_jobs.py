@@ -535,6 +535,7 @@ def list_library(
                 duration_seconds=job.duration_seconds,
                 artist=job.artist,
                 genres=list(job.genres),
+                cover_url=application.cover_url(job),
             )
             for job in application.library()
         ]
@@ -597,6 +598,7 @@ def list_my_songs(
                 duration_seconds=job.duration_seconds,
                 artist=job.artist,
                 genres=list(job.genres),
+                cover_url=application.cover_url(job),
             )
             for job in application.my_songs(_owner(principal))
         ]

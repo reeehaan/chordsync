@@ -62,6 +62,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_UPLOAD_URL_TTL_SECONDS = 600
 LIBRARY_AUDIO_URL_TTL_SECONDS = 600
+# A cover link lives a while: the app shows the list for a good time before refreshing.
+COVER_URL_TTL_SECONDS = 3600
 # If a confirm dies mid-validation the job stays VALIDATING. After this many
 # seconds another confirm may take over (must exceed the Lambda timeout).
 VALIDATION_LEASE_SECONDS = 120
@@ -680,6 +682,21 @@ class CloudAnalysisApplication:
     def library_audio(self, job_id: str) -> tuple[str, int, str | None]:
         """A short-lived download link for the song's playback audio."""
         return self._playback_link(self._finished(job_id))
+
+    def cover_url(self, job: CloudJobRecord) -> str | None:
+        """A signed link to the song's cover image, or None when it has none (or the
+        link cannot be made: the list is still shown, just without art)."""
+        key = job.cover_object_key
+        if not key or self._uploads is None or not key.startswith(f"jobs/{job.job_id}/"):
+            return None
+        try:
+            return self._uploads.presign_get(
+                ArtifactKey(ArtifactRole.PLAYBACK_AUDIO, key),
+                expires_in=COVER_URL_TTL_SECONDS,
+            )
+        except Exception:  # noqa: BLE001 - a missing cover must never break a list
+            logger.warning("could not sign a cover link for a song")
+            return None
 
     def _playback_link(self, job: CloudJobRecord) -> tuple[str, int, str | None]:
         if not job.playback_object_key:

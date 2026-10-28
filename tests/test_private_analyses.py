@@ -260,7 +260,7 @@ def test_stored_genres_outside_the_list_are_ignored_not_trusted():
         loaded = CloudJobRecord.from_dict({**payload, "genres": bad})
         assert loaded.genres in ([], ["Rock"], ["Sinhala"], ["Rock", "Sinhala"])
     assert CloudJobRecord.from_dict({**payload, "genres": ["Polka", "Rock", 7, "Sinhala"]}).genres == ["Rock", "Sinhala"]
-    old = {k: v for k, v in payload.items() if k not in {"artist", "genres", "genre_source", "superseded_by"}}
+    old = {k: v for k, v in payload.items() if k not in {"artist", "genres", "genre_source", "superseded_by", "cover_object_key"}}
     loaded = CloudJobRecord.from_dict(old)  # a song saved before these fields existed
     assert loaded.genres == [] and loaded.artist is None and loaded.superseded_by is None
 
@@ -274,3 +274,53 @@ def test_dynamodb_leaves_hidden_duplicates_out_of_every_list():
         request = table.requests[0]
         assert "attribute_not_exists(superseded_by)" in request["FilterExpression"]
         assert request["ExpressionAttributeValues"][":null"] == "NULL"
+
+
+# --- covers ---
+
+
+def test_a_song_with_a_cover_gets_a_signed_link_and_one_without_gets_none(env):
+    seed(env, "with-cover", title="Duvet", owner="demo:tester-a")
+    seed(env, "no-cover", title="Lemon", owner="demo:tester-a", age_minutes=5)
+    _tag(env, "with-cover", cover_object_key="jobs/with-cover/playback/cover.jpg")
+
+    songs = {s["title"]: s for s in env.client.get("/analysis/library").json()["songs"]}
+
+    link = songs["Duvet"]["cover_url"]
+    assert link.startswith("https://") and "jobs/with-cover/playback/cover.jpg" in link
+    assert songs["Lemon"]["cover_url"] is None
+    request = env.uploads.presign_requests[-1]
+    assert request["expires_in"] == 3600  # long enough to browse the list
+
+
+def test_your_own_songs_get_cover_links_too(env):
+    seed(env, "mine", title="Mine", owner=f"cognito:{SUB_A}")
+    _tag(env, "mine", cover_object_key="jobs/mine/playback/cover.jpg")
+
+    songs = _as(env, SUB_A).get("/analysis/mine").json()["songs"]
+
+    assert songs[0]["cover_url"].endswith("signature=test") and "jobs/mine/playback/cover.jpg" in songs[0]["cover_url"]
+
+
+def test_a_cover_outside_the_songs_own_folder_is_never_signed(env):
+    seed(env, "tricky", title="Tricky", owner="demo:tester-a")
+    _tag(env, "tricky", cover_object_key="jobs/someone-else/playback/audio.mp3")
+    env.uploads.presign_requests.clear()
+
+    songs = env.client.get("/analysis/library").json()["songs"]
+
+    assert songs[0]["cover_url"] is None and env.uploads.presign_requests == []
+
+
+def test_a_cover_that_cannot_be_signed_leaves_the_list_working(env, monkeypatch):
+    seed(env, "s1", title="One", owner="demo:tester-a")
+    _tag(env, "s1", cover_object_key="jobs/s1/playback/cover.jpg")
+
+    def broken(key, *, expires_in):
+        raise RuntimeError("signing failed")
+
+    monkeypatch.setattr(env.uploads, "presign_get", broken)
+
+    response = env.client.get("/analysis/library")
+
+    assert response.status_code == 200 and response.json()["songs"][0]["cover_url"] is None

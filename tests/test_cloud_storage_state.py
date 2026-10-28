@@ -77,6 +77,7 @@ def test_cloud_job_serialization_round_trip_contains_only_metadata():
         "genres",
         "genre_source",
         "superseded_by",
+        "cover_object_key",
     }
     assert "timeline" not in payload
     assert "audio" not in payload
