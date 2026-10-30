@@ -123,6 +123,7 @@ class LocalAnalyzedSessionLibrary implements AnalyzedSessionLibrary {
       timeline: SharedTimeline.fromJson(
         json['timeline'] as Map<String, dynamic>,
       ),
+      cleanChords: json['clean_chords'] as bool? ?? true,
     );
   }
 
@@ -145,6 +146,7 @@ class LocalAnalyzedSessionLibrary implements AnalyzedSessionLibrary {
             },
       'result_available': session.job.resultAvailable,
     },
+    'clean_chords': session.cleanChords,
     'timeline': _timelineToJson(session.timeline),
   };
 

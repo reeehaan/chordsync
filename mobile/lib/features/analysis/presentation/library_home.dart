@@ -24,6 +24,7 @@ class LibraryHome extends StatefulWidget {
     required this.sessions,
     required this.onOpen,
     required this.onAddSong,
+    this.onCleanChordsChanged,
     this.cloud,
     this.accountButton,
     this.profile,
@@ -32,6 +33,10 @@ class LibraryHome extends StatefulWidget {
   final List<AnalyzedPracticeSession> sessions;
   final ValueChanged<AnalyzedPracticeSession> onOpen;
   final VoidCallback onAddSong;
+
+  /// Called when a song's chord clean-up is switched on or off.
+  final void Function(AnalyzedPracticeSession session, bool value)?
+  onCleanChordsChanged;
 
   /// The shared library in the cloud. Null when the app has no cloud to ask
   /// (local development), and the section is then left out.
@@ -390,6 +395,10 @@ class _LibraryHomeState extends State<LibraryHome> {
                       session: session,
                       genres: _genresOf(session),
                       onOpen: () => widget.onOpen(session),
+                      onCleanChordsChanged: widget.onCleanChordsChanged == null
+                          ? null
+                          : (value) =>
+                                widget.onCleanChordsChanged!(session, value),
                     ),
                   ),
                 ),
@@ -446,10 +455,12 @@ class _SavedPracticeCard extends StatefulWidget {
     super.key,
     required this.session,
     required this.onOpen,
+    this.onCleanChordsChanged,
     this.genres = const [],
   });
 
   final AnalyzedPracticeSession session;
+  final ValueChanged<bool>? onCleanChordsChanged;
 
   /// What kind of music it is, when known.
   final List<String> genres;
@@ -469,6 +480,34 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
     () => EmbeddedCoverArt.read(widget.session.audioFile),
   );
 
+  /// Whether one-beat chords are hidden is a choice per song: some songs
+  /// really do change chord that fast.
+  Future<void> _showChordSettings(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) {
+        var value = widget.session.cleanChords;
+        return StatefulBuilder(
+          builder: (context, setSheetState) => SafeArea(
+            child: SwitchListTile(
+              key: const ValueKey('cleanChordsSwitch'),
+              title: const Text('Hide one-beat chords'),
+              subtitle: const Text(
+                'Turn this off if quick chord changes in this song are '
+                'missing.',
+              ),
+              value: value,
+              onChanged: (next) {
+                setSheetState(() => value = next);
+                widget.onCleanChordsChanged!(next);
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
@@ -480,6 +519,9 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
         key: ValueKey('savedPractice-${session.job.jobId}'),
         borderRadius: BorderRadius.circular(16),
         onTap: widget.onOpen,
+        onLongPress: widget.onCleanChordsChanged == null
+            ? null
+            : () => _showChordSettings(context),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Row(
@@ -564,7 +606,7 @@ class _SavedPracticeCardState extends State<_SavedPracticeCard> {
   /// The first [limit] different chords in the order they are played.
   static List<String> _firstChords(AnalyzedPracticeSession session, int limit) {
     final seen = <String>[];
-    for (final bar in session.timeline.bars) {
+    for (final bar in session.practiceTimeline.bars) {
       for (final beat in bar.beats) {
         if (beat.chord != 'N' && !seen.contains(beat.chord)) {
           seen.add(beat.chord);
@@ -785,6 +827,7 @@ class _CloudSongCard extends StatelessWidget {
             SongCover(
               seed: identity.title,
               coverUrl: song.coverUrl,
+              coverKey: song.jobId,
               genres: song.genres,
             ),
             const SizedBox(width: 14),

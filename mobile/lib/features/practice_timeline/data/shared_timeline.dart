@@ -1,3 +1,5 @@
+import 'chord_blip_filter.dart';
+
 class SharedTimeline {
   const SharedTimeline({
     required this.schemaVersion,
@@ -32,6 +34,20 @@ class SharedTimeline {
           .toList(),
     );
   }
+
+  /// This song with the chords too brief to play taken out (see
+  /// [ChordBlipFilter]). For showing only: what is saved stays as analysed, so
+  /// the rule can change later without losing anything.
+  SharedTimeline withCleanChords() => SharedTimeline(
+    schemaVersion: schemaVersion,
+    bpm: bpm,
+    beatsPerBar: beatsPerBar,
+    beatSource: beatSource,
+    lyricSource: lyricSource,
+    bars: ChordBlipFilter.apply(bars),
+    lyrics: lyrics,
+    practiceRegions: practiceRegions,
+  );
 
   final int schemaVersion;
   final double bpm;

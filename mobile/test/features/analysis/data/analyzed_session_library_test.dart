@@ -43,6 +43,26 @@ void main() {
     );
   });
 
+  test(
+    'keeps a song\'s chord clean-up choice, on unless switched off',
+    () async {
+      final session = _session(audio, jobId: 'job-one', title: 'Practice song');
+      await library.save(session.withCleanChords(false));
+      expect((await library.load()).single.cleanChords, isFalse);
+
+      await library.save(session.withCleanChords(true));
+      expect((await library.load()).single.cleanChords, isTrue);
+
+      final index = File('${documents.path}/analyzed_sessions/sessions.json');
+      final stripped = (await index.readAsString()).replaceAll(
+        '"clean_chords":true,',
+        '',
+      );
+      await index.writeAsString(stripped);
+      expect((await library.load()).single.cleanChords, isTrue);
+    },
+  );
+
   test('loads an old saved session without practice_regions', () async {
     final session = _session(audio, jobId: 'old-job', title: 'Old session');
     await library.save(session);

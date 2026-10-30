@@ -23,7 +23,9 @@ class PracticeSessionFactory {
     PracticePlaybackSynchronizer? synchronizer;
     try {
       final audioPlayer = _audioPlayerFactory(session.audioFile);
-      final playbackController = PracticePlaybackController(session.timeline);
+      final playbackController = PracticePlaybackController(
+        session.practiceTimeline,
+      );
       synchronizer = PracticePlaybackSynchronizer(
         audioPlayer: audioPlayer,
         playbackController: playbackController,

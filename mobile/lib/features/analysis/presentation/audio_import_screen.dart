@@ -198,6 +198,16 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
     );
   }
 
+  Future<void> _setCleanChords(
+    AnalyzedPracticeSession session,
+    bool value,
+  ) async {
+    final library = widget.sessionLibrary;
+    if (library == null) return;
+    await library.save(session.withCleanChords(value));
+    await _loadSavedSessions();
+  }
+
   Future<void> _openSavedPractice(AnalyzedPracticeSession session) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -231,6 +241,7 @@ class _AudioImportScreenState extends State<AudioImportScreen> {
                   sessions: _savedSessions,
                   onOpen: _openSavedPractice,
                   onAddSong: () => _selectTab(1),
+                  onCleanChordsChanged: _setCleanChords,
                   cloud: widget.cloudLibrary,
                   accountButton: widget.accountButton,
                   profile: widget.profile,

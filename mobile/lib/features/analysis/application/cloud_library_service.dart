@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../data/analysis_job.dart';
 import '../data/analyzed_session_library.dart';
+import '../../practice_timeline/data/shared_timeline.dart';
 import '../data/cloud_library_api.dart';
 import 'analyzed_practice_session.dart';
 
@@ -88,8 +89,13 @@ class CloudLibraryService {
     }
     // The timeline is small and the audio is big: fetch it first, so a failure
     // does not leave a large file behind.
-    final timeline = await api.getSongTimeline(song.jobId, mine: song.mine);
-    final link = await api.getSongAudioLink(song.jobId, mine: song.mine);
+    // The two calls do not depend on each other, so they go out together.
+    final fetched = await Future.wait<Object>([
+      api.getSongTimeline(song.jobId, mine: song.mine),
+      api.getSongAudioLink(song.jobId, mine: song.mine),
+    ]);
+    final timeline = fetched[0] as SharedTimeline;
+    final link = fetched[1] as CloudAudioLink;
 
     final documents = await documentsDirectory();
     final directory = Directory(p.join(documents.path, 'imported_audio'));
@@ -118,6 +124,7 @@ class CloudLibraryService {
         resultAvailable: true,
       ),
       timeline: timeline,
+      cleanChords: true,
     );
     await library.save(session);
     return session;

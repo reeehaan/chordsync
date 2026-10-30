@@ -124,7 +124,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
     _audioPlayer = prepared.audioPlayer;
     _controller = prepared.playbackController;
     _synchronizer = prepared.synchronizer;
-    _timeline = analyzedSession.timeline;
+    _timeline = analyzedSession.practiceTimeline;
     final audioDuration = prepared.audioPlayer.duration;
     setState(() {
       _maximumPosition = audioDuration == null

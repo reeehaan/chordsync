@@ -72,6 +72,7 @@ class AnalysisPracticeCoordinator implements AnalysisPracticePreparation {
       job: completed.job,
       audioFile: audioFile,
       timeline: completed.timeline,
+      cleanChords: true,
     );
   }
 
