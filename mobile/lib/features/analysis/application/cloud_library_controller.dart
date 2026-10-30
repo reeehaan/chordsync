@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/cloud_library_api.dart';
+import '../data/cloud_song_list_cache.dart';
 import 'analyzed_practice_session.dart';
 import 'cloud_library_service.dart';
 
@@ -13,7 +14,25 @@ class CloudLibraryController extends ChangeNotifier {
     required this.service,
     this.onDownloaded,
     this.syncMine = false,
-  });
+    this.cache,
+    this.listMaxAge = const Duration(minutes: 10),
+    this.mineMaxAge = const Duration(hours: 1),
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
+
+  /// Where the song list is kept between launches, or null to keep none.
+  final CloudSongListCache? cache;
+
+  /// How long a fetched list is shown without asking the API again.
+  final Duration listMaxAge;
+
+  /// How often the person's own analyses are checked for on a refresh that was
+  /// not asked for by hand.
+  final Duration mineMaxAge;
+
+  final DateTime Function() _clock;
+  CloudSongSnapshot? _snapshot;
+  bool _cacheRead = false;
 
   /// When true, the songs the person analysed (on any phone) are brought onto
   /// this phone whenever the library refreshes, so a new install shows them.
@@ -44,18 +63,57 @@ class CloudLibraryController extends ChangeNotifier {
   /// offering it even before the saved-songs list has caught up.
   bool isSaved(String jobId) => _saved.contains(jobId);
 
-  Future<void> refresh() async {
+  /// Shows the list, asking the API only when it is older than [listMaxAge].
+  /// A refresh asked for by hand ([force]) always asks, and also looks for the
+  /// person's own songs on other phones.
+  Future<void> refresh({bool force = false}) async {
     if (_status == CloudLibraryStatus.loading) return;
-    _status = CloudLibraryStatus.loading;
-    _notify();
-    try {
-      _songs = await service.songs();
-      _status = CloudLibraryStatus.ready;
-    } on Object {
-      _status = CloudLibraryStatus.failed;
+    if (!_cacheRead) {
+      _cacheRead = true;
+      _snapshot = await cache?.load();
+      final saved = _snapshot;
+      if (saved != null && _songs.isEmpty) {
+        _songs = saved.songs;
+        _status = CloudLibraryStatus.ready;
+        _notify();
+      }
     }
-    _notify();
-    if (syncMine && _status == CloudLibraryStatus.ready) await _bringMySongs();
+    final saved = _snapshot;
+    final listIsFresh =
+        !force &&
+        saved != null &&
+        _clock().difference(saved.fetchedAt) < listMaxAge;
+    if (!listIsFresh) {
+      final hadSongs = _songs.isNotEmpty;
+      // With a list already on screen, update it quietly instead of
+      // swapping it for a spinner.
+      if (!hadSongs) {
+        _status = CloudLibraryStatus.loading;
+        _notify();
+      }
+      try {
+        _songs = await service.songs();
+        _status = CloudLibraryStatus.ready;
+        _snapshot = CloudSongSnapshot(
+          songs: _songs,
+          fetchedAt: _clock(),
+          mineSyncedAt: saved?.mineSyncedAt,
+        );
+        await cache?.save(_snapshot!);
+      } on Object {
+        _status = hadSongs
+            ? CloudLibraryStatus.ready
+            : CloudLibraryStatus.failed;
+      }
+      _notify();
+    }
+    if (!syncMine || _status != CloudLibraryStatus.ready) return;
+    final lastMine = _snapshot?.mineSyncedAt;
+    final mineIsFresh =
+        !force &&
+        lastMine != null &&
+        _clock().difference(lastMine) < mineMaxAge;
+    if (!mineIsFresh) await _bringMySongs();
   }
 
   /// Downloads the person's own analyses that are not on this phone yet, one at
@@ -72,6 +130,11 @@ class CloudLibraryController extends ChangeNotifier {
           continue;
         }
         await download(song);
+      }
+      final current = _snapshot;
+      if (current != null) {
+        _snapshot = current.copyWith(mineSyncedAt: _clock());
+        await cache?.save(_snapshot!);
       }
     } on Object {
       // Offline, or signed in without an account: nothing to bring.

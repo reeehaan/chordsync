@@ -64,7 +64,7 @@ class DiscoverSection extends StatelessWidget {
                   tooltip: 'Refresh songs',
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.refresh),
-                  onPressed: cloud.refresh,
+                  onPressed: () => cloud.refresh(force: true),
                 ),
             ],
           ),
@@ -343,6 +343,7 @@ class _SongTile extends StatelessWidget {
                   SongCover(
                     seed: identity.title,
                     coverUrl: song.coverUrl,
+                    coverKey: song.jobId,
                     genres: song.genres,
                     size: width,
                     radius: 14,
@@ -585,6 +586,7 @@ class _SongRow extends StatelessWidget {
               SongCover(
                 seed: identity.title,
                 coverUrl: song.coverUrl,
+                coverKey: song.jobId,
                 genres: song.genres,
               ),
               const SizedBox(width: 14),
@@ -688,6 +690,7 @@ class _SongSheet extends StatelessWidget {
                     SongCover(
                       seed: identity.title,
                       coverUrl: song.coverUrl,
+                      coverKey: song.jobId,
                       genres: song.genres,
                       size: 96,
                       radius: 16,

@@ -5,6 +5,7 @@ import 'design_system/chordsync_design_system.dart';
 import 'design_system/motion.dart';
 import 'features/analysis/application/analysis_job_poller.dart';
 import 'features/analysis/application/cloud_library_controller.dart';
+import 'features/analysis/data/cloud_song_list_cache.dart';
 import 'features/analysis/application/cloud_library_service.dart';
 import 'features/analysis/application/analysis_practice_coordinator.dart';
 import 'features/analysis/data/analysis_api_client.dart';
@@ -155,6 +156,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (!config.isHosted) return null;
     return CloudLibraryController(
       syncMine: _auth != null,
+      cache: FileCloudSongListCache(),
       service: CloudLibraryService(
         api: DioHostedAnalysisApi(
           baseUrl: config.baseUrl,

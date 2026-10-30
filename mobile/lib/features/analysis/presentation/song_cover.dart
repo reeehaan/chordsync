@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../design_system/chordsync_design_system.dart';
+import '../data/cached_cover_image.dart';
 import 'genre_style.dart';
 
 /// A song's art card: its real cover when it has one, and otherwise a card
@@ -11,6 +12,7 @@ class SongCover extends StatelessWidget {
     super.key,
     required this.seed,
     this.coverUrl,
+    this.coverKey,
     this.genres = const [],
     this.size = 64,
     this.radius = 12,
@@ -21,6 +23,10 @@ class SongCover extends StatelessWidget {
 
   /// An https link to the cover image, or null.
   final String? coverUrl;
+
+  /// What the cover is kept under on this phone (the song's id), so it is
+  /// fetched once. Null means it is not kept.
+  final String? coverKey;
   final List<String> genres;
   final double size;
   final double radius;
@@ -52,11 +58,13 @@ class SongCover extends StatelessWidget {
               ),
             ),
             if (url != null && Uri.tryParse(url)?.scheme == 'https')
-              Image.network(
-                url,
+              Image(
+                image: ResizeImage(
+                  CachedCoverImage(cacheKey: coverKey, url: url),
+                  width: (size * 3).round(),
+                ),
                 key: const ValueKey('coverImage'),
                 fit: BoxFit.cover,
-                cacheWidth: (size * 3).round(),
                 gaplessPlayback: true,
                 excludeFromSemantics: true,
                 // A cover that fades in over the made card.

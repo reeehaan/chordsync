@@ -25,6 +25,17 @@ class CloudSong {
         mine: mine,
       );
 
+  /// What the phone keeps between launches, in the shape the API sends.
+  Map<String, Object?> toJson() => {
+    'job_id': jobId,
+    'title': title,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'duration_seconds': durationSeconds,
+    'artist': artist,
+    'genres': genres,
+    'cover_url': coverUrl,
+  };
+
   final String jobId;
   final String title;
   final DateTime createdAt;
