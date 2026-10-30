@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from analysis.preprocessing.playback_encoder import prepare_playback
 from backend.api.app.services.analysis_worker_consumer import (
     AnalysisWorkerConsumer,
     WorkerOutcome,
@@ -144,6 +145,7 @@ def build_consumer(config: CloudRuntimeConfig) -> AnalysisWorkerConsumer:
             runtime.artifact_storage,
             extra_workspace_roots=(processor.workspace_root,),
         ),
+        playback_encoder=prepare_playback,
     )
 
 

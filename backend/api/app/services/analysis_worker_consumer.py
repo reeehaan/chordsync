@@ -5,6 +5,7 @@ import logging
 import time
 from contextlib import AbstractContextManager
 from enum import Enum
+from pathlib import Path
 from typing import Callable
 
 from backend.api.app.services.analysis_job_queue import (
@@ -28,6 +29,7 @@ from backend.api.app.services.cloud_job_repository import (
     CloudJobRepository,
     JobWriteConflictError,
 )
+from backend.api.app.services.playback_audio import PlaybackAudio, original_playback
 from backend.api.app.services.result_publication import (
     AnalysisResultPublisher,
     PublicationRequest,
@@ -75,9 +77,11 @@ class AnalysisWorkerConsumer:
         cleanup: ArtifactCleanup,
         *,
         heartbeat_factory: HeartbeatFactory | None = None,
+        playback_encoder: Callable[[Path, bytes], PlaybackAudio] = original_playback,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._sleep = sleep
+        self._playback_encoder = playback_encoder
         self._queue = queue
         self._repository = repository
         self._storage = storage
@@ -179,12 +183,13 @@ class AnalysisWorkerConsumer:
             return WorkerOutcome.ACKNOWLEDGED_STALE
         if latest.status is not CloudJobStatus.PROCESSING:
             return WorkerOutcome.RELEASED_BUSY
+        playback = self._playback_encoder(source.path, source.content)
         self._publisher.publish(
             PublicationRequest(
                 job_id=job.job_id,
-                playback_bytes=source.content,
-                playback_extension=source.path.suffix,
-                playback_content_type=_content_type(source.path.suffix),
+                playback_bytes=playback.content,
+                playback_extension=playback.extension,
+                playback_content_type=playback.content_type,
                 timeline_bytes=json.dumps(
                     timeline.model_dump(mode="json"),
                     separators=(",", ":"),
@@ -247,11 +252,3 @@ def _is_retryable(error: Exception) -> bool:
             CloudProviderErrorKind.UNEXPECTED,
         }
     return True
-
-
-def _content_type(extension: str) -> str:
-    return {
-        ".mp3": "audio/mpeg",
-        ".wav": "audio/wav",
-        ".m4a": "audio/mp4",
-    }[extension.casefold()]
