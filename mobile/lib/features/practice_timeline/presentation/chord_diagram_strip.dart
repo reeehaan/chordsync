@@ -38,8 +38,12 @@ class ChordDiagramStrip extends StatefulWidget {
   /// Longest chord shown as beat segments; a longer one keeps the bar.
   static const maximumBeatSegments = 8;
 
-  static const compactHeight = 150.0;
-  static const expandedHeight = 176.0;
+  /// The band at the top that holds the enlarge button, so it never sits on a
+  /// chord's name.
+  static const controlBand = 42.0;
+
+  static const compactHeight = 150.0 + controlBand;
+  static const expandedHeight = 176.0 + controlBand;
 
   @override
   State<ChordDiagramStrip> createState() => _ChordDiagramStripState();
@@ -122,10 +126,16 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip>
       final activeIndex = entries.indexWhere((entry) => entry.isCurrent);
       if (activeIndex < 0) return;
       final cardExtent = _cardWidth + _cardGap;
-      final target =
-          (activeIndex * cardExtent -
-                  (position.viewportDimension - _cardWidth) / 2)
-              .clamp(0.0, position.maxScrollExtent);
+      // The current card sits near the left, so the next two are fully in
+      // view; whatever room is left shows the edge of the previous card, which
+      // may be cut off.
+      final room =
+          position.viewportDimension -
+          _rightMargin -
+          _visibleCards * cardExtent;
+      final leftInset = (room + _cardGap).clamp(0.0, cardExtent * 0.5);
+      final target = (_stripPadding + activeIndex * cardExtent - leftInset)
+          .clamp(0.0, position.maxScrollExtent);
       _scrollController.animateTo(
         target,
         duration: const Duration(milliseconds: 320),
@@ -134,17 +144,39 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip>
     });
   }
 
-  double get _cardWidth => _isExpanded ? 128.0 : 104.0;
+  /// The current card and the two after it must fit on screen together.
+  static const _visibleCards = 3;
+  static const _rightMargin = 8.0;
+  static const _stripPadding = 16.0;
+
+  double _viewportWidth = 390;
+
+  double get _cardWidth {
+    if (!_isExpanded) return 104.0;
+    // Enlarged cards shrink to the widest size that still shows three.
+    final fit =
+        (_viewportWidth - _rightMargin - (_visibleCards - 1) * _cardGap) /
+        _visibleCards;
+    return fit.clamp(104.0, 128.0);
+  }
+
   double get _cardGap => 10.0;
 
   List<_StripEntry> _entries() {
-    final upcoming = widget.progression
-        .where((chord) => chord != widget.currentChord)
-        .toList(growable: false);
+    // The progression is already in play order with repeats collapsed, and
+    // starts with the sounding chord. Keep it in order: a chord that comes
+    // back later (C, G, C, G) must still show as the one after next.
+    final progression = widget.progression;
     final following = <String>[
-      ?widget.nextChord,
-      ...upcoming.where((chord) => chord != widget.nextChord),
+      if (progression.isNotEmpty && progression.first == widget.currentChord)
+        ...progression.skip(1)
+      else
+        ...progression,
     ];
+    final next = widget.nextChord;
+    if (next != null && (following.isEmpty || following.first != next)) {
+      following.insert(0, next);
+    }
     final entries = [
       if (widget.previousChord case final previous?)
         _StripEntry(
@@ -253,6 +285,7 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip>
 
   @override
   Widget build(BuildContext context) {
+    _viewportWidth = MediaQuery.sizeOf(context).width;
     final entries = _entries();
     return Semantics(
       container: true,
@@ -294,7 +327,12 @@ class _ChordDiagramStripState extends State<ChordDiagramStrip>
                     : _scrollController,
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  ChordDiagramStrip.controlBand,
+                  16,
+                  0,
+                ),
                 child: AnimatedBuilder(
                   animation: _slide,
                   builder: (context, child) {

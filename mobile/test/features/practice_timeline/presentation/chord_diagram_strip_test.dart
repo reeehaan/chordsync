@@ -62,6 +62,87 @@ Widget _step({
 );
 
 void main() {
+  testWidgets('the enlarge button sits above the chord cards, not on them', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _step(
+        previous: 'Am',
+        current: 'C',
+        next: 'G',
+        progression: const ['C', 'G', 'F', 'C'],
+        start: 4,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = tester.getRect(
+      find.byKey(const ValueKey('expandDiagramsButton')),
+    );
+    for (final key in [
+      'currentChordValue',
+      'nextChordValue',
+      'upcomingChordValue4',
+    ]) {
+      final name = tester.getRect(find.byKey(ValueKey(key)));
+      expect(button.overlaps(name), isFalse, reason: key);
+    }
+  });
+
+  testWidgets('the current chord and the next two are fully on screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _step(
+        previous: 'Am',
+        current: 'C',
+        next: 'G',
+        progression: const ['C', 'G', 'F', 'C'],
+        start: 4,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final key in [
+      'currentChordValue',
+      'nextChordValue',
+      'upcomingChordValue4',
+    ]) {
+      final box = tester.getRect(find.byKey(ValueKey(key)));
+      expect(box.left, greaterThanOrEqualTo(0), reason: key);
+      expect(box.right, lessThanOrEqualTo(390), reason: key);
+    }
+  });
+
+  testWidgets('the chord after next shows even when it repeats the current', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _step(
+        previous: null,
+        current: 'C',
+        next: 'G',
+        progression: const ['C', 'G', 'C', 'G'],
+        start: 0,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('nextChordValue')), findsOneWidget);
+    final after = tester.widget<Text>(
+      find.byKey(const ValueKey('upcomingChordValue4')),
+    );
+    expect(after.data, 'C');
+  });
+
   testWidgets('a chord turning current is orange at once, never grey', (
     tester,
   ) async {
