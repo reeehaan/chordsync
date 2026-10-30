@@ -740,7 +740,7 @@ _ALREADY_CONFIRMED = frozenset(
 )
 _REJECTION_MESSAGES = {
     "audio_too_large": "Audio exceeds the 25 MB limit.",
-    "audio_too_long": "Audio exceeds the 6-minute limit.",
+    "audio_too_long": "Audio exceeds the 10-minute limit.",
     "empty_audio": "Audio file must not be empty.",
     "invalid_audio": "Audio could not be decoded.",
     "unsupported_audio_format": "Supported audio formats are WAV, MP3, and M4A.",

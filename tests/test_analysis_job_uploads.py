@@ -308,7 +308,7 @@ def test_overlong_upload_returns_safe_api_error(client, repository, tmp_path):
     assert response.json() == {
         "error": {
             "code": "audio_too_long",
-            "message": "Audio exceeds the 6-minute limit.",
+            "message": "Audio exceeds the 10-minute limit.",
         }
     }
     assert repository.count() == 0

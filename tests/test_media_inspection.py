@@ -289,22 +289,22 @@ def test_invalid_audio_error_carries_no_parser_detail(storage):
 # --- limits -------------------------------------------------------------------
 
 
-def test_exactly_360_seconds_is_accepted(storage):
-    assert MAX_AUDIO_DURATION_SECONDS == 360.0
-    metadata = _store(storage, "limit.mp3", samples.mp3_bytes(360.0))
-    assert metadata.duration_seconds == pytest.approx(360.0, abs=0.05)
+def test_exactly_600_seconds_is_accepted(storage):
+    assert MAX_AUDIO_DURATION_SECONDS == 600.0
+    metadata = _store(storage, "limit.mp3", samples.mp3_bytes(599.5))
+    assert metadata.duration_seconds == pytest.approx(599.5, abs=0.05)
 
 
 @pytest.mark.parametrize(
     "filename,content",
     [
-        ("long.mp3", samples.mp3_bytes(361.0)),
-        ("long.wav", samples.wav_bytes(361.0, sample_rate=8000, bits=8)),
-        ("long.m4a", samples.m4a_bytes(361.0)),
+        ("long.mp3", samples.mp3_bytes(601.0)),
+        ("long.wav", samples.wav_bytes(601.0, sample_rate=8000, bits=8)),
+        ("long.m4a", samples.m4a_bytes(601.0)),
     ],
     ids=["mp3", "wav", "m4a"],
 )
-def test_over_360_seconds_is_rejected(storage, filename, content):
+def test_over_600_seconds_is_rejected(storage, filename, content):
     with pytest.raises(AudioTooLongError):
         _store(storage, filename, content)
     assert not (storage.root / "job-1").exists()
@@ -388,6 +388,6 @@ def test_mismatched_extension_returns_the_same_controlled_error(client):
 
 
 def test_over_long_audio_returns_413_audio_too_long(client):
-    response = _post(client, "long.mp3", samples.mp3_bytes(361.0), "audio/mpeg")
+    response = _post(client, "long.mp3", samples.mp3_bytes(601.0), "audio/mpeg")
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "audio_too_long"

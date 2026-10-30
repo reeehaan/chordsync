@@ -290,7 +290,7 @@ def create_analysis_job(
         return error_response(
             413,
             "audio_too_long",
-            "Audio exceeds the 6-minute limit.",
+            "Audio exceeds the 10-minute limit.",
         )
     except InvalidAudioError:
         return error_response(400, "invalid_audio", "Audio could not be decoded.")
@@ -460,7 +460,7 @@ def confirm_upload(
     except AudioTooLargeError:
         return error_response(413, "audio_too_large", "Audio exceeds the 25 MB limit.")
     except AudioTooLongError:
-        return error_response(422, "audio_too_long", "Audio exceeds the 6-minute limit.")
+        return error_response(422, "audio_too_long", "Audio exceeds the 10-minute limit.")
     except EmptyAudioError:
         return error_response(422, "empty_audio", "Audio file must not be empty.")
     except AnalysisInputValidationError as error:

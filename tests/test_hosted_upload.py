@@ -513,13 +513,13 @@ def test_extension_and_content_mismatch_is_a_422(env):
     _assert_rejected(env, job_id, env.confirm(job_id), 422, "invalid_audio")
 
 
-def test_audio_over_360_seconds_is_a_422(env):
-    job_id = env.create_and_upload(ms.wav_bytes(361.0))
+def test_audio_over_600_seconds_is_a_422(env):
+    job_id = env.create_and_upload(ms.wav_bytes(601.0))
     _assert_rejected(env, job_id, env.confirm(job_id), 422, "audio_too_long")
 
 
-def test_audio_of_exactly_360_seconds_is_accepted(env):
-    job_id = env.create_and_upload(ms.wav_bytes(360.0))
+def test_audio_of_exactly_600_seconds_is_accepted(env):
+    job_id = env.create_and_upload(ms.wav_bytes(600.0))
     assert env.confirm(job_id).status_code == 202
 
 

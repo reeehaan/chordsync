@@ -14,7 +14,7 @@ from backend.api.app.services.media_inspection import (
 
 SUPPORTED_AUDIO_EXTENSIONS = frozenset(EXTENSION_FORMATS)
 MAX_AUDIO_SIZE_BYTES = 25 * 1024 * 1024
-MAX_AUDIO_DURATION_SECONDS = 360.0
+MAX_AUDIO_DURATION_SECONDS = 600.0
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_ANALYSIS_INPUT_ROOT = _PROJECT_ROOT / "storage/uploads/analysis_jobs"
 _COPY_CHUNK_SIZE = 1024 * 1024

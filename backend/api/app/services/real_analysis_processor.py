@@ -175,9 +175,9 @@ class AnalysisPipelineConfig:
     whisperx_model: str = "small"
     demucs_model: str = "htdemucs"
     preprocessing_timeout: float = 120.0
-    chord_timeout: float = 300.0
-    beat_timeout: float = 300.0
-    separation_timeout: float = 600.0
+    chord_timeout: float = 500.0
+    beat_timeout: float = 500.0
+    separation_timeout: float = 1000.0
     lyric_timeout: float = 1800.0
     fusion_timeout: float = 120.0
     music_only_enabled: bool = False
