@@ -287,7 +287,7 @@ void main() {
 
     test('backend validation and availability codes', () async {
       for (final (code, fragment) in [
-        ('audio_too_long', '6 minutes'),
+        ('audio_too_long', '10 minutes'),
         ('invalid_audio', 'could not be read'),
         ('empty_audio', 'could not be read'),
         ('upload_not_received', 'did not finish'),

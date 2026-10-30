@@ -275,7 +275,7 @@ class AudioImportController extends ChangeNotifier {
       return switch (error.code) {
         'unsupported_audio_format' => 'Choose a WAV, MP3, or M4A audio file.',
         'audio_too_large' => 'The selected audio file is too large.',
-        'audio_too_long' => 'Songs can be up to 6 minutes long.',
+        'audio_too_long' => 'Songs can be up to 10 minutes long.',
         'invalid_audio' || 'empty_audio' => 'The audio file could not be read.',
         'upload_not_received' => 'The upload did not finish. Please try again.',
         'upload_expired' => 'The upload expired. Please try again.',
