@@ -768,9 +768,13 @@ class _SongSheet extends StatelessWidget {
                           ),
                           onPressed: () async {
                             final navigator = Navigator.of(context);
+                            final sheet = ModalRoute.of(context);
                             await cloud.download(song);
+                            // Only close this sheet. If it is already gone,
+                            // a pop would remove the home page instead.
                             if (cloud.errorOf(song.jobId) == null &&
-                                navigator.mounted) {
+                                navigator.mounted &&
+                                (sheet?.isCurrent ?? false)) {
                               navigator.pop();
                             }
                           },
