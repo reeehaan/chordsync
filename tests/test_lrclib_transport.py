@@ -399,6 +399,47 @@ def test_timed_lyrics_are_not_taken_from_a_different_recording():
     assert result.provider_track_id == "42"  # kept the plain exact match
 
 
+def test_timed_lyrics_credited_to_several_artists_are_used_for_a_plain_exact_match():
+    # The file's artist is "Tagged Artist"; the timed entry credits two singers.
+    plain_only = _payload(syncedLyrics=None)
+    duet = _timed(id=7, artistName="Tagged Artist & Someone Else", duration=121.0)
+
+    result = _source(_routing_opener(plain_only, [duet])).get_reference(IDENTITY)
+
+    assert result.provider_track_id == "7"
+    assert result.synced_lyrics == duet["syncedLyrics"]
+    assert result.song_identity.artist == "Tagged Artist"
+
+
+@pytest.mark.parametrize(
+    "credit",
+    [
+        "Tagged Artist, Someone Else",
+        "Someone Else feat. Tagged Artist",
+        "Someone Else x Tagged Artist",
+    ],
+)
+def test_other_ways_of_crediting_several_artists_are_accepted(credit):
+    plain_only = _payload(syncedLyrics=None)
+    duet = _timed(id=7, artistName=credit, duration=121.0)
+
+    result = _source(_routing_opener(plain_only, [duet])).get_reference(IDENTITY)
+
+    assert result.provider_track_id == "7"
+
+
+@pytest.mark.parametrize(
+    "credit", ["Someone Else & Another One", "Tagged Artist Band", "Tagged Artistry"]
+)
+def test_a_credit_that_does_not_name_the_artist_is_never_accepted(credit):
+    plain_only = _payload(syncedLyrics=None)
+    other = _timed(id=7, artistName=credit, duration=121.0)
+
+    result = _source(_routing_opener(plain_only, [other])).get_reference(IDENTITY)
+
+    assert result.provider_track_id == "42"  # kept the plain exact match
+
+
 def test_the_closest_release_with_timed_lyrics_wins():
     opener = _routing_opener(
         _http_error(404),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 import time
 from dataclasses import dataclass
@@ -148,9 +149,19 @@ class LrclibTransport:
         # The exact match only has plain lyrics. Another release of the same
         # recording may have timed lyrics, which are far more useful.
         better = self._search(
-            song_identity, duration_seconds, parameters, require_synced=True
+            song_identity,
+            duration_seconds,
+            parameters,
+            require_synced=True,
+            credit_list=True,
         )
-        return _map_response(better if better is not None else exact)
+        if better is None:
+            return _map_response(exact)
+        mapped = dict(_map_response(better))
+        # Same recording as the exact match, which matched the song's own artist;
+        # the timed entry may credit several singers ("A & B" for "A").
+        mapped["artist"] = exact.get("artistName")
+        return mapped
 
     def _search(
         self,
@@ -161,6 +172,7 @@ class LrclibTransport:
         require_synced: bool = False,
         latin_only: bool = False,
         unknown_duration: bool = False,
+        credit_list: bool = False,
     ) -> Mapping[str, object] | None:
         search = {
             key: value
@@ -188,6 +200,9 @@ class LrclibTransport:
                 latin_only
                 and wanted_artist
                 and (wanted_artist in item_artist or item_artist in wanted_artist)
+            ) and not (
+                credit_list
+                and wanted_artist in _credited_artists(item.get("artistName"))
             ):
                 continue
             if not item.get("plainLyrics"):
@@ -300,6 +315,18 @@ def _same_text(value: str) -> str:
     from analysis.lyrics.lyrics_api_reference import _identity_text
 
     return _identity_text(value)
+
+
+_CREDIT_SEPARATOR = re.compile(
+    r"\s*(?:&|,|;|/|\+|\bfeat\.?|\bft\.?|\bfeaturing\b|\band\b|\bwith\b|\bx\b)\s*",
+    re.IGNORECASE,
+)
+
+
+def _credited_artists(value: object) -> set[str]:
+    """Each artist named in a credit such as "A & B" or "A feat. B", normalised."""
+    names = _CREDIT_SEPARATOR.split(str(value or ""))
+    return {name for name in map(_same_text, names) if name}
 
 
 def _mostly_non_latin(text: object) -> bool:
