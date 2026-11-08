@@ -10,7 +10,7 @@ sheet that scrolls in time with the music.
 
 ## Features
 
-- **Upload a song**: WAV, MP3, or M4A, up to 6 minutes (25 MB).
+- **Upload a song**: WAV, MP3, or M4A, up to 10 minutes (25 MB).
 - **Automatic chord recognition** with a neural model (BTC), with Chordino as
   a fallback.
 - **Beat and bar tracking**, so chords line up with the rhythm.
