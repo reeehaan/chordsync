@@ -440,6 +440,32 @@ def test_a_credit_that_does_not_name_the_artist_is_never_accepted(credit):
     assert result.provider_track_id == "42"  # kept the plain exact match
 
 
+def test_timed_lyrics_credited_to_several_artists_win_when_the_exact_lookup_misses():
+    # The file is 5 s shorter than the entries, so the exact lookup finds nothing and
+    # the search fallback runs. Same album, so up to 10 s apart is still the song.
+    plain = _payload(id=1, duration=125.5)
+    duet = _timed(id=7, artistName="Tagged Artist & Someone Else", duration=125.0)
+
+    result = _source(_routing_opener(_http_error(404), [plain, duet])).get_reference(
+        IDENTITY
+    )
+
+    assert result.provider_track_id == "7"
+    assert result.synced_lyrics == duet["syncedLyrics"]
+    assert result.song_identity.artist == "Tagged Artist"
+
+
+def test_a_credit_naming_another_artist_is_ignored_when_the_exact_lookup_misses():
+    plain = _payload(id=1, duration=125.5)
+    other = _timed(id=7, artistName="Someone Else & Another One", duration=125.0)
+
+    result = _source(_routing_opener(_http_error(404), [plain, other])).get_reference(
+        IDENTITY
+    )
+
+    assert result.provider_track_id == "1"
+
+
 def test_the_closest_release_with_timed_lyrics_wins():
     opener = _routing_opener(
         _http_error(404),

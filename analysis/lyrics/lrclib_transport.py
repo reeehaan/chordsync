@@ -107,7 +107,9 @@ class LrclibTransport:
         except LyricsApiRateLimitedError:
             raise  # never send a second request while rate limited
         except LyricsApiUnavailableError as exact_failure:
-            candidate = self._search(song_identity, duration_seconds, parameters)
+            candidate = self._search(
+                song_identity, duration_seconds, parameters, credit_list=True
+            )
             if candidate is None:
                 # Some entries list no length at all (0 seconds), so no length can
                 # confirm the recording. Plain lyrics in another script are still
@@ -124,7 +126,13 @@ class LrclibTransport:
                 mapped["synced_lyrics"] = None  # its times cannot be trusted either
                 mapped["duration_seconds"] = None  # 0 means unknown, not zero seconds
                 return mapped
-            return _map_response(candidate)
+            mapped = dict(_map_response(candidate))
+            if _same_text(str(mapped.get("artist") or "")) != _same_text(
+                song_identity.artist
+            ):
+                # Credited as "A & B" for the song's "A": report the song's own artist.
+                mapped["artist"] = song_identity.artist
+            return mapped
         if exact.get("syncedLyrics"):
             if _is_devanagari(exact.get("syncedLyrics")):
                 # Hindi songs have many entries, most written in English letters.
